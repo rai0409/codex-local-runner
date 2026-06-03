@@ -24662,6 +24662,23 @@ _PROMPT549_INPUT_FIELDS = (
 )
 
 
+_PROMPT550_INPUT_FIELDS = (
+    "prompt550_input_final_completion_result_present",
+    "prompt550_input_post_smoke_local_commit_created",
+    "prompt550_input_post_smoke_local_commit_hash_present",
+    "prompt550_input_post_smoke_local_tag_created",
+    "prompt550_input_post_smoke_local_tag_name_present",
+    "prompt550_input_post_smoke_local_tag_points_at_head",
+    "prompt550_input_post_commit_worktree_clean",
+    "prompt550_input_post_commit_clean_rerun_performed",
+    "prompt550_input_post_commit_clean_rerun_success",
+    "prompt550_input_post_commit_required_fields_present",
+    "prompt550_input_post_commit_no_remote_mutation_verified",
+    "prompt550_input_next_cycle_handoff_ready",
+    "prompt550_input_final_completion_error_present",
+)
+
+
 def _build_prompt549_actual_runtime_smoke_artifact_verification_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -24986,6 +25003,325 @@ def _build_prompt549_actual_runtime_smoke_artifact_verification_state(
     }
     for field, value in inputs.items():
         state[field.replace("prompt549_input_", "prompt549_")] = value
+    return state
+
+
+def _build_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt549_next_action = _normalize_text(
+        payload.get("prompt549_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt549_actual_runtime_smoke_artifact_verification_ready",
+            payload.get("prompt549_actual_runtime_smoke_artifact_verification_ready")
+            is True,
+        ),
+        (
+            "prompt549_actual_runtime_smoke_artifact_verification_success",
+            payload.get("prompt549_actual_runtime_smoke_artifact_verification_success")
+            is True,
+        ),
+        (
+            "prompt549_source_prompt548_ready",
+            payload.get("prompt549_source_prompt548_ready") is True,
+        ),
+        (
+            "prompt549_actual_runtime_smoke_verification_present",
+            payload.get("prompt549_actual_runtime_smoke_verification_present")
+            is True,
+        ),
+        (
+            "prompt549_stdout_artifact_nonempty",
+            payload.get("prompt549_stdout_artifact_nonempty") is True,
+        ),
+        (
+            "prompt549_stderr_artifact_exists",
+            payload.get("prompt549_stderr_artifact_exists") is True,
+        ),
+        (
+            "prompt549_returncode_artifact_zero",
+            payload.get("prompt549_returncode_artifact_zero") is True,
+        ),
+        (
+            "prompt549_changed_files_artifact_nonempty",
+            payload.get("prompt549_changed_files_artifact_nonempty") is True,
+        ),
+        (
+            "prompt549_diff_artifact_nonempty",
+            payload.get("prompt549_diff_artifact_nonempty") is True,
+        ),
+        (
+            "prompt549_result_json_artifact_valid",
+            payload.get("prompt549_result_json_artifact_valid") is True,
+        ),
+        (
+            "prompt549_result_json_subprocess_executed_true",
+            payload.get("prompt549_result_json_subprocess_executed_true")
+            is True,
+        ),
+        (
+            "prompt549_result_json_returncode_success_true",
+            payload.get("prompt549_result_json_returncode_success_true") is True,
+        ),
+        (
+            "prompt549_result_json_changed_files_allowed_true",
+            payload.get("prompt549_result_json_changed_files_allowed_true")
+            is True,
+        ),
+        (
+            "prompt549_result_json_unexpected_changed_files_present_false",
+            payload.get(
+                "prompt549_result_json_unexpected_changed_files_present_false"
+            )
+            is True,
+        ),
+        (
+            "prompt549_result_json_unexpected_diff_present_false",
+            payload.get("prompt549_result_json_unexpected_diff_present_false")
+            is True,
+        ),
+        (
+            "prompt549_result_json_timeout_occurred_false",
+            payload.get("prompt549_result_json_timeout_occurred_false") is True,
+        ),
+        (
+            "prompt549_result_json_execution_error_present_false",
+            payload.get("prompt549_result_json_execution_error_present_false")
+            is True,
+        ),
+        (
+            "prompt549_result_json_no_remote_mutation_verified_true",
+            payload.get("prompt549_result_json_no_remote_mutation_verified_true")
+            is True,
+        ),
+        (
+            "prompt549_runtime_smoke_verification_error_present",
+            payload.get("prompt549_runtime_smoke_verification_error_present")
+            is False,
+        ),
+        (
+            "prompt549_actual_runtime_smoke_artifacts_verified",
+            payload.get("prompt549_actual_runtime_smoke_artifacts_verified")
+            is True,
+        ),
+        (
+            "prompt549_actual_runtime_smoke_result_json_verified",
+            payload.get("prompt549_actual_runtime_smoke_result_json_verified")
+            is True,
+        ),
+        (
+            "prompt549_actual_runtime_smoke_local_only_verified",
+            payload.get("prompt549_actual_runtime_smoke_local_only_verified")
+            is True,
+        ),
+        (
+            "prompt549_ready_for_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion",
+            payload.get(
+                "prompt549_ready_for_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion"
+            )
+            is True,
+        ),
+        (
+            "prompt549_full_autonomous_flow_completed",
+            payload.get("prompt549_full_autonomous_flow_completed") is False,
+        ),
+        (
+            "prompt549_completion_claim_allowed",
+            payload.get("prompt549_completion_claim_allowed") is False,
+        ),
+        (
+            "prompt549_codex_execution_allowed",
+            payload.get("prompt549_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt549_subprocess_execution_allowed",
+            payload.get("prompt549_subprocess_execution_allowed") is False,
+        ),
+        (
+            "prompt549_git_mutation_allowed",
+            payload.get("prompt549_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt549_remote_mutation_allowed",
+            payload.get("prompt549_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt549_commit_tag_execution_allowed",
+            payload.get("prompt549_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt549_execution_performed_by_prompt549",
+            payload.get("prompt549_execution_performed_by_prompt549") is False,
+        ),
+        (
+            "prompt549_next_action",
+            prompt549_next_action
+            == "prepare_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    inputs = {
+        field: payload.get(field) is True
+        for field in _PROMPT550_INPUT_FIELDS
+        if field != "prompt550_input_final_completion_error_present"
+    }
+    final_completion_error_present = (
+        payload.get("prompt550_input_final_completion_error_present") is True
+    )
+    final_completion_result_present = inputs[
+        "prompt550_input_final_completion_result_present"
+    ]
+    post_smoke_local_commit_created = inputs[
+        "prompt550_input_post_smoke_local_commit_created"
+    ]
+    post_smoke_local_commit_hash_present = inputs[
+        "prompt550_input_post_smoke_local_commit_hash_present"
+    ]
+    post_smoke_local_tag_created = inputs[
+        "prompt550_input_post_smoke_local_tag_created"
+    ]
+    post_smoke_local_tag_name_present = inputs[
+        "prompt550_input_post_smoke_local_tag_name_present"
+    ]
+    post_smoke_local_tag_points_at_head = inputs[
+        "prompt550_input_post_smoke_local_tag_points_at_head"
+    ]
+    post_commit_worktree_clean = inputs[
+        "prompt550_input_post_commit_worktree_clean"
+    ]
+    post_commit_clean_rerun_performed = inputs[
+        "prompt550_input_post_commit_clean_rerun_performed"
+    ]
+    post_commit_clean_rerun_success = inputs[
+        "prompt550_input_post_commit_clean_rerun_success"
+    ]
+    post_commit_required_fields_present = inputs[
+        "prompt550_input_post_commit_required_fields_present"
+    ]
+    post_commit_no_remote_mutation_verified = inputs[
+        "prompt550_input_post_commit_no_remote_mutation_verified"
+    ]
+    next_cycle_handoff_ready = inputs[
+        "prompt550_input_next_cycle_handoff_ready"
+    ]
+    final_completion_checks = (
+        ("base_readiness", base_readiness),
+        *tuple(inputs.items()),
+        (
+            "prompt550_input_final_completion_error_present",
+            not final_completion_error_present,
+        ),
+    )
+    final_completion_failure_reasons = [
+        f"failed_{field}"
+        for field, passed in final_completion_checks
+        if not passed
+    ]
+    final_completion_success = not final_completion_failure_reasons
+
+    if final_completion_success:
+        status = "post_smoke_local_commit_tag_clean_rerun_final_completion_success"
+        next_action = (
+            "local_only_success_path_one_cycle_autonomous_development_completed"
+        )
+        blocked_reasons: list[str] = []
+    elif base_readiness and not final_completion_result_present:
+        status = "awaiting_post_smoke_local_commit_tag_clean_rerun_final_completion"
+        next_action = (
+            "await_post_smoke_local_commit_tag_clean_rerun_final_completion"
+        )
+        blocked_reasons = []
+    elif base_readiness and final_completion_result_present:
+        status = "post_smoke_local_commit_tag_clean_rerun_final_completion_failed"
+        next_action = "manual_review_prompt550_final_completion_failed"
+        blocked_reasons = final_completion_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    state = {
+        "local_only": True,
+        "source_prompt": "prompt550",
+        "prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_status": status,
+        "prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_ready": bool(
+            base_readiness
+        ),
+        "prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_success": bool(
+            final_completion_success
+        ),
+        "prompt550_source_prompt549_ready": bool(base_readiness),
+        "prompt550_final_completion_result_present": final_completion_result_present,
+        "prompt550_post_smoke_local_commit_created": post_smoke_local_commit_created,
+        "prompt550_post_smoke_local_commit_hash_present": post_smoke_local_commit_hash_present,
+        "prompt550_post_smoke_local_tag_created": post_smoke_local_tag_created,
+        "prompt550_post_smoke_local_tag_name_present": post_smoke_local_tag_name_present,
+        "prompt550_post_smoke_local_tag_points_at_head": post_smoke_local_tag_points_at_head,
+        "prompt550_post_commit_worktree_clean": post_commit_worktree_clean,
+        "prompt550_post_commit_clean_rerun_performed": post_commit_clean_rerun_performed,
+        "prompt550_post_commit_clean_rerun_success": post_commit_clean_rerun_success,
+        "prompt550_post_commit_required_fields_present": post_commit_required_fields_present,
+        "prompt550_post_commit_no_remote_mutation_verified": post_commit_no_remote_mutation_verified,
+        "prompt550_next_cycle_handoff_ready": next_cycle_handoff_ready,
+        "prompt550_final_completion_error_present": (
+            final_completion_error_present
+        ),
+        "prompt550_local_only_success_path_one_cycle_completed": bool(
+            final_completion_success
+        ),
+        "prompt550_humanless_success_only_local_autonomous_development_completed": bool(
+            final_completion_success
+        ),
+        "prompt550_actual_runtime_smoke_to_final_completion_completed": bool(
+            final_completion_success
+        ),
+        "prompt550_final_completion_claim_allowed": bool(
+            final_completion_success
+        ),
+        "prompt550_remote_push_pr_merge_rollback_included": False,
+        "prompt550_long_running_daemon_included": False,
+        "prompt550_multi_cycle_unattended_loop_included": False,
+        "prompt550_completion_scope": (
+            "local_only_success_path_one_cycle_final_completion"
+        ),
+        "prompt550_full_autonomous_flow_completed": bool(
+            final_completion_success
+        ),
+        "prompt550_completion_claim_allowed": bool(final_completion_success),
+        "prompt550_autonomous_flow_status": (
+            "completed_local_only_success_path_one_cycle"
+            if final_completion_success
+            else "not_complete_until_final_completion_inputs_pass"
+        ),
+        "prompt550_prompt378_execution_allowed": False,
+        "prompt550_prompt379_execution_allowed": False,
+        "prompt550_codex_execution_allowed": False,
+        "prompt550_subprocess_execution_allowed": False,
+        "prompt550_git_mutation_allowed": False,
+        "prompt550_remote_mutation_allowed": False,
+        "prompt550_commit_tag_execution_allowed": False,
+        "prompt550_execution_performed_by_prompt550": False,
+        "prompt550_next_action": next_action,
+        "prompt550_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt550_blocked_reasons": blocked_reasons,
+    }
+    for field, value in inputs.items():
+        state[field.replace("prompt550_input_", "prompt550_")] = value
     return state
 
 
@@ -26052,4 +26388,5 @@ __all__ = [
     "_build_prompt547_real_runtime_internal_codex_smoke_state",
     "_build_prompt548_runtime_result_injection_to_contract_state",
     "_build_prompt549_actual_runtime_smoke_artifact_verification_state",
+    "_build_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_state",
 ]

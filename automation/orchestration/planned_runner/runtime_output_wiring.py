@@ -950,6 +950,18 @@ def _connect_prompt549_actual_runtime_smoke_artifact_verification(
     return merged
 
 
+def _connect_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion(
+    *,
+    run_state: Mapping[str, Any],
+) -> dict[str, Any]:
+    merged = dict(run_state)
+    builder = get_prompt_builders()[
+        "_build_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_state"
+    ]
+    merged.update(builder(run_state_payload=merged))
+    return merged
+
+
 def _merge_prompt491a_current_head_materialization_surfaces(
     *,
     run_state: Mapping[str, Any],
@@ -1303,6 +1315,11 @@ def reconnect_runtime_output_generation(
     run_state = _connect_prompt549_actual_runtime_smoke_artifact_verification(
         run_state=run_state,
         execution_repo_path=execution_repo_path,
+    )
+    run_state = (
+        _connect_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion(
+            run_state=run_state,
+        )
     )
 
     split_compatible_artifact_names: list[str] = []
