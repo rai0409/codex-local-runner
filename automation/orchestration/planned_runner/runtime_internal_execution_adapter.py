@@ -169,6 +169,25 @@ def write_internal_execution_artifacts(
     repo_path = Path(repo_dir)
     artifact_dir = repo_path / PROMPT546_ARTIFACT_DIR
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    prefix = _result_prefix_for_prompt(prompt_id)
+    artifact_returncode = 1 if returncode is None else int(returncode)
+    fallback_returncode_missing = returncode is None
+    result_payload_for_write = dict(result_payload)
+    result_payload_for_write[f"{prefix}_internal_codex_returncode"] = (
+        artifact_returncode
+    )
+    result_payload_for_write[
+        f"{prefix}_internal_codex_returncode_success"
+    ] = artifact_returncode == 0
+    if fallback_returncode_missing:
+        result_payload_for_write[
+            f"{prefix}_internal_execution_error_present"
+        ] = True
+        error_key = f"{prefix}_internal_error"
+        if not str(result_payload_for_write.get(error_key) or "").strip():
+            result_payload_for_write[
+                error_key
+            ] = "missing_returncode_after_internal_codex_subprocess"
 
     artifacts = _artifact_paths_for_prompt(prompt_id)
     stdout_artifact = artifacts["stdout"]
@@ -188,7 +207,7 @@ def write_internal_execution_artifacts(
     stdout_path.write_text(stdout_text, encoding="utf-8")
     stderr_path.write_text(stderr_text, encoding="utf-8")
     returncode_path.write_text(
-        "" if returncode is None else f"{returncode}\n",
+        f"{artifact_returncode}\n",
         encoding="utf-8",
     )
     changed_files_path.write_text(
@@ -197,7 +216,12 @@ def write_internal_execution_artifacts(
     )
     diff_path.write_text(diff_text, encoding="utf-8")
     result_path.write_text(
-        json.dumps(dict(result_payload), ensure_ascii=False, indent=2, sort_keys=True),
+        json.dumps(
+            result_payload_for_write,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
 
