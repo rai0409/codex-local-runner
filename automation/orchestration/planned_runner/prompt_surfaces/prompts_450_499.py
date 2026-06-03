@@ -20516,6 +20516,303 @@ def _build_prompt537_external_bounded_real_dispatch_result_ingestion_state(
     }
 
 
+def _build_prompt538_bounded_real_dispatch_review_and_commit_route_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt537_next_action = _normalize_text(
+        payload.get("prompt537_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt537_external_bounded_real_dispatch_result_ingestion_ready",
+            payload.get(
+                "prompt537_external_bounded_real_dispatch_result_ingestion_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt537_external_bounded_real_dispatch_result_success",
+            payload.get("prompt537_external_bounded_real_dispatch_result_success")
+            is True,
+        ),
+        (
+            "prompt537_source_prompt536_ready",
+            payload.get("prompt537_source_prompt536_ready") is True,
+        ),
+        (
+            "prompt537_external_dispatch_result_present",
+            payload.get("prompt537_external_dispatch_result_present") is True,
+        ),
+        (
+            "prompt537_dispatch_command_artifact_present",
+            payload.get("prompt537_dispatch_command_artifact_present")
+            is True,
+        ),
+        (
+            "prompt537_codex_prompt_artifact_present",
+            payload.get("prompt537_codex_prompt_artifact_present") is True,
+        ),
+        (
+            "prompt537_execution_result_artifact_present",
+            payload.get("prompt537_execution_result_artifact_present") is True,
+        ),
+        (
+            "prompt537_stdout_artifact_present",
+            payload.get("prompt537_stdout_artifact_present") is True,
+        ),
+        (
+            "prompt537_stderr_artifact_present",
+            payload.get("prompt537_stderr_artifact_present") is True,
+        ),
+        (
+            "prompt537_diff_review_artifact_present",
+            payload.get("prompt537_diff_review_artifact_present") is True,
+        ),
+        (
+            "prompt537_changed_files_artifact_present",
+            payload.get("prompt537_changed_files_artifact_present") is True,
+        ),
+        (
+            "prompt537_codex_returncode_present",
+            payload.get("prompt537_codex_returncode_present") is True,
+        ),
+        (
+            "prompt537_codex_returncode_success",
+            payload.get("prompt537_codex_returncode_success") is True,
+        ),
+        (
+            "prompt537_changed_files_allowed",
+            payload.get("prompt537_changed_files_allowed") is True,
+        ),
+        (
+            "prompt537_tracked_diff_present",
+            payload.get("prompt537_tracked_diff_present") is True,
+        ),
+        (
+            "prompt537_unexpected_diff_present",
+            payload.get("prompt537_unexpected_diff_present") is False,
+        ),
+        (
+            "prompt537_execution_error_present",
+            payload.get("prompt537_execution_error_present") is False,
+        ),
+        (
+            "prompt537_double_run_prevention_token_consumed",
+            payload.get("prompt537_double_run_prevention_token_consumed")
+            is True,
+        ),
+        (
+            "prompt537_no_remote_mutation_verified",
+            payload.get("prompt537_no_remote_mutation_verified") is True,
+        ),
+        (
+            "prompt537_bounded_real_dispatch_completed",
+            payload.get("prompt537_bounded_real_dispatch_completed") is True,
+        ),
+        (
+            "prompt537_bounded_real_dispatch_review_ready",
+            payload.get("prompt537_bounded_real_dispatch_review_ready")
+            is True,
+        ),
+        (
+            "prompt537_diff_review_ready",
+            payload.get("prompt537_diff_review_ready") is True,
+        ),
+        (
+            "prompt537_commit_tag_decision_ready",
+            payload.get("prompt537_commit_tag_decision_ready") is True,
+        ),
+        (
+            "prompt537_post_commit_clean_rerun_required",
+            payload.get("prompt537_post_commit_clean_rerun_required")
+            is True,
+        ),
+        (
+            "prompt537_next_cycle_handoff_required",
+            payload.get("prompt537_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt537_prompt378_execution_allowed",
+            payload.get("prompt537_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt537_prompt379_execution_allowed",
+            payload.get("prompt537_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt537_codex_execution_allowed",
+            payload.get("prompt537_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt537_git_mutation_allowed",
+            payload.get("prompt537_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt537_remote_mutation_allowed",
+            payload.get("prompt537_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt537_commit_tag_execution_allowed",
+            payload.get("prompt537_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt537_execution_performed_by_prompt537",
+            payload.get("prompt537_execution_performed_by_prompt537")
+            is False,
+        ),
+        (
+            "prompt537_next_action",
+            prompt537_next_action
+            == "prepare_prompt538_bounded_real_dispatch_review_and_commit_route",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    review_result_present = (
+        payload.get("prompt538_input_review_result_present") is True
+    )
+    diff_review_passed = (
+        payload.get("prompt538_input_diff_review_passed") is True
+    )
+    changed_files_allowed = (
+        payload.get("prompt538_input_changed_files_allowed") is True
+    )
+    required_fields_present = (
+        payload.get("prompt538_input_required_fields_present") is True
+    )
+    py_compile_ok = payload.get("prompt538_input_py_compile_ok") is True
+    pre_commit_worktree_has_expected_changes = (
+        payload.get(
+            "prompt538_input_pre_commit_worktree_has_expected_changes"
+        )
+        is True
+    )
+    commit_message_present = (
+        payload.get("prompt538_input_commit_message_present") is True
+    )
+    tag_name_present = (
+        payload.get("prompt538_input_tag_name_present") is True
+    )
+    tag_name_available = (
+        payload.get("prompt538_input_tag_name_available") is True
+    )
+    review_error_present = (
+        payload.get("prompt538_input_review_error_present") is True
+    )
+
+    review_success_checks = (
+        ("base_readiness", base_readiness),
+        ("prompt538_input_review_result_present", review_result_present),
+        ("prompt538_input_diff_review_passed", diff_review_passed),
+        ("prompt538_input_changed_files_allowed", changed_files_allowed),
+        ("prompt538_input_required_fields_present", required_fields_present),
+        ("prompt538_input_py_compile_ok", py_compile_ok),
+        (
+            "prompt538_input_pre_commit_worktree_has_expected_changes",
+            pre_commit_worktree_has_expected_changes,
+        ),
+        ("prompt538_input_commit_message_present", commit_message_present),
+        ("prompt538_input_tag_name_present", tag_name_present),
+        ("prompt538_input_tag_name_available", tag_name_available),
+        (
+            "prompt538_input_review_error_present",
+            payload.get("prompt538_input_review_error_present") is False,
+        ),
+    )
+    review_failure_reasons = [
+        f"failed_{field}"
+        for field, passed in review_success_checks
+        if not passed
+    ]
+    review_route_success = not review_failure_reasons
+
+    if review_route_success:
+        status = "ready_for_external_commit_tag_route"
+        next_action = "run_external_commit_tag_for_bounded_real_dispatch_trial"
+        blocked_reasons: list[str] = []
+    elif base_readiness and not review_result_present:
+        status = "awaiting_bounded_real_dispatch_review"
+        next_action = "await_bounded_real_dispatch_review"
+        blocked_reasons = []
+    elif base_readiness and review_result_present:
+        status = "blocked_bounded_real_dispatch_review"
+        next_action = (
+            "manual_review_prompt538_bounded_real_dispatch_review_blocked"
+        )
+        blocked_reasons = review_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt538_bounded_real_dispatch_review_and_commit_route"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt538",
+        "prompt538_bounded_real_dispatch_review_and_commit_route_status": (
+            status
+        ),
+        "prompt538_bounded_real_dispatch_review_and_commit_route_ready": (
+            bool(base_readiness)
+        ),
+        "prompt538_bounded_real_dispatch_review_success": bool(
+            review_route_success
+        ),
+        "prompt538_source_prompt537_ready": bool(
+            payload.get(
+                "prompt537_external_bounded_real_dispatch_result_ingestion_ready"
+            )
+        ),
+        "prompt538_review_result_present": review_result_present,
+        "prompt538_diff_review_passed": diff_review_passed,
+        "prompt538_changed_files_allowed": changed_files_allowed,
+        "prompt538_required_fields_present": required_fields_present,
+        "prompt538_py_compile_ok": py_compile_ok,
+        "prompt538_pre_commit_worktree_has_expected_changes": (
+            pre_commit_worktree_has_expected_changes
+        ),
+        "prompt538_commit_message_present": commit_message_present,
+        "prompt538_tag_name_present": tag_name_present,
+        "prompt538_tag_name_available": tag_name_available,
+        "prompt538_review_error_present": review_error_present,
+        "prompt538_external_commit_tag_route_required": bool(
+            review_route_success
+        ),
+        "prompt538_external_commit_tag_route_ready": bool(
+            review_route_success
+        ),
+        "prompt538_commit_tag_decision_ready": bool(review_route_success),
+        "prompt538_post_commit_clean_rerun_required": bool(
+            review_route_success
+        ),
+        "prompt538_next_cycle_handoff_required": bool(review_route_success),
+        "prompt538_bounded_real_dispatch_trial_closed": bool(
+            review_route_success
+        ),
+        "prompt538_prompt378_execution_allowed": False,
+        "prompt538_prompt379_execution_allowed": False,
+        "prompt538_codex_execution_allowed": False,
+        "prompt538_git_mutation_allowed": False,
+        "prompt538_remote_mutation_allowed": False,
+        "prompt538_commit_tag_execution_allowed": False,
+        "prompt538_execution_performed_by_prompt538": False,
+        "prompt538_next_action": next_action,
+        "prompt538_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt538_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -21567,4 +21864,5 @@ __all__ = [
     "_build_prompt535_bounded_real_dispatch_trial_gate_state",
     "_build_prompt536_bounded_real_dispatch_trial_execution_request_state",
     "_build_prompt537_external_bounded_real_dispatch_result_ingestion_state",
+    "_build_prompt538_bounded_real_dispatch_review_and_commit_route_state",
 ]
