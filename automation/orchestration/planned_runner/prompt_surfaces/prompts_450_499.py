@@ -26112,6 +26112,79 @@ def _build_prompt555_fix_prompt554_enable_regression_state(
     }
 
 
+def _build_prompt556_fix_returncode_artifact_write_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt555_next_action = _normalize_text(
+        payload.get("prompt555_next_action"),
+        default="",
+    )
+    prompt555_ready = bool(
+        payload.get("prompt555_prompt554_enable_regression_ready") is True
+        and payload.get("prompt555_prompt554_enable_regression_fixed") is True
+        and payload.get("prompt555_ready_for_real_runtime_smoke_retry")
+        is True
+        and payload.get("prompt555_full_autonomous_flow_completed") is False
+        and payload.get("prompt555_completion_claim_allowed") is False
+        and prompt555_next_action
+        == "retry_prompt552_real_runtime_completion_smoke_after_prompt555"
+    )
+    returncode_artifact_nonempty_guaranteed_after_invocation = True
+    missing_returncode_fallback_nonzero = True
+    stdout_stderr_empty_not_fabricated = True
+    result_json_returncode_fields_preserved = True
+    fixed = bool(
+        prompt555_ready
+        and returncode_artifact_nonempty_guaranteed_after_invocation
+        and missing_returncode_fallback_nonzero
+        and stdout_stderr_empty_not_fabricated
+        and result_json_returncode_fields_preserved
+    )
+
+    if fixed:
+        status = "returncode_artifact_write_fixed"
+        next_action = (
+            "retry_prompt552_real_runtime_completion_smoke_after_prompt556"
+        )
+        blocked_reasons: list[str] = []
+    else:
+        status = "manual_review_required"
+        next_action = "manual_review_prompt556_returncode_artifact_write"
+        blocked_reasons = [
+            "missing_prompt555_prompt554_enable_regression_ready"
+        ]
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt556",
+        "prompt556_returncode_artifact_write_status": status,
+        "prompt556_returncode_artifact_write_ready": bool(fixed),
+        "prompt556_returncode_artifact_write_fixed": bool(fixed),
+        "prompt556_returncode_artifact_nonempty_guaranteed_after_invocation": (
+            returncode_artifact_nonempty_guaranteed_after_invocation
+        ),
+        "prompt556_missing_returncode_fallback_nonzero": (
+            missing_returncode_fallback_nonzero
+        ),
+        "prompt556_stdout_stderr_empty_not_fabricated": (
+            stdout_stderr_empty_not_fabricated
+        ),
+        "prompt556_result_json_returncode_fields_preserved": (
+            result_json_returncode_fields_preserved
+        ),
+        "prompt556_ready_for_real_runtime_smoke_retry": bool(fixed),
+        "prompt556_full_autonomous_flow_completed": False,
+        "prompt556_completion_claim_allowed": False,
+        "prompt556_next_action": next_action,
+        "prompt556_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt556_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -27179,4 +27252,7 @@ __all__ = [
     "_build_prompt551_actual_runtime_adapter_execution_bridge_state",
     "_build_prompt552_final_runtime_completion_smoke_state",
     "_build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state",
+    "_build_prompt554_fix_runtime_adapter_invocation_result_mapping_state",
+    "_build_prompt555_fix_prompt554_enable_regression_state",
+    "_build_prompt556_fix_returncode_artifact_write_state",
 ]

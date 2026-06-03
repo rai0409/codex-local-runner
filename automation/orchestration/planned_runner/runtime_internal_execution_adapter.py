@@ -275,6 +275,13 @@ def run_internal_codex_subprocess(
     unexpected_changed_files_present = not changed_files_allowed
     unexpected_diff_present = bool(diff_text) and not changed_files_allowed
 
+    if executed and returncode is None:
+        returncode = 1
+        error_text = (
+            error_text
+            or "missing_returncode_after_internal_codex_subprocess"
+        )
+
     prefix = _result_prefix_for_prompt(prompt_id)
     result_payload: dict[str, Any] = {
         f"{prefix}_internal_codex_subprocess_executed": bool(executed),
