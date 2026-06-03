@@ -20813,6 +20813,321 @@ def _build_prompt538_bounded_real_dispatch_review_and_commit_route_state(
     }
 
 
+def _build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded_dispatch_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt538_next_action = _normalize_text(
+        payload.get("prompt538_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt538_bounded_real_dispatch_review_and_commit_route_ready",
+            payload.get(
+                "prompt538_bounded_real_dispatch_review_and_commit_route_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt538_bounded_real_dispatch_review_success",
+            payload.get("prompt538_bounded_real_dispatch_review_success")
+            is True,
+        ),
+        (
+            "prompt538_source_prompt537_ready",
+            payload.get("prompt538_source_prompt537_ready") is True,
+        ),
+        (
+            "prompt538_review_result_present",
+            payload.get("prompt538_review_result_present") is True,
+        ),
+        (
+            "prompt538_diff_review_passed",
+            payload.get("prompt538_diff_review_passed") is True,
+        ),
+        (
+            "prompt538_changed_files_allowed",
+            payload.get("prompt538_changed_files_allowed") is True,
+        ),
+        (
+            "prompt538_required_fields_present",
+            payload.get("prompt538_required_fields_present") is True,
+        ),
+        (
+            "prompt538_py_compile_ok",
+            payload.get("prompt538_py_compile_ok") is True,
+        ),
+        (
+            "prompt538_pre_commit_worktree_has_expected_changes",
+            payload.get("prompt538_pre_commit_worktree_has_expected_changes")
+            is True,
+        ),
+        (
+            "prompt538_commit_message_present",
+            payload.get("prompt538_commit_message_present") is True,
+        ),
+        (
+            "prompt538_tag_name_present",
+            payload.get("prompt538_tag_name_present") is True,
+        ),
+        (
+            "prompt538_tag_name_available",
+            payload.get("prompt538_tag_name_available") is True,
+        ),
+        (
+            "prompt538_review_error_present",
+            payload.get("prompt538_review_error_present") is False,
+        ),
+        (
+            "prompt538_external_commit_tag_route_required",
+            payload.get("prompt538_external_commit_tag_route_required")
+            is True,
+        ),
+        (
+            "prompt538_external_commit_tag_route_ready",
+            payload.get("prompt538_external_commit_tag_route_ready") is True,
+        ),
+        (
+            "prompt538_commit_tag_decision_ready",
+            payload.get("prompt538_commit_tag_decision_ready") is True,
+        ),
+        (
+            "prompt538_post_commit_clean_rerun_required",
+            payload.get("prompt538_post_commit_clean_rerun_required")
+            is True,
+        ),
+        (
+            "prompt538_next_cycle_handoff_required",
+            payload.get("prompt538_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt538_bounded_real_dispatch_trial_closed",
+            payload.get("prompt538_bounded_real_dispatch_trial_closed")
+            is True,
+        ),
+        (
+            "prompt538_prompt378_execution_allowed",
+            payload.get("prompt538_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt538_prompt379_execution_allowed",
+            payload.get("prompt538_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt538_codex_execution_allowed",
+            payload.get("prompt538_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt538_git_mutation_allowed",
+            payload.get("prompt538_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt538_remote_mutation_allowed",
+            payload.get("prompt538_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt538_commit_tag_execution_allowed",
+            payload.get("prompt538_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt538_execution_performed_by_prompt538",
+            payload.get("prompt538_execution_performed_by_prompt538")
+            is False,
+        ),
+        (
+            "prompt538_next_action",
+            prompt538_next_action
+            == "run_external_commit_tag_for_bounded_real_dispatch_trial",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    external_commit_tag_result_present = (
+        payload.get("prompt539_input_external_commit_tag_result_present")
+        is True
+    )
+    commit_created = payload.get("prompt539_input_commit_created") is True
+    commit_hash_present = (
+        payload.get("prompt539_input_commit_hash_present") is True
+    )
+    tag_created = payload.get("prompt539_input_tag_created") is True
+    tag_name_present = (
+        payload.get("prompt539_input_tag_name_present") is True
+    )
+    tag_points_at_head = (
+        payload.get("prompt539_input_tag_points_at_head") is True
+    )
+    post_commit_worktree_clean = (
+        payload.get("prompt539_input_post_commit_worktree_clean") is True
+    )
+    post_commit_rerun_performed = (
+        payload.get("prompt539_input_post_commit_rerun_performed") is True
+    )
+    post_commit_rerun_success = (
+        payload.get("prompt539_input_post_commit_rerun_success") is True
+    )
+    head_tag_verified = (
+        payload.get("prompt539_input_head_tag_verified") is True
+    )
+    required_fields_verified = (
+        payload.get("prompt539_input_required_fields_verified") is True
+    )
+    bounded_real_dispatch_cycle_closed = (
+        payload.get("prompt539_input_bounded_real_dispatch_cycle_closed")
+        is True
+    )
+    next_cycle_handoff_verified = (
+        payload.get("prompt539_input_next_cycle_handoff_verified") is True
+    )
+    commit_tag_error_present = (
+        payload.get("prompt539_input_commit_tag_error_present") is True
+    )
+
+    close_success_checks = (
+        ("base_readiness", base_readiness),
+        (
+            "prompt539_input_external_commit_tag_result_present",
+            external_commit_tag_result_present,
+        ),
+        ("prompt539_input_commit_created", commit_created),
+        ("prompt539_input_commit_hash_present", commit_hash_present),
+        ("prompt539_input_tag_created", tag_created),
+        ("prompt539_input_tag_name_present", tag_name_present),
+        ("prompt539_input_tag_points_at_head", tag_points_at_head),
+        (
+            "prompt539_input_post_commit_worktree_clean",
+            post_commit_worktree_clean,
+        ),
+        (
+            "prompt539_input_post_commit_rerun_performed",
+            post_commit_rerun_performed,
+        ),
+        (
+            "prompt539_input_post_commit_rerun_success",
+            post_commit_rerun_success,
+        ),
+        ("prompt539_input_head_tag_verified", head_tag_verified),
+        (
+            "prompt539_input_required_fields_verified",
+            required_fields_verified,
+        ),
+        (
+            "prompt539_input_bounded_real_dispatch_cycle_closed",
+            bounded_real_dispatch_cycle_closed,
+        ),
+        (
+            "prompt539_input_next_cycle_handoff_verified",
+            next_cycle_handoff_verified,
+        ),
+        (
+            "prompt539_input_commit_tag_error_present",
+            payload.get("prompt539_input_commit_tag_error_present")
+            is False,
+        ),
+    )
+    close_failure_reasons = [
+        f"failed_{field}"
+        for field, passed in close_success_checks
+        if not passed
+    ]
+    close_success = not close_failure_reasons
+
+    if close_success:
+        status = "bounded_real_dispatch_cycle_closed"
+        next_action = "prepare_prompt540_internal_codex_execution_adapter"
+        blocked_reasons: list[str] = []
+    elif base_readiness and not external_commit_tag_result_present:
+        status = "awaiting_external_commit_tag_result"
+        next_action = (
+            "await_external_commit_tag_result_for_bounded_real_dispatch"
+        )
+        blocked_reasons = []
+    elif base_readiness and external_commit_tag_result_present:
+        status = "bounded_real_dispatch_cycle_close_failed"
+        next_action = (
+            "manual_review_prompt539_bounded_real_dispatch_cycle_close_failure"
+        )
+        blocked_reasons = close_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt539_external_commit_tag_result_and_post_clean_rerun"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt539",
+        "prompt539_external_commit_tag_result_and_post_clean_rerun_status": (
+            status
+        ),
+        "prompt539_external_commit_tag_result_and_post_clean_rerun_ready": (
+            bool(base_readiness)
+        ),
+        "prompt539_bounded_real_dispatch_cycle_close_success": bool(
+            close_success
+        ),
+        "prompt539_source_prompt538_ready": bool(
+            payload.get(
+                "prompt538_bounded_real_dispatch_review_and_commit_route_ready"
+            )
+        ),
+        "prompt539_external_commit_tag_result_present": (
+            external_commit_tag_result_present
+        ),
+        "prompt539_commit_created": commit_created,
+        "prompt539_commit_hash_present": commit_hash_present,
+        "prompt539_tag_created": tag_created,
+        "prompt539_tag_name_present": tag_name_present,
+        "prompt539_tag_points_at_head": tag_points_at_head,
+        "prompt539_post_commit_worktree_clean": post_commit_worktree_clean,
+        "prompt539_post_commit_rerun_performed": post_commit_rerun_performed,
+        "prompt539_post_commit_rerun_success": post_commit_rerun_success,
+        "prompt539_head_tag_verified": head_tag_verified,
+        "prompt539_required_fields_verified": required_fields_verified,
+        "prompt539_bounded_real_dispatch_cycle_closed": (
+            bounded_real_dispatch_cycle_closed
+        ),
+        "prompt539_next_cycle_handoff_verified": (
+            next_cycle_handoff_verified
+        ),
+        "prompt539_commit_tag_error_present": commit_tag_error_present,
+        "prompt539_bounded_real_dispatch_trial_completed": bool(
+            close_success
+        ),
+        "prompt539_bounded_real_dispatch_trial_minimal_complete": bool(
+            close_success
+        ),
+        "prompt539_local_only_real_dispatch_cycle_completed": bool(
+            close_success
+        ),
+        "prompt539_next_autonomous_cycle_ready": bool(close_success),
+        "prompt539_next_prompt378_request_gate_ready": bool(close_success),
+        "prompt539_ready_for_internal_codex_execution_adapter": bool(
+            close_success
+        ),
+        "prompt539_prompt378_execution_allowed": False,
+        "prompt539_prompt379_execution_allowed": False,
+        "prompt539_codex_execution_allowed": False,
+        "prompt539_git_mutation_allowed": False,
+        "prompt539_remote_mutation_allowed": False,
+        "prompt539_commit_tag_execution_allowed": False,
+        "prompt539_execution_performed_by_prompt539": False,
+        "prompt539_next_action": next_action,
+        "prompt539_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt539_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -21865,4 +22180,5 @@ __all__ = [
     "_build_prompt536_bounded_real_dispatch_trial_execution_request_state",
     "_build_prompt537_external_bounded_real_dispatch_result_ingestion_state",
     "_build_prompt538_bounded_real_dispatch_review_and_commit_route_state",
+    "_build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded_dispatch_state",
 ]
