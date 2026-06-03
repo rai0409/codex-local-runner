@@ -20168,6 +20168,354 @@ def _build_prompt536_bounded_real_dispatch_trial_execution_request_state(
     }
 
 
+def _build_prompt537_external_bounded_real_dispatch_result_ingestion_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt536_next_action = _normalize_text(
+        payload.get("prompt536_next_action"),
+        default="",
+    )
+    prompt536_external_execution_request_kind = _normalize_text(
+        payload.get("prompt536_external_execution_request_kind"),
+        default="",
+    )
+    prompt536_external_execution_scope = _normalize_text(
+        payload.get("prompt536_external_execution_scope"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt536_bounded_real_dispatch_trial_execution_request_ready",
+            payload.get(
+                "prompt536_bounded_real_dispatch_trial_execution_request_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt536_external_bounded_real_dispatch_required",
+            payload.get("prompt536_external_bounded_real_dispatch_required")
+            is True,
+        ),
+        (
+            "prompt536_external_execution_request_ready",
+            payload.get("prompt536_external_execution_request_ready")
+            is True,
+        ),
+        (
+            "prompt536_source_prompt535_ready",
+            payload.get("prompt536_source_prompt535_ready") is True,
+        ),
+        (
+            "prompt536_external_execution_request_kind",
+            prompt536_external_execution_request_kind
+            == "bounded_real_dispatch_trial",
+        ),
+        (
+            "prompt536_external_execution_scope",
+            prompt536_external_execution_scope == "local_only_one_shot",
+        ),
+        (
+            "prompt536_pre_dispatch_clean_worktree_required",
+            payload.get("prompt536_pre_dispatch_clean_worktree_required")
+            is True,
+        ),
+        (
+            "prompt536_allowed_files_guard_required",
+            payload.get("prompt536_allowed_files_guard_required") is True,
+        ),
+        (
+            "prompt536_one_shot_token_consumption_required",
+            payload.get("prompt536_one_shot_token_consumption_required")
+            is True,
+        ),
+        (
+            "prompt536_double_run_prevention_required",
+            payload.get("prompt536_double_run_prevention_required") is True,
+        ),
+        (
+            "prompt536_post_execution_artifact_check_required",
+            payload.get("prompt536_post_execution_artifact_check_required")
+            is True,
+        ),
+        (
+            "prompt536_no_remote_mutation_required",
+            payload.get("prompt536_no_remote_mutation_required") is True,
+        ),
+        (
+            "prompt536_bounded_real_dispatch_allowed",
+            payload.get("prompt536_bounded_real_dispatch_allowed") is False,
+        ),
+        (
+            "prompt536_bounded_real_dispatch_performed",
+            payload.get("prompt536_bounded_real_dispatch_performed")
+            is False,
+        ),
+        (
+            "prompt536_prompt378_execution_allowed",
+            payload.get("prompt536_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt536_prompt379_execution_allowed",
+            payload.get("prompt536_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt536_codex_execution_allowed",
+            payload.get("prompt536_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt536_git_mutation_allowed",
+            payload.get("prompt536_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt536_remote_mutation_allowed",
+            payload.get("prompt536_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt536_commit_tag_execution_allowed",
+            payload.get("prompt536_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt536_execution_performed_by_prompt536",
+            payload.get("prompt536_execution_performed_by_prompt536")
+            is False,
+        ),
+        (
+            "prompt536_next_action",
+            prompt536_next_action
+            == "run_external_bounded_real_dispatch_trial",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    external_dispatch_result_present = (
+        payload.get("prompt537_input_external_dispatch_result_present")
+        is True
+    )
+    dispatch_command_artifact_present = (
+        payload.get("prompt537_input_dispatch_command_artifact_present")
+        is True
+    )
+    codex_prompt_artifact_present = (
+        payload.get("prompt537_input_codex_prompt_artifact_present") is True
+    )
+    execution_result_artifact_present = (
+        payload.get("prompt537_input_execution_result_artifact_present")
+        is True
+    )
+    stdout_artifact_present = (
+        payload.get("prompt537_input_stdout_artifact_present") is True
+    )
+    stderr_artifact_present = (
+        payload.get("prompt537_input_stderr_artifact_present") is True
+    )
+    diff_review_artifact_present = (
+        payload.get("prompt537_input_diff_review_artifact_present") is True
+    )
+    changed_files_artifact_present = (
+        payload.get("prompt537_input_changed_files_artifact_present") is True
+    )
+    codex_returncode_present = (
+        payload.get("prompt537_input_codex_returncode_present") is True
+    )
+    codex_returncode_success = (
+        payload.get("prompt537_input_codex_returncode_success") is True
+    )
+    changed_files_allowed = (
+        payload.get("prompt537_input_changed_files_allowed") is True
+    )
+    tracked_diff_present = (
+        payload.get("prompt537_input_tracked_diff_present") is True
+    )
+    unexpected_diff_present = (
+        payload.get("prompt537_input_unexpected_diff_present") is True
+    )
+    execution_error_present = (
+        payload.get("prompt537_input_execution_error_present") is True
+    )
+    double_run_prevention_token_consumed = (
+        payload.get(
+            "prompt537_input_double_run_prevention_token_consumed"
+        )
+        is True
+    )
+    no_remote_mutation_verified = (
+        payload.get("prompt537_input_no_remote_mutation_verified") is True
+    )
+
+    result_success_checks = (
+        ("base_readiness", base_readiness),
+        (
+            "prompt537_input_external_dispatch_result_present",
+            external_dispatch_result_present,
+        ),
+        (
+            "prompt537_input_dispatch_command_artifact_present",
+            dispatch_command_artifact_present,
+        ),
+        (
+            "prompt537_input_codex_prompt_artifact_present",
+            codex_prompt_artifact_present,
+        ),
+        (
+            "prompt537_input_execution_result_artifact_present",
+            execution_result_artifact_present,
+        ),
+        (
+            "prompt537_input_stdout_artifact_present",
+            stdout_artifact_present,
+        ),
+        (
+            "prompt537_input_stderr_artifact_present",
+            stderr_artifact_present,
+        ),
+        (
+            "prompt537_input_diff_review_artifact_present",
+            diff_review_artifact_present,
+        ),
+        (
+            "prompt537_input_changed_files_artifact_present",
+            changed_files_artifact_present,
+        ),
+        (
+            "prompt537_input_codex_returncode_present",
+            codex_returncode_present,
+        ),
+        (
+            "prompt537_input_codex_returncode_success",
+            codex_returncode_success,
+        ),
+        (
+            "prompt537_input_changed_files_allowed",
+            changed_files_allowed,
+        ),
+        (
+            "prompt537_input_tracked_diff_present",
+            tracked_diff_present,
+        ),
+        (
+            "prompt537_input_unexpected_diff_present",
+            payload.get("prompt537_input_unexpected_diff_present") is False,
+        ),
+        (
+            "prompt537_input_execution_error_present",
+            payload.get("prompt537_input_execution_error_present") is False,
+        ),
+        (
+            "prompt537_input_double_run_prevention_token_consumed",
+            double_run_prevention_token_consumed,
+        ),
+        (
+            "prompt537_input_no_remote_mutation_verified",
+            no_remote_mutation_verified,
+        ),
+    )
+    result_failure_reasons = [
+        f"failed_{field}"
+        for field, passed in result_success_checks
+        if not passed
+    ]
+    result_success = not result_failure_reasons
+
+    if result_success:
+        status = "external_dispatch_result_ingested_success"
+        next_action = (
+            "prepare_prompt538_bounded_real_dispatch_review_and_commit_route"
+        )
+        blocked_reasons: list[str] = []
+    elif base_readiness and not external_dispatch_result_present:
+        status = "awaiting_external_dispatch_result"
+        next_action = "await_external_bounded_real_dispatch_result"
+        blocked_reasons = []
+    elif base_readiness and external_dispatch_result_present:
+        status = "external_dispatch_result_ingested_failure"
+        next_action = (
+            "manual_review_prompt537_external_bounded_real_dispatch_result_failure"
+        )
+        blocked_reasons = result_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt537_external_bounded_real_dispatch_result_ingestion"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt537",
+        "prompt537_external_bounded_real_dispatch_result_ingestion_status": (
+            status
+        ),
+        "prompt537_external_bounded_real_dispatch_result_ingestion_ready": (
+            bool(base_readiness)
+        ),
+        "prompt537_external_bounded_real_dispatch_result_success": bool(
+            result_success
+        ),
+        "prompt537_source_prompt536_ready": bool(
+            payload.get(
+                "prompt536_bounded_real_dispatch_trial_execution_request_ready"
+            )
+        ),
+        "prompt537_external_dispatch_result_present": (
+            external_dispatch_result_present
+        ),
+        "prompt537_dispatch_command_artifact_present": (
+            dispatch_command_artifact_present
+        ),
+        "prompt537_codex_prompt_artifact_present": (
+            codex_prompt_artifact_present
+        ),
+        "prompt537_execution_result_artifact_present": (
+            execution_result_artifact_present
+        ),
+        "prompt537_stdout_artifact_present": stdout_artifact_present,
+        "prompt537_stderr_artifact_present": stderr_artifact_present,
+        "prompt537_diff_review_artifact_present": (
+            diff_review_artifact_present
+        ),
+        "prompt537_changed_files_artifact_present": (
+            changed_files_artifact_present
+        ),
+        "prompt537_codex_returncode_present": codex_returncode_present,
+        "prompt537_codex_returncode_success": codex_returncode_success,
+        "prompt537_changed_files_allowed": changed_files_allowed,
+        "prompt537_tracked_diff_present": tracked_diff_present,
+        "prompt537_unexpected_diff_present": unexpected_diff_present,
+        "prompt537_execution_error_present": execution_error_present,
+        "prompt537_double_run_prevention_token_consumed": (
+            double_run_prevention_token_consumed
+        ),
+        "prompt537_no_remote_mutation_verified": (
+            no_remote_mutation_verified
+        ),
+        "prompt537_bounded_real_dispatch_completed": bool(result_success),
+        "prompt537_bounded_real_dispatch_review_ready": bool(result_success),
+        "prompt537_diff_review_ready": bool(result_success),
+        "prompt537_commit_tag_decision_ready": bool(result_success),
+        "prompt537_post_commit_clean_rerun_required": bool(result_success),
+        "prompt537_next_cycle_handoff_required": bool(result_success),
+        "prompt537_prompt378_execution_allowed": False,
+        "prompt537_prompt379_execution_allowed": False,
+        "prompt537_codex_execution_allowed": False,
+        "prompt537_git_mutation_allowed": False,
+        "prompt537_remote_mutation_allowed": False,
+        "prompt537_commit_tag_execution_allowed": False,
+        "prompt537_execution_performed_by_prompt537": False,
+        "prompt537_next_action": next_action,
+        "prompt537_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt537_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -21218,4 +21566,5 @@ __all__ = [
     "_build_prompt534_runtime_synthetic_full_cycle_payload_verification_state",
     "_build_prompt535_bounded_real_dispatch_trial_gate_state",
     "_build_prompt536_bounded_real_dispatch_trial_execution_request_state",
+    "_build_prompt537_external_bounded_real_dispatch_result_ingestion_state",
 ]

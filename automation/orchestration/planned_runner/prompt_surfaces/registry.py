@@ -199,6 +199,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt534_runtime_synthetic_full_cycle_payload_verification_state,
     _build_prompt535_bounded_real_dispatch_trial_gate_state,
     _build_prompt536_bounded_real_dispatch_trial_execution_request_state,
+    _build_prompt537_external_bounded_real_dispatch_result_ingestion_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -394,6 +395,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt534_runtime_synthetic_full_cycle_payload_verification_state": _build_prompt534_runtime_synthetic_full_cycle_payload_verification_state,
     "_build_prompt535_bounded_real_dispatch_trial_gate_state": _build_prompt535_bounded_real_dispatch_trial_gate_state,
     "_build_prompt536_bounded_real_dispatch_trial_execution_request_state": _build_prompt536_bounded_real_dispatch_trial_execution_request_state,
+    "_build_prompt537_external_bounded_real_dispatch_result_ingestion_state": _build_prompt537_external_bounded_real_dispatch_result_ingestion_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -594,4 +596,5 @@ __all__ = [
     "_build_prompt534_runtime_synthetic_full_cycle_payload_verification_state",
     "_build_prompt535_bounded_real_dispatch_trial_gate_state",
     "_build_prompt536_bounded_real_dispatch_trial_execution_request_state",
+    "_build_prompt537_external_bounded_real_dispatch_result_ingestion_state",
 ]
