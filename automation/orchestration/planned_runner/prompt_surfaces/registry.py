@@ -217,6 +217,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt552_final_runtime_completion_smoke_state,
     _build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state,
     _build_prompt554_fix_runtime_adapter_invocation_result_mapping_state,
+    _build_prompt555_fix_prompt554_enable_regression_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -430,6 +431,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt552_final_runtime_completion_smoke_state": _build_prompt552_final_runtime_completion_smoke_state,
     "_build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state": _build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state,
     "_build_prompt554_fix_runtime_adapter_invocation_result_mapping_state": _build_prompt554_fix_runtime_adapter_invocation_result_mapping_state,
+    "_build_prompt555_fix_prompt554_enable_regression_state": _build_prompt555_fix_prompt554_enable_regression_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -647,4 +649,5 @@ __all__ = [
     "_build_prompt552_final_runtime_completion_smoke_state",
     "_build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state",
     "_build_prompt554_fix_runtime_adapter_invocation_result_mapping_state",
+    "_build_prompt555_fix_prompt554_enable_regression_state",
 ]

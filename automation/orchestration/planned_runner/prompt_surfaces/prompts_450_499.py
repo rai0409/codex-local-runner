@@ -26025,6 +26025,93 @@ def _build_prompt554_fix_runtime_adapter_invocation_result_mapping_state(
     }
 
 
+def _build_prompt555_fix_prompt554_enable_regression_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt554_next_action = _normalize_text(
+        payload.get("prompt554_next_action"),
+        default="",
+    )
+    prompt554_ready = bool(
+        payload.get(
+            "prompt554_runtime_adapter_invocation_result_mapping_ready"
+        )
+        is True
+        and payload.get(
+            "prompt554_runtime_adapter_invocation_result_mapping_fixed"
+        )
+        is True
+        and payload.get("prompt554_ready_for_prompt555_real_runtime_smoke_retry")
+        is True
+        and payload.get("prompt554_full_autonomous_flow_completed") is False
+        and payload.get("prompt554_completion_claim_allowed") is False
+        and prompt554_next_action
+        == "retry_prompt552_real_runtime_completion_smoke_after_prompt554"
+    )
+    runtime_execution_enable_token = _normalize_text(
+        payload.get("prompt551_runtime_execution_enable_token"),
+        default="",
+    )
+    enabled_true_token_nonempty_maps_to_explicit_enable = bool(
+        payload.get("prompt551_input_explicit_execution_enable_present") is True
+        and payload.get("prompt551_explicit_execution_enable_present") is True
+    )
+    payload_enable_still_supported = bool(
+        payload.get("prompt551_runtime_execution_enabled") is True
+        and runtime_execution_enable_token
+    )
+    prompt551_runtime_adapter_invoked_mapping_preserved = bool(
+        payload.get("prompt551_input_runtime_adapter_invoked")
+        == payload.get("prompt551_runtime_adapter_invoked")
+    )
+    fixed = bool(
+        prompt554_ready
+        and enabled_true_token_nonempty_maps_to_explicit_enable
+        and payload_enable_still_supported
+        and prompt551_runtime_adapter_invoked_mapping_preserved
+    )
+
+    if fixed:
+        status = "prompt554_enable_regression_fixed"
+        next_action = (
+            "retry_prompt552_real_runtime_completion_smoke_after_prompt555"
+        )
+        blocked_reasons: list[str] = []
+    else:
+        status = "manual_review_required"
+        next_action = "manual_review_prompt555_prompt554_enable_regression"
+        blocked_reasons = [
+            "missing_prompt554_runtime_adapter_invocation_result_mapping_ready"
+        ]
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt555",
+        "prompt555_prompt554_enable_regression_status": status,
+        "prompt555_prompt554_enable_regression_ready": bool(prompt554_ready),
+        "prompt555_prompt554_enable_regression_fixed": bool(fixed),
+        "prompt555_enabled_true_token_nonempty_maps_to_explicit_enable": (
+            enabled_true_token_nonempty_maps_to_explicit_enable
+        ),
+        "prompt555_payload_enable_still_supported": (
+            payload_enable_still_supported
+        ),
+        "prompt555_prompt551_runtime_adapter_invoked_mapping_preserved": (
+            prompt551_runtime_adapter_invoked_mapping_preserved
+        ),
+        "prompt555_ready_for_real_runtime_smoke_retry": bool(fixed),
+        "prompt555_full_autonomous_flow_completed": False,
+        "prompt555_completion_claim_allowed": False,
+        "prompt555_next_action": next_action,
+        "prompt555_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt555_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,

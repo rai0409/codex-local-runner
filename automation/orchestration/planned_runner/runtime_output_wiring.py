@@ -857,16 +857,15 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
     )
     explicit_arg_enable_token = _normalize_text(enable_token, default="")
     explicit_arg_enable_present = bool(
-        enabled is True
-        and explicit_arg_enable_token == PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+        enabled is True and explicit_arg_enable_token
+    )
+    payload_explicit_execution_enable_token = _normalize_text(
+        payload.get("prompt551_runtime_execution_enable_token"),
+        default="",
     )
     payload_explicit_execution_enable_present = bool(
         payload.get("prompt551_runtime_execution_enabled") is True
-        and _normalize_text(
-            payload.get("prompt551_runtime_execution_enable_token"),
-            default="",
-        )
-        == PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+        and payload_explicit_execution_enable_token
     )
     explicit_execution_enable_present = bool(
         explicit_arg_enable_present
