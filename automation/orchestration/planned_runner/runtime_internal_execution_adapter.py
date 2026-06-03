@@ -12,6 +12,9 @@ from typing import Mapping
 PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN = (
     "prompt546_internal_codex_subprocess_execute"
 )
+PROMPT547_INTERNAL_CODEX_ENABLE_TOKEN = (
+    "prompt547_internal_codex_subprocess_execute"
+)
 
 PROMPT546_ARTIFACT_DIR = Path("artifacts/runtime_commands")
 PROMPT546_STDOUT_ARTIFACT = (
@@ -31,6 +34,24 @@ PROMPT546_DIFF_ARTIFACT = (
 )
 PROMPT546_RESULT_ARTIFACT = (
     PROMPT546_ARTIFACT_DIR / "prompt546_internal_codex_result.json"
+)
+PROMPT547_STDOUT_ARTIFACT = (
+    PROMPT546_ARTIFACT_DIR / "prompt547_internal_codex_stdout.txt"
+)
+PROMPT547_STDERR_ARTIFACT = (
+    PROMPT546_ARTIFACT_DIR / "prompt547_internal_codex_stderr.txt"
+)
+PROMPT547_RETURNCODE_ARTIFACT = (
+    PROMPT546_ARTIFACT_DIR / "prompt547_internal_codex_returncode.txt"
+)
+PROMPT547_CHANGED_FILES_ARTIFACT = (
+    PROMPT546_ARTIFACT_DIR / "prompt547_internal_codex_changed_files.txt"
+)
+PROMPT547_DIFF_ARTIFACT = (
+    PROMPT546_ARTIFACT_DIR / "prompt547_internal_codex_diff.patch"
+)
+PROMPT547_RESULT_ARTIFACT = (
+    PROMPT546_ARTIFACT_DIR / "prompt547_internal_codex_result.json"
 )
 
 
@@ -143,17 +164,26 @@ def write_internal_execution_artifacts(
     changed_files: Iterable[str],
     diff_text: str,
     result_payload: Mapping[str, Any],
+    prompt_id: str = "prompt546",
 ) -> dict[str, str]:
     repo_path = Path(repo_dir)
     artifact_dir = repo_path / PROMPT546_ARTIFACT_DIR
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
-    stdout_path = repo_path / PROMPT546_STDOUT_ARTIFACT
-    stderr_path = repo_path / PROMPT546_STDERR_ARTIFACT
-    returncode_path = repo_path / PROMPT546_RETURNCODE_ARTIFACT
-    changed_files_path = repo_path / PROMPT546_CHANGED_FILES_ARTIFACT
-    diff_path = repo_path / PROMPT546_DIFF_ARTIFACT
-    result_path = repo_path / PROMPT546_RESULT_ARTIFACT
+    artifacts = _artifact_paths_for_prompt(prompt_id)
+    stdout_artifact = artifacts["stdout"]
+    stderr_artifact = artifacts["stderr"]
+    returncode_artifact = artifacts["returncode"]
+    changed_files_artifact = artifacts["changed_files"]
+    diff_artifact = artifacts["diff"]
+    result_artifact = artifacts["result"]
+
+    stdout_path = repo_path / stdout_artifact
+    stderr_path = repo_path / stderr_artifact
+    returncode_path = repo_path / returncode_artifact
+    changed_files_path = repo_path / changed_files_artifact
+    diff_path = repo_path / diff_artifact
+    result_path = repo_path / result_artifact
 
     stdout_path.write_text(stdout_text, encoding="utf-8")
     stderr_path.write_text(stderr_text, encoding="utf-8")
@@ -172,12 +202,12 @@ def write_internal_execution_artifacts(
     )
 
     return {
-        "stdout": str(PROMPT546_STDOUT_ARTIFACT),
-        "stderr": str(PROMPT546_STDERR_ARTIFACT),
-        "returncode": str(PROMPT546_RETURNCODE_ARTIFACT),
-        "changed_files": str(PROMPT546_CHANGED_FILES_ARTIFACT),
-        "diff": str(PROMPT546_DIFF_ARTIFACT),
-        "result": str(PROMPT546_RESULT_ARTIFACT),
+        "stdout": str(stdout_artifact),
+        "stderr": str(stderr_artifact),
+        "returncode": str(returncode_artifact),
+        "changed_files": str(changed_files_artifact),
+        "diff": str(diff_artifact),
+        "result": str(result_artifact),
     }
 
 
@@ -189,6 +219,7 @@ def run_internal_codex_subprocess(
     enabled: bool = False,
     enable_token: str = "",
     timeout_seconds: int = 600,
+    prompt_id: str = "prompt546",
 ) -> dict[str, Any]:
     repo_path = Path(repo_dir)
     prompt_file = Path(prompt_path)
@@ -202,7 +233,7 @@ def run_internal_codex_subprocess(
     timeout_occurred = False
     error_text = ""
 
-    token_valid = enable_token == PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+    token_valid = enable_token == _enable_token_for_prompt(prompt_id)
     execution_allowed = bool(enabled and token_valid)
 
     if execution_allowed:
@@ -244,30 +275,31 @@ def run_internal_codex_subprocess(
     unexpected_changed_files_present = not changed_files_allowed
     unexpected_diff_present = bool(diff_text) and not changed_files_allowed
 
+    prefix = _result_prefix_for_prompt(prompt_id)
     result_payload: dict[str, Any] = {
-        "prompt546_internal_codex_subprocess_executed": bool(executed),
-        "prompt546_internal_codex_returncode": returncode,
-        "prompt546_internal_codex_returncode_success": returncode == 0,
-        "prompt546_internal_codex_stdout_captured": True,
-        "prompt546_internal_codex_stderr_captured": True,
-        "prompt546_internal_changed_files_captured": True,
-        "prompt546_internal_diff_captured": True,
-        "prompt546_internal_changed_files_allowed": bool(changed_files_allowed),
-        "prompt546_internal_unexpected_changed_files_present": bool(
+        f"{prefix}_internal_codex_subprocess_executed": bool(executed),
+        f"{prefix}_internal_codex_returncode": returncode,
+        f"{prefix}_internal_codex_returncode_success": returncode == 0,
+        f"{prefix}_internal_codex_stdout_captured": True,
+        f"{prefix}_internal_codex_stderr_captured": True,
+        f"{prefix}_internal_changed_files_captured": True,
+        f"{prefix}_internal_diff_captured": True,
+        f"{prefix}_internal_changed_files_allowed": bool(changed_files_allowed),
+        f"{prefix}_internal_unexpected_changed_files_present": bool(
             unexpected_changed_files_present
         ),
-        "prompt546_internal_unexpected_diff_present": bool(
+        f"{prefix}_internal_unexpected_diff_present": bool(
             unexpected_diff_present
         ),
-        "prompt546_internal_execution_timeout_occurred": bool(timeout_occurred),
-        "prompt546_internal_execution_error_present": bool(error_text),
-        "prompt546_internal_no_remote_mutation_verified": True,
-        "prompt546_internal_execution_enabled": bool(enabled),
-        "prompt546_internal_execution_enable_token_valid": bool(token_valid),
-        "prompt546_internal_execution_allowed": bool(execution_allowed),
-        "prompt546_internal_codex_prompt_path": str(prompt_file),
-        "prompt546_internal_changed_files": changed_files,
-        "prompt546_internal_error": error_text,
+        f"{prefix}_internal_execution_timeout_occurred": bool(timeout_occurred),
+        f"{prefix}_internal_execution_error_present": bool(error_text),
+        f"{prefix}_internal_no_remote_mutation_verified": True,
+        f"{prefix}_internal_execution_enabled": bool(enabled),
+        f"{prefix}_internal_execution_enable_token_valid": bool(token_valid),
+        f"{prefix}_internal_execution_allowed": bool(execution_allowed),
+        f"{prefix}_internal_codex_prompt_path": str(prompt_file),
+        f"{prefix}_internal_changed_files": changed_files,
+        f"{prefix}_internal_error": error_text,
     }
     artifact_paths = write_internal_execution_artifacts(
         repo_dir=str(repo_path),
@@ -277,14 +309,47 @@ def run_internal_codex_subprocess(
         changed_files=changed_files,
         diff_text=diff_text,
         result_payload=result_payload,
+        prompt_id=prompt_id,
     )
-    result_payload["prompt546_internal_artifact_paths"] = artifact_paths
-    result_path = repo_path / PROMPT546_RESULT_ARTIFACT
+    result_payload[f"{prefix}_internal_artifact_paths"] = artifact_paths
+    result_path = repo_path / _artifact_paths_for_prompt(prompt_id)["result"]
     result_path.write_text(
         json.dumps(result_payload, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     return result_payload
+
+
+def _enable_token_for_prompt(prompt_id: str) -> str:
+    if prompt_id == "prompt547":
+        return PROMPT547_INTERNAL_CODEX_ENABLE_TOKEN
+    return PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+
+
+def _result_prefix_for_prompt(prompt_id: str) -> str:
+    if prompt_id == "prompt547":
+        return "prompt547"
+    return "prompt546"
+
+
+def _artifact_paths_for_prompt(prompt_id: str) -> dict[str, Path]:
+    if prompt_id == "prompt547":
+        return {
+            "stdout": PROMPT547_STDOUT_ARTIFACT,
+            "stderr": PROMPT547_STDERR_ARTIFACT,
+            "returncode": PROMPT547_RETURNCODE_ARTIFACT,
+            "changed_files": PROMPT547_CHANGED_FILES_ARTIFACT,
+            "diff": PROMPT547_DIFF_ARTIFACT,
+            "result": PROMPT547_RESULT_ARTIFACT,
+        }
+    return {
+        "stdout": PROMPT546_STDOUT_ARTIFACT,
+        "stderr": PROMPT546_STDERR_ARTIFACT,
+        "returncode": PROMPT546_RETURNCODE_ARTIFACT,
+        "changed_files": PROMPT546_CHANGED_FILES_ARTIFACT,
+        "diff": PROMPT546_DIFF_ARTIFACT,
+        "result": PROMPT546_RESULT_ARTIFACT,
+    }
 
 
 def _coerce_output_text(value: Any) -> str:
@@ -316,6 +381,13 @@ def _sanitized_environment() -> dict[str, str]:
 
 __all__ = [
     "PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN",
+    "PROMPT547_INTERNAL_CODEX_ENABLE_TOKEN",
+    "PROMPT547_CHANGED_FILES_ARTIFACT",
+    "PROMPT547_DIFF_ARTIFACT",
+    "PROMPT547_RESULT_ARTIFACT",
+    "PROMPT547_RETURNCODE_ARTIFACT",
+    "PROMPT547_STDERR_ARTIFACT",
+    "PROMPT547_STDOUT_ARTIFACT",
     "build_internal_codex_exec_command",
     "capture_git_changed_files",
     "capture_git_diff",

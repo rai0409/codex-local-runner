@@ -209,6 +209,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state,
     _build_prompt545_end_to_end_local_autonomous_real_smoke_state,
     _build_prompt546_runtime_internal_execution_adapter_connection_state,
+    _build_prompt547_real_runtime_internal_codex_smoke_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -414,6 +415,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state": _build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state,
     "_build_prompt545_end_to_end_local_autonomous_real_smoke_state": _build_prompt545_end_to_end_local_autonomous_real_smoke_state,
     "_build_prompt546_runtime_internal_execution_adapter_connection_state": _build_prompt546_runtime_internal_execution_adapter_connection_state,
+    "_build_prompt547_real_runtime_internal_codex_smoke_state": _build_prompt547_real_runtime_internal_codex_smoke_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -624,4 +626,5 @@ __all__ = [
     "_build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state",
     "_build_prompt545_end_to_end_local_autonomous_real_smoke_state",
     "_build_prompt546_runtime_internal_execution_adapter_connection_state",
+    "_build_prompt547_real_runtime_internal_codex_smoke_state",
 ]

@@ -23989,6 +23989,308 @@ def _build_prompt546_runtime_internal_execution_adapter_connection_state(
     }
 
 
+def _build_prompt547_real_runtime_internal_codex_smoke_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt546_next_action = _normalize_text(
+        payload.get("prompt546_next_action"),
+        default="",
+    )
+
+    base_readiness_checks = (
+        (
+            "prompt546_runtime_internal_execution_adapter_connected",
+            payload.get("prompt546_runtime_internal_execution_adapter_connected")
+            is True,
+        ),
+        (
+            "prompt546_runtime_internal_codex_subprocess_adapter_ready",
+            payload.get(
+                "prompt546_runtime_internal_codex_subprocess_adapter_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt546_runtime_internal_execution_artifacts_ready",
+            payload.get("prompt546_runtime_internal_execution_artifacts_ready")
+            is True,
+        ),
+        (
+            "prompt546_runtime_internal_result_json_ready",
+            payload.get("prompt546_runtime_internal_result_json_ready") is True,
+        ),
+        (
+            "prompt546_ready_for_prompt547_real_runtime_smoke",
+            payload.get("prompt546_ready_for_prompt547_real_runtime_smoke")
+            is True,
+        ),
+        (
+            "prompt546_next_action",
+            prompt546_next_action
+            == "prepare_prompt547_real_runtime_internal_codex_smoke",
+        ),
+        (
+            "prompt546_codex_execution_allowed",
+            payload.get("prompt546_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt546_subprocess_execution_allowed",
+            payload.get("prompt546_subprocess_execution_allowed") is False,
+        ),
+        (
+            "prompt546_git_mutation_allowed",
+            payload.get("prompt546_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt546_remote_mutation_allowed",
+            payload.get("prompt546_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt546_commit_tag_execution_allowed",
+            payload.get("prompt546_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt546_execution_performed_by_prompt546",
+            payload.get("prompt546_execution_performed_by_prompt546") is False,
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    real_runtime_smoke_result_present = (
+        payload.get("prompt547_input_real_runtime_smoke_result_present")
+        is True
+    )
+    internal_codex_subprocess_executed = (
+        payload.get("prompt547_input_internal_codex_subprocess_executed")
+        is True
+    )
+    internal_codex_returncode_success = (
+        payload.get("prompt547_input_internal_codex_returncode_success")
+        is True
+    )
+    internal_codex_stdout_captured = (
+        payload.get("prompt547_input_internal_codex_stdout_captured") is True
+    )
+    internal_codex_stderr_captured = (
+        payload.get("prompt547_input_internal_codex_stderr_captured") is True
+    )
+    internal_changed_files_captured = (
+        payload.get("prompt547_input_internal_changed_files_captured") is True
+    )
+    internal_diff_captured = (
+        payload.get("prompt547_input_internal_diff_captured") is True
+    )
+    internal_changed_files_allowed = (
+        payload.get("prompt547_input_internal_changed_files_allowed") is True
+    )
+    internal_unexpected_changed_files_present = (
+        payload.get(
+            "prompt547_input_internal_unexpected_changed_files_present"
+        )
+        is True
+    )
+    internal_unexpected_diff_present = (
+        payload.get("prompt547_input_internal_unexpected_diff_present") is True
+    )
+    internal_execution_timeout_occurred = (
+        payload.get("prompt547_input_internal_execution_timeout_occurred")
+        is True
+    )
+    internal_execution_error_present = (
+        payload.get("prompt547_input_internal_execution_error_present") is True
+    )
+    internal_no_remote_mutation_verified = (
+        payload.get("prompt547_input_internal_no_remote_mutation_verified")
+        is True
+    )
+    runtime_artifacts_present = (
+        payload.get("prompt547_input_runtime_artifacts_present") is True
+    )
+    runtime_result_json_present = (
+        payload.get("prompt547_input_runtime_result_json_present") is True
+    )
+
+    smoke_checks = (
+        ("base_readiness", base_readiness),
+        (
+            "prompt547_input_real_runtime_smoke_result_present",
+            real_runtime_smoke_result_present,
+        ),
+        (
+            "prompt547_input_internal_codex_subprocess_executed",
+            internal_codex_subprocess_executed,
+        ),
+        (
+            "prompt547_input_internal_codex_returncode_success",
+            internal_codex_returncode_success,
+        ),
+        (
+            "prompt547_input_internal_codex_stdout_captured",
+            internal_codex_stdout_captured,
+        ),
+        (
+            "prompt547_input_internal_codex_stderr_captured",
+            internal_codex_stderr_captured,
+        ),
+        (
+            "prompt547_input_internal_changed_files_captured",
+            internal_changed_files_captured,
+        ),
+        ("prompt547_input_internal_diff_captured", internal_diff_captured),
+        (
+            "prompt547_input_internal_changed_files_allowed",
+            internal_changed_files_allowed,
+        ),
+        (
+            "prompt547_input_internal_unexpected_changed_files_present",
+            not internal_unexpected_changed_files_present,
+        ),
+        (
+            "prompt547_input_internal_unexpected_diff_present",
+            not internal_unexpected_diff_present,
+        ),
+        (
+            "prompt547_input_internal_execution_timeout_occurred",
+            not internal_execution_timeout_occurred,
+        ),
+        (
+            "prompt547_input_internal_execution_error_present",
+            not internal_execution_error_present,
+        ),
+        (
+            "prompt547_input_internal_no_remote_mutation_verified",
+            internal_no_remote_mutation_verified,
+        ),
+        (
+            "prompt547_input_runtime_artifacts_present",
+            runtime_artifacts_present,
+        ),
+        (
+            "prompt547_input_runtime_result_json_present",
+            runtime_result_json_present,
+        ),
+    )
+    smoke_failure_reasons = [
+        f"failed_{field}" for field, passed in smoke_checks if not passed
+    ]
+    smoke_success = not smoke_failure_reasons
+    artifacts_verified = bool(
+        internal_codex_stdout_captured
+        and internal_codex_stderr_captured
+        and internal_changed_files_captured
+        and internal_diff_captured
+        and runtime_artifacts_present
+        and runtime_result_json_present
+    )
+    local_only_verified = bool(
+        internal_no_remote_mutation_verified
+        and not internal_unexpected_changed_files_present
+        and not internal_unexpected_diff_present
+    )
+
+    if smoke_success:
+        status = "real_runtime_internal_codex_smoke_success"
+        next_action = "prepare_prompt548_runtime_result_injection_to_contract"
+        blocked_reasons: list[str] = []
+    elif base_readiness and not real_runtime_smoke_result_present:
+        status = "awaiting_real_runtime_internal_codex_smoke_result"
+        next_action = "await_real_runtime_internal_codex_smoke_result"
+        blocked_reasons = []
+    elif base_readiness and real_runtime_smoke_result_present:
+        status = "real_runtime_internal_codex_smoke_failed"
+        next_action = (
+            "manual_review_prompt547_real_runtime_internal_codex_smoke_failed"
+        )
+        blocked_reasons = smoke_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt547_real_runtime_internal_codex_smoke"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt547",
+        "prompt547_real_runtime_internal_codex_smoke_status": status,
+        "prompt547_real_runtime_internal_codex_smoke_ready": bool(
+            base_readiness
+        ),
+        "prompt547_real_runtime_internal_codex_smoke_success": bool(
+            smoke_success
+        ),
+        "prompt547_source_prompt546_ready": bool(base_readiness),
+        "prompt547_real_runtime_smoke_result_present": (
+            real_runtime_smoke_result_present
+        ),
+        "prompt547_internal_codex_subprocess_executed": (
+            internal_codex_subprocess_executed
+        ),
+        "prompt547_internal_codex_returncode_success": (
+            internal_codex_returncode_success
+        ),
+        "prompt547_internal_codex_stdout_captured": (
+            internal_codex_stdout_captured
+        ),
+        "prompt547_internal_codex_stderr_captured": (
+            internal_codex_stderr_captured
+        ),
+        "prompt547_internal_changed_files_captured": (
+            internal_changed_files_captured
+        ),
+        "prompt547_internal_diff_captured": internal_diff_captured,
+        "prompt547_internal_changed_files_allowed": (
+            internal_changed_files_allowed
+        ),
+        "prompt547_internal_unexpected_changed_files_present": (
+            internal_unexpected_changed_files_present
+        ),
+        "prompt547_internal_unexpected_diff_present": (
+            internal_unexpected_diff_present
+        ),
+        "prompt547_internal_execution_timeout_occurred": (
+            internal_execution_timeout_occurred
+        ),
+        "prompt547_internal_execution_error_present": (
+            internal_execution_error_present
+        ),
+        "prompt547_internal_no_remote_mutation_verified": (
+            internal_no_remote_mutation_verified
+        ),
+        "prompt547_runtime_artifacts_present": runtime_artifacts_present,
+        "prompt547_runtime_result_json_present": runtime_result_json_present,
+        "prompt547_ready_for_prompt548_runtime_result_injection_to_contract": (
+            bool(smoke_success)
+        ),
+        "prompt547_runtime_internal_codex_smoke_artifacts_verified": (
+            bool(artifacts_verified)
+        ),
+        "prompt547_runtime_internal_codex_smoke_local_only_verified": (
+            bool(local_only_verified)
+        ),
+        "prompt547_prompt378_execution_allowed": False,
+        "prompt547_prompt379_execution_allowed": False,
+        "prompt547_codex_execution_allowed": False,
+        "prompt547_subprocess_execution_allowed": False,
+        "prompt547_git_mutation_allowed": False,
+        "prompt547_remote_mutation_allowed": False,
+        "prompt547_commit_tag_execution_allowed": False,
+        "prompt547_execution_performed_by_prompt547": False,
+        "prompt547_next_action": next_action,
+        "prompt547_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt547_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -25049,4 +25351,5 @@ __all__ = [
     "_build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state",
     "_build_prompt545_end_to_end_local_autonomous_real_smoke_state",
     "_build_prompt546_runtime_internal_execution_adapter_connection_state",
+    "_build_prompt547_real_runtime_internal_codex_smoke_state",
 ]

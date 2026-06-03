@@ -985,6 +985,24 @@ class PlannedExecutionRunner:
             prompt546_internal_codex_allowed_files=kwargs.get(
                 "prompt546_internal_codex_allowed_files"
             ),
+            prompt547_internal_codex_subprocess_enabled=bool(
+                kwargs.get("prompt547_internal_codex_subprocess_enabled", False)
+            ),
+            prompt547_internal_codex_enable_token=_normalize_text(
+                kwargs.get("prompt547_internal_codex_enable_token"),
+                default="",
+            ),
+            prompt547_internal_codex_prompt_path=_normalize_text(
+                kwargs.get("prompt547_internal_codex_prompt_path"),
+                default="",
+            ),
+            prompt547_internal_codex_timeout_seconds=kwargs.get(
+                "prompt547_internal_codex_timeout_seconds",
+                600,
+            ),
+            prompt547_internal_codex_allowed_files=kwargs.get(
+                "prompt547_internal_codex_allowed_files"
+            ),
         )
         _write_json(run_state_path, run_state_payload)
 

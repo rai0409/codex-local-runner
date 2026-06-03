@@ -77,6 +77,24 @@ from automation.orchestration.planned_runner.runtime_internal_execution_adapter 
     PROMPT546_STDOUT_ARTIFACT,
 )
 from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
+    PROMPT547_CHANGED_FILES_ARTIFACT,
+)
+from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
+    PROMPT547_DIFF_ARTIFACT,
+)
+from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
+    PROMPT547_RESULT_ARTIFACT,
+)
+from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
+    PROMPT547_RETURNCODE_ARTIFACT,
+)
+from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
+    PROMPT547_STDERR_ARTIFACT,
+)
+from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
+    PROMPT547_STDOUT_ARTIFACT,
+)
+from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
     run_internal_codex_subprocess,
 )
 from automation.orchestration.planned_runner.prompt_surfaces.registry import (
@@ -139,6 +157,7 @@ _PROMPT546_DEFAULT_ALLOWED_FILES = (
     "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py",
     "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
 )
+_PROMPT547_DEFAULT_ALLOWED_FILES = _PROMPT546_DEFAULT_ALLOWED_FILES
 
 _PROMPT380_RESULT_REVIEW_ROUTE_FIELDS = (
     "prompt380_prompt379_result_review_status",
@@ -534,6 +553,89 @@ def _prompt546_input_metadata(
     }
 
 
+def _prompt547_input_metadata(
+    *,
+    repo_path: Path,
+    result_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(result_payload, Mapping):
+        return {"prompt547_input_real_runtime_smoke_result_present": False}
+    return {
+        "prompt547_input_real_runtime_smoke_result_present": True,
+        "prompt547_input_internal_codex_subprocess_executed": bool(
+            result_payload.get("prompt547_internal_codex_subprocess_executed")
+        ),
+        "prompt547_input_internal_codex_returncode_success": bool(
+            result_payload.get("prompt547_internal_codex_returncode_success")
+        ),
+        "prompt547_input_internal_codex_stdout_captured": bool(
+            result_payload.get("prompt547_internal_codex_stdout_captured")
+        ),
+        "prompt547_input_internal_codex_stderr_captured": bool(
+            result_payload.get("prompt547_internal_codex_stderr_captured")
+        ),
+        "prompt547_input_internal_changed_files_captured": bool(
+            result_payload.get("prompt547_internal_changed_files_captured")
+        ),
+        "prompt547_input_internal_diff_captured": bool(
+            result_payload.get("prompt547_internal_diff_captured")
+        ),
+        "prompt547_input_internal_changed_files_allowed": bool(
+            result_payload.get("prompt547_internal_changed_files_allowed")
+        ),
+        "prompt547_input_internal_unexpected_changed_files_present": bool(
+            result_payload.get(
+                "prompt547_internal_unexpected_changed_files_present"
+            )
+        ),
+        "prompt547_input_internal_unexpected_diff_present": bool(
+            result_payload.get("prompt547_internal_unexpected_diff_present")
+        ),
+        "prompt547_input_internal_execution_timeout_occurred": bool(
+            result_payload.get("prompt547_internal_execution_timeout_occurred")
+        ),
+        "prompt547_input_internal_execution_error_present": bool(
+            result_payload.get("prompt547_internal_execution_error_present")
+        ),
+        "prompt547_input_internal_no_remote_mutation_verified": bool(
+            result_payload.get("prompt547_internal_no_remote_mutation_verified")
+        ),
+        "prompt547_input_runtime_artifacts_present": bool(
+            _prompt546_artifact_ready(repo_path, PROMPT547_STDOUT_ARTIFACT)
+            and _prompt546_artifact_ready(repo_path, PROMPT547_STDERR_ARTIFACT)
+            and _prompt546_artifact_ready(repo_path, PROMPT547_RETURNCODE_ARTIFACT)
+            and _prompt546_artifact_ready(
+                repo_path,
+                PROMPT547_CHANGED_FILES_ARTIFACT,
+            )
+            and _prompt546_artifact_ready(repo_path, PROMPT547_DIFF_ARTIFACT)
+        ),
+        "prompt547_input_runtime_result_json_present": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT547_RESULT_ARTIFACT,
+        ),
+    }
+
+
+_PROMPT547_INPUT_FIELDS = (
+    "prompt547_input_real_runtime_smoke_result_present",
+    "prompt547_input_internal_codex_subprocess_executed",
+    "prompt547_input_internal_codex_returncode_success",
+    "prompt547_input_internal_codex_stdout_captured",
+    "prompt547_input_internal_codex_stderr_captured",
+    "prompt547_input_internal_changed_files_captured",
+    "prompt547_input_internal_diff_captured",
+    "prompt547_input_internal_changed_files_allowed",
+    "prompt547_input_internal_unexpected_changed_files_present",
+    "prompt547_input_internal_unexpected_diff_present",
+    "prompt547_input_internal_execution_timeout_occurred",
+    "prompt547_input_internal_execution_error_present",
+    "prompt547_input_internal_no_remote_mutation_verified",
+    "prompt547_input_runtime_artifacts_present",
+    "prompt547_input_runtime_result_json_present",
+)
+
+
 def _connect_prompt546_runtime_internal_execution_adapter(
     *,
     run_state: Mapping[str, Any],
@@ -569,6 +671,50 @@ def _connect_prompt546_runtime_internal_execution_adapter(
     )
     builder = get_prompt_builders()[
         "_build_prompt546_runtime_internal_execution_adapter_connection_state"
+    ]
+    merged.update(builder(run_state_payload=merged))
+    return merged
+
+
+def _connect_prompt547_real_runtime_internal_codex_smoke(
+    *,
+    run_state: Mapping[str, Any],
+    execution_repo_path: str,
+    prompt_path: str,
+    enabled: bool,
+    enable_token: str,
+    timeout_seconds: int,
+    allowed_files: Iterable[str] | None,
+) -> dict[str, Any]:
+    merged = dict(run_state)
+    repo_text = _normalize_text(execution_repo_path, default="")
+    resolved_prompt_path = _normalize_text(prompt_path, default="")
+    result_payload: dict[str, Any] | None = None
+    if repo_text and resolved_prompt_path and (enabled or enable_token):
+        result_payload = run_internal_codex_subprocess(
+            repo_dir=repo_text,
+            prompt_path=resolved_prompt_path,
+            allowed_files=(
+                tuple(allowed_files)
+                if allowed_files is not None
+                else _PROMPT547_DEFAULT_ALLOWED_FILES
+            ),
+            enabled=bool(enabled),
+            enable_token=_normalize_text(enable_token, default=""),
+            timeout_seconds=timeout_seconds,
+            prompt_id="prompt547",
+        )
+    if isinstance(result_payload, Mapping) or not any(
+        field in merged for field in _PROMPT547_INPUT_FIELDS
+    ):
+        merged.update(
+            _prompt547_input_metadata(
+                repo_path=Path(repo_text) if repo_text else Path("."),
+                result_payload=result_payload,
+            )
+        )
+    builder = get_prompt_builders()[
+        "_build_prompt547_real_runtime_internal_codex_smoke_state"
     ]
     merged.update(builder(run_state_payload=merged))
     return merged
@@ -730,6 +876,11 @@ def reconnect_runtime_output_generation(
     prompt546_internal_codex_prompt_path: str = "",
     prompt546_internal_codex_timeout_seconds: int = 600,
     prompt546_internal_codex_allowed_files: Iterable[str] | None = None,
+    prompt547_internal_codex_subprocess_enabled: bool = False,
+    prompt547_internal_codex_enable_token: str = "",
+    prompt547_internal_codex_prompt_path: str = "",
+    prompt547_internal_codex_timeout_seconds: int = 600,
+    prompt547_internal_codex_allowed_files: Iterable[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run split runtime output builders and merge their surfaces."""
     _install_runtime_surface_helpers()
@@ -905,6 +1056,15 @@ def reconnect_runtime_output_generation(
         enable_token=prompt546_internal_codex_enable_token,
         timeout_seconds=prompt546_internal_codex_timeout_seconds,
         allowed_files=prompt546_internal_codex_allowed_files,
+    )
+    run_state = _connect_prompt547_real_runtime_internal_codex_smoke(
+        run_state=run_state,
+        execution_repo_path=execution_repo_path,
+        prompt_path=prompt547_internal_codex_prompt_path,
+        enabled=bool(prompt547_internal_codex_subprocess_enabled),
+        enable_token=prompt547_internal_codex_enable_token,
+        timeout_seconds=prompt547_internal_codex_timeout_seconds,
+        allowed_files=prompt547_internal_codex_allowed_files,
     )
 
     split_compatible_artifact_names: list[str] = []
