@@ -967,6 +967,24 @@ class PlannedExecutionRunner:
                 kwargs.get("prompt389_bounded_repeated_success_path_loop_enabled", False)
             ),
             prompt389_max_cycles=kwargs.get("prompt389_max_cycles"),
+            prompt546_internal_codex_subprocess_enabled=bool(
+                kwargs.get("prompt546_internal_codex_subprocess_enabled", False)
+            ),
+            prompt546_internal_codex_enable_token=_normalize_text(
+                kwargs.get("prompt546_internal_codex_enable_token"),
+                default="",
+            ),
+            prompt546_internal_codex_prompt_path=_normalize_text(
+                kwargs.get("prompt546_internal_codex_prompt_path"),
+                default="",
+            ),
+            prompt546_internal_codex_timeout_seconds=kwargs.get(
+                "prompt546_internal_codex_timeout_seconds",
+                600,
+            ),
+            prompt546_internal_codex_allowed_files=kwargs.get(
+                "prompt546_internal_codex_allowed_files"
+            ),
         )
         _write_json(run_state_path, run_state_payload)
 
