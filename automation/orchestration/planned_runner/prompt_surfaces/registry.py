@@ -213,6 +213,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt548_runtime_result_injection_to_contract_state,
     _build_prompt549_actual_runtime_smoke_artifact_verification_state,
     _build_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_state,
+    _build_prompt551_actual_runtime_adapter_execution_bridge_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -422,6 +423,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt548_runtime_result_injection_to_contract_state": _build_prompt548_runtime_result_injection_to_contract_state,
     "_build_prompt549_actual_runtime_smoke_artifact_verification_state": _build_prompt549_actual_runtime_smoke_artifact_verification_state,
     "_build_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_state": _build_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_state,
+    "_build_prompt551_actual_runtime_adapter_execution_bridge_state": _build_prompt551_actual_runtime_adapter_execution_bridge_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -635,4 +637,5 @@ __all__ = [
     "_build_prompt547_real_runtime_internal_codex_smoke_state",
     "_build_prompt548_runtime_result_injection_to_contract_state",
     "_build_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_state",
+    "_build_prompt551_actual_runtime_adapter_execution_bridge_state",
 ]

@@ -65,6 +65,9 @@ from automation.orchestration.planned_runner.runtime_internal_execution_adapter 
     PROMPT546_DIFF_ARTIFACT,
 )
 from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
+    PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN,
+)
+from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
     PROMPT546_RESULT_ARTIFACT,
 )
 from automation.orchestration.planned_runner.runtime_internal_execution_adapter import (
@@ -158,6 +161,10 @@ _PROMPT546_DEFAULT_ALLOWED_FILES = (
     "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
 )
 _PROMPT547_DEFAULT_ALLOWED_FILES = _PROMPT546_DEFAULT_ALLOWED_FILES
+
+_PROMPT551_MINIMAL_PROMPT_ARTIFACT = (
+    Path("artifacts/runtime_commands/prompt551_minimal_runtime_smoke_prompt.txt")
+)
 
 _PROMPT380_RESULT_REVIEW_ROUTE_FIELDS = (
     "prompt380_prompt379_result_review_status",
@@ -660,6 +667,183 @@ _PROMPT548_RESULT_JSON_SCHEMA_FIELDS = (
     "prompt547_internal_execution_error_present",
     "prompt547_internal_no_remote_mutation_verified",
 )
+
+_PROMPT551_RESULT_JSON_SCHEMA_FIELDS = (
+    "prompt546_internal_codex_subprocess_executed",
+    "prompt546_internal_codex_returncode",
+    "prompt546_internal_codex_returncode_success",
+    "prompt546_internal_codex_stdout_captured",
+    "prompt546_internal_codex_stderr_captured",
+    "prompt546_internal_changed_files_captured",
+    "prompt546_internal_diff_captured",
+    "prompt546_internal_changed_files_allowed",
+    "prompt546_internal_unexpected_changed_files_present",
+    "prompt546_internal_unexpected_diff_present",
+    "prompt546_internal_execution_timeout_occurred",
+    "prompt546_internal_execution_error_present",
+    "prompt546_internal_no_remote_mutation_verified",
+)
+
+
+def _prompt551_returncode_exists(repo_path: Path) -> bool:
+    return (repo_path / PROMPT546_RETURNCODE_ARTIFACT).is_file()
+
+
+def _prompt551_input_metadata(
+    *,
+    repo_path: Path,
+    result_payload: Mapping[str, Any] | None = None,
+    explicit_execution_enable_present: bool = False,
+    bridge_present: bool = True,
+) -> dict[str, Any]:
+    result_path = repo_path / PROMPT546_RESULT_ARTIFACT
+    loaded_payload = (
+        result_payload
+        if isinstance(result_payload, Mapping)
+        else _read_json_object_if_exists(result_path)
+    )
+    result_json_schema_valid = bool(
+        isinstance(loaded_payload, Mapping)
+        and all(
+            field in loaded_payload
+            for field in _PROMPT551_RESULT_JSON_SCHEMA_FIELDS
+        )
+    )
+    loaded_payload = (
+        loaded_payload if isinstance(loaded_payload, Mapping) else {}
+    )
+    return {
+        "prompt551_input_runtime_execution_bridge_present": bool(
+            bridge_present
+        ),
+        "prompt551_input_explicit_execution_enable_present": bool(
+            explicit_execution_enable_present
+        ),
+        "prompt551_input_runtime_adapter_invoked": bool(
+            loaded_payload.get("prompt546_internal_codex_subprocess_executed")
+            is True
+        ),
+        "prompt551_input_stdout_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_STDOUT_ARTIFACT,
+        ),
+        "prompt551_input_stderr_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_STDERR_ARTIFACT,
+        ),
+        "prompt551_input_returncode_artifact_exists": _prompt551_returncode_exists(
+            repo_path
+        ),
+        "prompt551_input_changed_files_artifact_exists": (
+            _prompt546_artifact_ready(repo_path, PROMPT546_CHANGED_FILES_ARTIFACT)
+        ),
+        "prompt551_input_diff_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_DIFF_ARTIFACT,
+        ),
+        "prompt551_input_result_json_artifact_exists": result_path.is_file(),
+        "prompt551_input_result_json_schema_valid": bool(
+            result_json_schema_valid
+        ),
+        "prompt551_input_remote_mutation_absent": bool(
+            loaded_payload.get("prompt546_internal_no_remote_mutation_verified")
+            is True
+        ),
+        "prompt551_input_execution_error_present": bool(
+            loaded_payload.get("prompt546_internal_execution_error_present")
+            is True
+        ),
+    }
+
+
+def run_prompt551_actual_runtime_adapter_execution_bridge(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str = "",
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    timeout_seconds: int | None = None,
+    allowed_files: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    resolved_enabled = (
+        bool(enabled)
+        if enabled is not None
+        else bool(payload.get("prompt551_runtime_execution_enabled"))
+    )
+    resolved_enable_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt551_runtime_execution_enable_token"),
+        default="",
+    )
+    explicit_execution_enable_present = bool(
+        resolved_enabled
+        and resolved_enable_token == PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+    )
+    timeout = max(
+        1,
+        min(
+            600,
+            int(
+                timeout_seconds
+                if timeout_seconds is not None
+                else payload.get("prompt551_runtime_execution_timeout_seconds")
+                or 120
+            ),
+        ),
+    )
+    merged = dict(payload)
+
+    result_payload: dict[str, Any] | None = None
+    if repo_text and explicit_execution_enable_present:
+        prompt_path = repo_path / _PROMPT551_MINIMAL_PROMPT_ARTIFACT
+        prompt_path.parent.mkdir(parents=True, exist_ok=True)
+        prompt_path.write_text(
+            "\n".join(
+                (
+                    "Mode: Scout",
+                    "Goal: bounded runtime adapter smoke only.",
+                    "Allowed files: none.",
+                    "Forbidden files: all repository files.",
+                    "Expected artifact/output: report current working directory only.",
+                    "Allowed validation commands: pwd.",
+                    "Out of scope: code changes, commits, tags, pushes, PRs, merges, rollbacks.",
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        result_payload = run_internal_codex_subprocess(
+            repo_dir=str(repo_path),
+            prompt_path=str(prompt_path),
+            allowed_files=(
+                tuple(allowed_files)
+                if allowed_files is not None
+                else _PROMPT546_DEFAULT_ALLOWED_FILES
+            ),
+            enabled=True,
+            enable_token=resolved_enable_token,
+            timeout_seconds=timeout,
+        )
+
+    merged.update(
+        _prompt551_input_metadata(
+            repo_path=repo_path,
+            result_payload=result_payload,
+            explicit_execution_enable_present=explicit_execution_enable_present,
+        )
+    )
+    builder = get_prompt_builders()[
+        "_build_prompt551_actual_runtime_adapter_execution_bridge_state"
+    ]
+    merged.update(builder(run_state_payload=merged))
+    return merged
 
 
 def _prompt548_returncode_zero(repo_path: Path) -> bool:
