@@ -21489,6 +21489,444 @@ def _build_prompt540_internal_codex_execution_adapter_state(
     }
 
 
+def _build_prompt541_internal_codex_subprocess_execution_adapter_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt540_next_action = _normalize_text(
+        payload.get("prompt540_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt540_internal_codex_execution_adapter_ready",
+            payload.get("prompt540_internal_codex_execution_adapter_ready")
+            is True,
+        ),
+        (
+            "prompt540_internal_codex_execution_adapter_candidate_ready",
+            payload.get(
+                "prompt540_internal_codex_execution_adapter_candidate_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt540_source_prompt539_ready",
+            payload.get("prompt540_source_prompt539_ready") is True,
+        ),
+        (
+            "prompt540_internal_codex_adapter_enable_present",
+            payload.get("prompt540_internal_codex_adapter_enable_present")
+            is True,
+        ),
+        (
+            "prompt540_internal_codex_adapter_enable_token_valid",
+            payload.get(
+                "prompt540_internal_codex_adapter_enable_token_valid"
+            )
+            is True,
+        ),
+        (
+            "prompt540_subprocess_adapter_contract_present",
+            payload.get("prompt540_subprocess_adapter_contract_present")
+            is True,
+        ),
+        (
+            "prompt540_timeout_seconds_present",
+            payload.get("prompt540_timeout_seconds_present") is True,
+        ),
+        (
+            "prompt540_working_directory_contract_present",
+            payload.get("prompt540_working_directory_contract_present")
+            is True,
+        ),
+        (
+            "prompt540_environment_contract_present",
+            payload.get("prompt540_environment_contract_present") is True,
+        ),
+        (
+            "prompt540_artifact_capture_contract_present",
+            payload.get("prompt540_artifact_capture_contract_present")
+            is True,
+        ),
+        (
+            "prompt540_allowed_files_contract_present",
+            payload.get("prompt540_allowed_files_contract_present") is True,
+        ),
+        (
+            "prompt540_no_remote_mutation_contract_present",
+            payload.get("prompt540_no_remote_mutation_contract_present")
+            is True,
+        ),
+        (
+            "prompt540_double_run_prevention_contract_present",
+            payload.get("prompt540_double_run_prevention_contract_present")
+            is True,
+        ),
+        (
+            "prompt540_adapter_error_present",
+            payload.get("prompt540_adapter_error_present") is False,
+        ),
+        (
+            "prompt540_internal_subprocess_execution_adapter_required",
+            payload.get(
+                "prompt540_internal_subprocess_execution_adapter_required"
+            )
+            is True,
+        ),
+        (
+            "prompt540_internal_codex_exec_command_required",
+            payload.get("prompt540_internal_codex_exec_command_required")
+            is True,
+        ),
+        (
+            "prompt540_internal_execution_timeout_required",
+            payload.get("prompt540_internal_execution_timeout_required")
+            is True,
+        ),
+        (
+            "prompt540_internal_artifact_capture_required",
+            payload.get("prompt540_internal_artifact_capture_required")
+            is True,
+        ),
+        (
+            "prompt540_internal_returncode_capture_required",
+            payload.get("prompt540_internal_returncode_capture_required")
+            is True,
+        ),
+        (
+            "prompt540_internal_stdout_stderr_capture_required",
+            payload.get(
+                "prompt540_internal_stdout_stderr_capture_required"
+            )
+            is True,
+        ),
+        (
+            "prompt540_internal_changed_files_capture_required",
+            payload.get(
+                "prompt540_internal_changed_files_capture_required"
+            )
+            is True,
+        ),
+        (
+            "prompt540_internal_diff_capture_required",
+            payload.get("prompt540_internal_diff_capture_required") is True,
+        ),
+        (
+            "prompt540_internal_post_execution_review_required",
+            payload.get("prompt540_internal_post_execution_review_required")
+            is True,
+        ),
+        (
+            "prompt540_prompt378_execution_allowed",
+            payload.get("prompt540_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt540_prompt379_execution_allowed",
+            payload.get("prompt540_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt540_codex_execution_allowed",
+            payload.get("prompt540_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt540_subprocess_execution_allowed",
+            payload.get("prompt540_subprocess_execution_allowed") is False,
+        ),
+        (
+            "prompt540_git_mutation_allowed",
+            payload.get("prompt540_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt540_remote_mutation_allowed",
+            payload.get("prompt540_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt540_commit_tag_execution_allowed",
+            payload.get("prompt540_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt540_execution_performed_by_prompt540",
+            payload.get("prompt540_execution_performed_by_prompt540")
+            is False,
+        ),
+        (
+            "prompt540_next_action",
+            prompt540_next_action
+            == "prepare_prompt541_internal_codex_subprocess_execution_adapter",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    internal_subprocess_adapter_present = (
+        payload.get("prompt541_input_internal_subprocess_adapter_present")
+        is True
+    )
+    codex_exec_command_present = (
+        payload.get("prompt541_input_codex_exec_command_present") is True
+    )
+    codex_prompt_artifact_present = (
+        payload.get("prompt541_input_codex_prompt_artifact_present") is True
+    )
+    working_directory_present = (
+        payload.get("prompt541_input_working_directory_present") is True
+    )
+    timeout_seconds_present = (
+        payload.get("prompt541_input_timeout_seconds_present") is True
+    )
+    environment_sanitized = (
+        payload.get("prompt541_input_environment_sanitized") is True
+    )
+    artifact_output_directory_present = (
+        payload.get("prompt541_input_artifact_output_directory_present")
+        is True
+    )
+    stdout_capture_path_present = (
+        payload.get("prompt541_input_stdout_capture_path_present") is True
+    )
+    stderr_capture_path_present = (
+        payload.get("prompt541_input_stderr_capture_path_present") is True
+    )
+    returncode_capture_path_present = (
+        payload.get("prompt541_input_returncode_capture_path_present")
+        is True
+    )
+    changed_files_capture_path_present = (
+        payload.get("prompt541_input_changed_files_capture_path_present")
+        is True
+    )
+    diff_capture_path_present = (
+        payload.get("prompt541_input_diff_capture_path_present") is True
+    )
+    double_run_prevention_token_present = (
+        payload.get("prompt541_input_double_run_prevention_token_present")
+        is True
+    )
+    no_remote_mutation_guard_present = (
+        payload.get("prompt541_input_no_remote_mutation_guard_present")
+        is True
+    )
+    allowed_files_guard_present = (
+        payload.get("prompt541_input_allowed_files_guard_present") is True
+    )
+    adapter_error_present = (
+        payload.get("prompt541_input_adapter_error_present") is True
+    )
+
+    adapter_contract_checks = (
+        ("base_readiness", base_readiness),
+        (
+            "prompt541_input_internal_subprocess_adapter_present",
+            internal_subprocess_adapter_present,
+        ),
+        (
+            "prompt541_input_codex_exec_command_present",
+            codex_exec_command_present,
+        ),
+        (
+            "prompt541_input_codex_prompt_artifact_present",
+            codex_prompt_artifact_present,
+        ),
+        (
+            "prompt541_input_working_directory_present",
+            working_directory_present,
+        ),
+        (
+            "prompt541_input_timeout_seconds_present",
+            timeout_seconds_present,
+        ),
+        (
+            "prompt541_input_environment_sanitized",
+            environment_sanitized,
+        ),
+        (
+            "prompt541_input_artifact_output_directory_present",
+            artifact_output_directory_present,
+        ),
+        (
+            "prompt541_input_stdout_capture_path_present",
+            stdout_capture_path_present,
+        ),
+        (
+            "prompt541_input_stderr_capture_path_present",
+            stderr_capture_path_present,
+        ),
+        (
+            "prompt541_input_returncode_capture_path_present",
+            returncode_capture_path_present,
+        ),
+        (
+            "prompt541_input_changed_files_capture_path_present",
+            changed_files_capture_path_present,
+        ),
+        (
+            "prompt541_input_diff_capture_path_present",
+            diff_capture_path_present,
+        ),
+        (
+            "prompt541_input_double_run_prevention_token_present",
+            double_run_prevention_token_present,
+        ),
+        (
+            "prompt541_input_no_remote_mutation_guard_present",
+            no_remote_mutation_guard_present,
+        ),
+        (
+            "prompt541_input_allowed_files_guard_present",
+            allowed_files_guard_present,
+        ),
+        (
+            "prompt541_input_adapter_error_present",
+            payload.get("prompt541_input_adapter_error_present") is False,
+        ),
+    )
+    adapter_failure_reasons = [
+        f"failed_{field}"
+        for field, passed in adapter_contract_checks
+        if not passed
+    ]
+    adapter_contract_success = not adapter_failure_reasons
+
+    if adapter_contract_success:
+        status = "ready_for_internal_codex_subprocess_execution"
+        next_action = (
+            "prepare_prompt542_internal_execution_result_review_and_guard"
+        )
+        blocked_reasons: list[str] = []
+    elif base_readiness and not internal_subprocess_adapter_present:
+        status = "awaiting_internal_subprocess_adapter_contract"
+        next_action = "await_internal_subprocess_adapter_contract"
+        blocked_reasons = []
+    elif base_readiness and internal_subprocess_adapter_present:
+        status = "blocked_internal_codex_subprocess_execution_adapter"
+        next_action = (
+            "manual_review_prompt541_internal_codex_subprocess_adapter_blocked"
+        )
+        blocked_reasons = adapter_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt541_internal_codex_subprocess_execution_adapter"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt541",
+        "prompt541_internal_codex_subprocess_execution_adapter_status": (
+            status
+        ),
+        "prompt541_internal_codex_subprocess_execution_adapter_ready": bool(
+            base_readiness
+        ),
+        "prompt541_internal_codex_subprocess_execution_candidate_ready": bool(
+            adapter_contract_success
+        ),
+        "prompt541_source_prompt540_ready": bool(
+            payload.get("prompt540_internal_codex_execution_adapter_ready")
+        ),
+        "prompt541_internal_subprocess_adapter_present": (
+            internal_subprocess_adapter_present
+        ),
+        "prompt541_codex_exec_command_present": codex_exec_command_present,
+        "prompt541_codex_prompt_artifact_present": (
+            codex_prompt_artifact_present
+        ),
+        "prompt541_working_directory_present": working_directory_present,
+        "prompt541_timeout_seconds_present": timeout_seconds_present,
+        "prompt541_environment_sanitized": environment_sanitized,
+        "prompt541_artifact_output_directory_present": (
+            artifact_output_directory_present
+        ),
+        "prompt541_stdout_capture_path_present": (
+            stdout_capture_path_present
+        ),
+        "prompt541_stderr_capture_path_present": (
+            stderr_capture_path_present
+        ),
+        "prompt541_returncode_capture_path_present": (
+            returncode_capture_path_present
+        ),
+        "prompt541_changed_files_capture_path_present": (
+            changed_files_capture_path_present
+        ),
+        "prompt541_diff_capture_path_present": diff_capture_path_present,
+        "prompt541_double_run_prevention_token_present": (
+            double_run_prevention_token_present
+        ),
+        "prompt541_no_remote_mutation_guard_present": (
+            no_remote_mutation_guard_present
+        ),
+        "prompt541_allowed_files_guard_present": (
+            allowed_files_guard_present
+        ),
+        "prompt541_adapter_error_present": adapter_error_present,
+        "prompt541_expected_codex_prompt_artifact_path": (
+            "artifacts/runtime_commands/prompt541_internal_codex_prompt.md"
+        ),
+        "prompt541_expected_stdout_artifact_path": (
+            "artifacts/runtime_commands/prompt541_internal_codex_stdout.txt"
+        ),
+        "prompt541_expected_stderr_artifact_path": (
+            "artifacts/runtime_commands/prompt541_internal_codex_stderr.txt"
+        ),
+        "prompt541_expected_returncode_artifact_path": (
+            "artifacts/runtime_commands/prompt541_internal_codex_returncode.txt"
+        ),
+        "prompt541_expected_changed_files_artifact_path": (
+            "artifacts/runtime_commands/prompt541_internal_codex_changed_files.txt"
+        ),
+        "prompt541_expected_diff_artifact_path": (
+            "artifacts/runtime_commands/prompt541_internal_codex_diff.patch"
+        ),
+        "prompt541_expected_result_artifact_path": (
+            "artifacts/runtime_commands/prompt541_internal_codex_result.json"
+        ),
+        "prompt541_internal_codex_subprocess_execution_required": bool(
+            adapter_contract_success
+        ),
+        "prompt541_internal_codex_subprocess_execution_allowed": False,
+        "prompt541_internal_codex_subprocess_execution_performed": False,
+        "prompt541_internal_execution_result_capture_required": bool(
+            adapter_contract_success
+        ),
+        "prompt541_internal_execution_review_required": bool(
+            adapter_contract_success
+        ),
+        "prompt541_internal_allowed_files_review_required": bool(
+            adapter_contract_success
+        ),
+        "prompt541_internal_diff_review_required": bool(
+            adapter_contract_success
+        ),
+        "prompt541_internal_py_compile_review_required": bool(
+            adapter_contract_success
+        ),
+        "prompt541_internal_commit_tag_route_required": bool(
+            adapter_contract_success
+        ),
+        "prompt541_prompt378_execution_allowed": False,
+        "prompt541_prompt379_execution_allowed": False,
+        "prompt541_codex_execution_allowed": False,
+        "prompt541_subprocess_execution_allowed": False,
+        "prompt541_git_mutation_allowed": False,
+        "prompt541_remote_mutation_allowed": False,
+        "prompt541_commit_tag_execution_allowed": False,
+        "prompt541_execution_performed_by_prompt541": False,
+        "prompt541_next_action": next_action,
+        "prompt541_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt541_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -22543,4 +22981,5 @@ __all__ = [
     "_build_prompt538_bounded_real_dispatch_review_and_commit_route_state",
     "_build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded_dispatch_state",
     "_build_prompt540_internal_codex_execution_adapter_state",
+    "_build_prompt541_internal_codex_subprocess_execution_adapter_state",
 ]

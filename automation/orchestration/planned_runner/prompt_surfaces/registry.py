@@ -203,6 +203,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt538_bounded_real_dispatch_review_and_commit_route_state,
     _build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded_dispatch_state,
     _build_prompt540_internal_codex_execution_adapter_state,
+    _build_prompt541_internal_codex_subprocess_execution_adapter_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -402,6 +403,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt538_bounded_real_dispatch_review_and_commit_route_state": _build_prompt538_bounded_real_dispatch_review_and_commit_route_state,
     "_build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded_dispatch_state": _build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded_dispatch_state,
     "_build_prompt540_internal_codex_execution_adapter_state": _build_prompt540_internal_codex_execution_adapter_state,
+    "_build_prompt541_internal_codex_subprocess_execution_adapter_state": _build_prompt541_internal_codex_subprocess_execution_adapter_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -606,4 +608,5 @@ __all__ = [
     "_build_prompt538_bounded_real_dispatch_review_and_commit_route_state",
     "_build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded_dispatch_state",
     "_build_prompt540_internal_codex_execution_adapter_state",
+    "_build_prompt541_internal_codex_subprocess_execution_adapter_state",
 ]
