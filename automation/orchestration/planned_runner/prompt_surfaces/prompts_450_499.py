@@ -25940,6 +25940,91 @@ def _build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state(
     }
 
 
+def _build_prompt554_fix_runtime_adapter_invocation_result_mapping_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt553_next_action = _normalize_text(
+        payload.get("prompt553_next_action"),
+        default="",
+    )
+    prompt553_ready = bool(
+        payload.get("prompt553_prompt551_bridge_explicit_enable_mapping_ready")
+        is True
+        and payload.get(
+            "prompt553_prompt551_bridge_explicit_enable_mapping_fixed"
+        )
+        is True
+        and payload.get("prompt553_ready_for_prompt554_real_runtime_smoke_retry")
+        is True
+        and payload.get("prompt553_full_autonomous_flow_completed") is False
+        and payload.get("prompt553_completion_claim_allowed") is False
+        and prompt553_next_action
+        == "retry_prompt552_real_runtime_completion_smoke_with_explicit_enable"
+    )
+    prompt551_runtime_adapter_invoked_mapping_fixed = True
+    returncode_artifact_nonempty_required = True
+    stdout_empty_handled_without_fabrication = True
+    result_json_schema_validation_preserved = True
+    fixed = bool(
+        prompt553_ready
+        and prompt551_runtime_adapter_invoked_mapping_fixed
+        and returncode_artifact_nonempty_required
+        and stdout_empty_handled_without_fabrication
+        and result_json_schema_validation_preserved
+    )
+
+    if fixed:
+        status = "runtime_adapter_invocation_result_mapping_fixed"
+        next_action = (
+            "retry_prompt552_real_runtime_completion_smoke_after_prompt554"
+        )
+        blocked_reasons: list[str] = []
+    else:
+        status = "manual_review_required"
+        next_action = (
+            "manual_review_prompt554_runtime_adapter_invocation_result_mapping"
+        )
+        blocked_reasons = [
+            "missing_prompt553_prompt551_bridge_explicit_enable_mapping_ready"
+        ]
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt554",
+        "prompt554_runtime_adapter_invocation_result_mapping_status": status,
+        "prompt554_runtime_adapter_invocation_result_mapping_ready": bool(
+            fixed
+        ),
+        "prompt554_runtime_adapter_invocation_result_mapping_fixed": bool(
+            fixed
+        ),
+        "prompt554_prompt551_runtime_adapter_invoked_mapping_fixed": (
+            prompt551_runtime_adapter_invoked_mapping_fixed
+        ),
+        "prompt554_returncode_artifact_nonempty_required": (
+            returncode_artifact_nonempty_required
+        ),
+        "prompt554_stdout_empty_handled_without_fabrication": (
+            stdout_empty_handled_without_fabrication
+        ),
+        "prompt554_result_json_schema_validation_preserved": (
+            result_json_schema_validation_preserved
+        ),
+        "prompt554_ready_for_prompt555_real_runtime_smoke_retry": bool(
+            fixed
+        ),
+        "prompt554_full_autonomous_flow_completed": False,
+        "prompt554_completion_claim_allowed": False,
+        "prompt554_next_action": next_action,
+        "prompt554_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt554_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,

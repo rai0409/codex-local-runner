@@ -689,12 +689,64 @@ def _prompt551_returncode_exists(repo_path: Path) -> bool:
     return (repo_path / PROMPT546_RETURNCODE_ARTIFACT).is_file()
 
 
+def _prompt551_result_returncode(
+    result_payload: Mapping[str, Any],
+) -> int | None:
+    raw_returncode = result_payload.get("prompt546_internal_codex_returncode")
+    if isinstance(raw_returncode, bool):
+        return None
+    if isinstance(raw_returncode, int):
+        return raw_returncode
+    if isinstance(raw_returncode, str):
+        try:
+            return int(raw_returncode.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _prompt551_materialize_result_artifacts(
+    *,
+    repo_path: Path,
+    result_payload: Mapping[str, Any],
+) -> None:
+    returncode = _prompt551_result_returncode(result_payload)
+    if returncode is not None:
+        (repo_path / PROMPT546_RETURNCODE_ARTIFACT).write_text(
+            f"{returncode}\n",
+            encoding="utf-8",
+        )
+
+    changed_files = result_payload.get("prompt546_internal_changed_files")
+    if isinstance(changed_files, Iterable) and not isinstance(
+        changed_files,
+        (str, bytes),
+    ):
+        changed_file_lines = [str(item) for item in changed_files]
+        (repo_path / PROMPT546_CHANGED_FILES_ARTIFACT).write_text(
+            "\n".join(changed_file_lines) + "\n",
+            encoding="utf-8",
+        )
+
+    for artifact_path in (
+        PROMPT546_STDOUT_ARTIFACT,
+        PROMPT546_STDERR_ARTIFACT,
+        PROMPT546_DIFF_ARTIFACT,
+    ):
+        full_path = repo_path / artifact_path
+        if not full_path.is_file():
+            full_path.write_text("", encoding="utf-8")
+
+    _write_json(repo_path / PROMPT546_RESULT_ARTIFACT, dict(result_payload))
+
+
 def _prompt551_input_metadata(
     *,
     repo_path: Path,
     result_payload: Mapping[str, Any] | None = None,
     explicit_execution_enable_present: bool = False,
     bridge_present: bool = True,
+    runtime_adapter_invocation_attempted: bool = False,
 ) -> dict[str, Any]:
     result_path = repo_path / PROMPT546_RESULT_ARTIFACT
     loaded_payload = (
@@ -720,8 +772,7 @@ def _prompt551_input_metadata(
             explicit_execution_enable_present
         ),
         "prompt551_input_runtime_adapter_invoked": bool(
-            loaded_payload.get("prompt546_internal_codex_subprocess_executed")
-            is True
+            runtime_adapter_invocation_attempted
         ),
         "prompt551_input_stdout_artifact_exists": _prompt546_artifact_ready(
             repo_path,
@@ -806,7 +857,8 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
     )
     explicit_arg_enable_token = _normalize_text(enable_token, default="")
     explicit_arg_enable_present = bool(
-        enabled is True and explicit_arg_enable_token
+        enabled is True
+        and explicit_arg_enable_token == PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
     )
     payload_explicit_execution_enable_present = bool(
         payload.get("prompt551_runtime_execution_enabled") is True
@@ -835,6 +887,7 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
     merged = dict(payload)
 
     result_payload: dict[str, Any] | None = None
+    runtime_adapter_invocation_attempted = False
     if (
         repo_text
         and _prompt551_prompt550_base_ready(merged)
@@ -857,6 +910,7 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
             + "\n",
             encoding="utf-8",
         )
+        runtime_adapter_invocation_attempted = True
         result_payload = run_internal_codex_subprocess(
             repo_dir=str(repo_path),
             prompt_path=str(prompt_path),
@@ -869,12 +923,20 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
             enable_token=resolved_enable_token,
             timeout_seconds=timeout,
         )
+        if isinstance(result_payload, Mapping):
+            _prompt551_materialize_result_artifacts(
+                repo_path=repo_path,
+                result_payload=result_payload,
+            )
 
     merged.update(
         _prompt551_input_metadata(
             repo_path=repo_path,
             result_payload=result_payload,
             explicit_execution_enable_present=explicit_execution_enable_present,
+            runtime_adapter_invocation_attempted=(
+                runtime_adapter_invocation_attempted
+            ),
         )
     )
     builder = get_prompt_builders()[
