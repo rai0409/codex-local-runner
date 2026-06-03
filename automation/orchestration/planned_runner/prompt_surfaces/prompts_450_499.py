@@ -21128,6 +21128,367 @@ def _build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded
     }
 
 
+def _build_prompt540_internal_codex_execution_adapter_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt539_next_action = _normalize_text(
+        payload.get("prompt539_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt539_external_commit_tag_result_and_post_clean_rerun_ready",
+            payload.get(
+                "prompt539_external_commit_tag_result_and_post_clean_rerun_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt539_bounded_real_dispatch_cycle_close_success",
+            payload.get("prompt539_bounded_real_dispatch_cycle_close_success")
+            is True,
+        ),
+        (
+            "prompt539_source_prompt538_ready",
+            payload.get("prompt539_source_prompt538_ready") is True,
+        ),
+        (
+            "prompt539_external_commit_tag_result_present",
+            payload.get("prompt539_external_commit_tag_result_present")
+            is True,
+        ),
+        (
+            "prompt539_commit_created",
+            payload.get("prompt539_commit_created") is True,
+        ),
+        (
+            "prompt539_commit_hash_present",
+            payload.get("prompt539_commit_hash_present") is True,
+        ),
+        ("prompt539_tag_created", payload.get("prompt539_tag_created") is True),
+        (
+            "prompt539_tag_name_present",
+            payload.get("prompt539_tag_name_present") is True,
+        ),
+        (
+            "prompt539_tag_points_at_head",
+            payload.get("prompt539_tag_points_at_head") is True,
+        ),
+        (
+            "prompt539_post_commit_worktree_clean",
+            payload.get("prompt539_post_commit_worktree_clean") is True,
+        ),
+        (
+            "prompt539_post_commit_rerun_performed",
+            payload.get("prompt539_post_commit_rerun_performed") is True,
+        ),
+        (
+            "prompt539_post_commit_rerun_success",
+            payload.get("prompt539_post_commit_rerun_success") is True,
+        ),
+        (
+            "prompt539_head_tag_verified",
+            payload.get("prompt539_head_tag_verified") is True,
+        ),
+        (
+            "prompt539_required_fields_verified",
+            payload.get("prompt539_required_fields_verified") is True,
+        ),
+        (
+            "prompt539_bounded_real_dispatch_cycle_closed",
+            payload.get("prompt539_bounded_real_dispatch_cycle_closed")
+            is True,
+        ),
+        (
+            "prompt539_next_cycle_handoff_verified",
+            payload.get("prompt539_next_cycle_handoff_verified") is True,
+        ),
+        (
+            "prompt539_commit_tag_error_present",
+            payload.get("prompt539_commit_tag_error_present") is False,
+        ),
+        (
+            "prompt539_bounded_real_dispatch_trial_completed",
+            payload.get("prompt539_bounded_real_dispatch_trial_completed")
+            is True,
+        ),
+        (
+            "prompt539_bounded_real_dispatch_trial_minimal_complete",
+            payload.get(
+                "prompt539_bounded_real_dispatch_trial_minimal_complete"
+            )
+            is True,
+        ),
+        (
+            "prompt539_local_only_real_dispatch_cycle_completed",
+            payload.get("prompt539_local_only_real_dispatch_cycle_completed")
+            is True,
+        ),
+        (
+            "prompt539_next_autonomous_cycle_ready",
+            payload.get("prompt539_next_autonomous_cycle_ready") is True,
+        ),
+        (
+            "prompt539_next_prompt378_request_gate_ready",
+            payload.get("prompt539_next_prompt378_request_gate_ready")
+            is True,
+        ),
+        (
+            "prompt539_ready_for_internal_codex_execution_adapter",
+            payload.get(
+                "prompt539_ready_for_internal_codex_execution_adapter"
+            )
+            is True,
+        ),
+        (
+            "prompt539_prompt378_execution_allowed",
+            payload.get("prompt539_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt539_prompt379_execution_allowed",
+            payload.get("prompt539_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt539_codex_execution_allowed",
+            payload.get("prompt539_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt539_git_mutation_allowed",
+            payload.get("prompt539_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt539_remote_mutation_allowed",
+            payload.get("prompt539_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt539_commit_tag_execution_allowed",
+            payload.get("prompt539_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt539_execution_performed_by_prompt539",
+            payload.get("prompt539_execution_performed_by_prompt539")
+            is False,
+        ),
+        (
+            "prompt539_next_action",
+            prompt539_next_action
+            == "prepare_prompt540_internal_codex_execution_adapter",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    internal_codex_adapter_enable_present = (
+        payload.get("prompt540_input_internal_codex_adapter_enable_present")
+        is True
+    )
+    internal_codex_adapter_enable_token_valid = (
+        payload.get(
+            "prompt540_input_internal_codex_adapter_enable_token_valid"
+        )
+        is True
+    )
+    subprocess_adapter_contract_present = (
+        payload.get("prompt540_input_subprocess_adapter_contract_present")
+        is True
+    )
+    timeout_seconds_present = (
+        payload.get("prompt540_input_timeout_seconds_present") is True
+    )
+    working_directory_contract_present = (
+        payload.get("prompt540_input_working_directory_contract_present")
+        is True
+    )
+    environment_contract_present = (
+        payload.get("prompt540_input_environment_contract_present") is True
+    )
+    artifact_capture_contract_present = (
+        payload.get("prompt540_input_artifact_capture_contract_present")
+        is True
+    )
+    allowed_files_contract_present = (
+        payload.get("prompt540_input_allowed_files_contract_present") is True
+    )
+    no_remote_mutation_contract_present = (
+        payload.get("prompt540_input_no_remote_mutation_contract_present")
+        is True
+    )
+    double_run_prevention_contract_present = (
+        payload.get("prompt540_input_double_run_prevention_contract_present")
+        is True
+    )
+    adapter_error_present = (
+        payload.get("prompt540_input_adapter_error_present") is True
+    )
+
+    adapter_readiness_checks = (
+        ("base_readiness", base_readiness),
+        (
+            "prompt540_input_internal_codex_adapter_enable_present",
+            internal_codex_adapter_enable_present,
+        ),
+        (
+            "prompt540_input_internal_codex_adapter_enable_token_valid",
+            internal_codex_adapter_enable_token_valid,
+        ),
+        (
+            "prompt540_input_subprocess_adapter_contract_present",
+            subprocess_adapter_contract_present,
+        ),
+        (
+            "prompt540_input_timeout_seconds_present",
+            timeout_seconds_present,
+        ),
+        (
+            "prompt540_input_working_directory_contract_present",
+            working_directory_contract_present,
+        ),
+        (
+            "prompt540_input_environment_contract_present",
+            environment_contract_present,
+        ),
+        (
+            "prompt540_input_artifact_capture_contract_present",
+            artifact_capture_contract_present,
+        ),
+        (
+            "prompt540_input_allowed_files_contract_present",
+            allowed_files_contract_present,
+        ),
+        (
+            "prompt540_input_no_remote_mutation_contract_present",
+            no_remote_mutation_contract_present,
+        ),
+        (
+            "prompt540_input_double_run_prevention_contract_present",
+            double_run_prevention_contract_present,
+        ),
+        (
+            "prompt540_input_adapter_error_present",
+            payload.get("prompt540_input_adapter_error_present") is False,
+        ),
+    )
+    adapter_failure_reasons = [
+        f"failed_{field}"
+        for field, passed in adapter_readiness_checks
+        if not passed
+    ]
+    adapter_readiness = not adapter_failure_reasons
+
+    if adapter_readiness:
+        status = "ready_for_internal_codex_execution_adapter_implementation"
+        next_action = (
+            "prepare_prompt541_internal_codex_subprocess_execution_adapter"
+        )
+        blocked_reasons: list[str] = []
+    elif base_readiness and not internal_codex_adapter_enable_present:
+        status = "awaiting_internal_codex_adapter_enable"
+        next_action = "await_internal_codex_adapter_enable"
+        blocked_reasons = []
+    elif base_readiness and internal_codex_adapter_enable_present:
+        status = "blocked_internal_codex_execution_adapter"
+        next_action = (
+            "manual_review_prompt540_internal_codex_adapter_blocked"
+        )
+        blocked_reasons = adapter_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt540_internal_codex_execution_adapter"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt540",
+        "prompt540_internal_codex_execution_adapter_status": status,
+        "prompt540_internal_codex_execution_adapter_ready": bool(
+            base_readiness
+        ),
+        "prompt540_internal_codex_execution_adapter_candidate_ready": bool(
+            adapter_readiness
+        ),
+        "prompt540_source_prompt539_ready": bool(
+            payload.get(
+                "prompt539_external_commit_tag_result_and_post_clean_rerun_ready"
+            )
+        ),
+        "prompt540_internal_codex_adapter_enable_present": (
+            internal_codex_adapter_enable_present
+        ),
+        "prompt540_internal_codex_adapter_enable_token_valid": (
+            internal_codex_adapter_enable_token_valid
+        ),
+        "prompt540_subprocess_adapter_contract_present": (
+            subprocess_adapter_contract_present
+        ),
+        "prompt540_timeout_seconds_present": timeout_seconds_present,
+        "prompt540_working_directory_contract_present": (
+            working_directory_contract_present
+        ),
+        "prompt540_environment_contract_present": (
+            environment_contract_present
+        ),
+        "prompt540_artifact_capture_contract_present": (
+            artifact_capture_contract_present
+        ),
+        "prompt540_allowed_files_contract_present": (
+            allowed_files_contract_present
+        ),
+        "prompt540_no_remote_mutation_contract_present": (
+            no_remote_mutation_contract_present
+        ),
+        "prompt540_double_run_prevention_contract_present": (
+            double_run_prevention_contract_present
+        ),
+        "prompt540_adapter_error_present": adapter_error_present,
+        "prompt540_internal_subprocess_execution_adapter_required": bool(
+            adapter_readiness
+        ),
+        "prompt540_internal_codex_exec_command_required": bool(
+            adapter_readiness
+        ),
+        "prompt540_internal_execution_timeout_required": bool(
+            adapter_readiness
+        ),
+        "prompt540_internal_artifact_capture_required": bool(
+            adapter_readiness
+        ),
+        "prompt540_internal_returncode_capture_required": bool(
+            adapter_readiness
+        ),
+        "prompt540_internal_stdout_stderr_capture_required": bool(
+            adapter_readiness
+        ),
+        "prompt540_internal_changed_files_capture_required": bool(
+            adapter_readiness
+        ),
+        "prompt540_internal_diff_capture_required": bool(adapter_readiness),
+        "prompt540_internal_post_execution_review_required": bool(
+            adapter_readiness
+        ),
+        "prompt540_prompt378_execution_allowed": False,
+        "prompt540_prompt379_execution_allowed": False,
+        "prompt540_codex_execution_allowed": False,
+        "prompt540_subprocess_execution_allowed": False,
+        "prompt540_git_mutation_allowed": False,
+        "prompt540_remote_mutation_allowed": False,
+        "prompt540_commit_tag_execution_allowed": False,
+        "prompt540_execution_performed_by_prompt540": False,
+        "prompt540_next_action": next_action,
+        "prompt540_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt540_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -22181,4 +22542,5 @@ __all__ = [
     "_build_prompt537_external_bounded_real_dispatch_result_ingestion_state",
     "_build_prompt538_bounded_real_dispatch_review_and_commit_route_state",
     "_build_prompt539_external_commit_tag_result_and_post_clean_rerun_for_bounded_dispatch_state",
+    "_build_prompt540_internal_codex_execution_adapter_state",
 ]
