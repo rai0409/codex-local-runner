@@ -24642,6 +24642,353 @@ def _build_prompt548_runtime_result_injection_to_contract_state(
     }
 
 
+_PROMPT549_INPUT_FIELDS = (
+    "prompt549_input_actual_runtime_smoke_verification_present",
+    "prompt549_input_stdout_artifact_nonempty",
+    "prompt549_input_stderr_artifact_exists",
+    "prompt549_input_returncode_artifact_zero",
+    "prompt549_input_changed_files_artifact_nonempty",
+    "prompt549_input_diff_artifact_nonempty",
+    "prompt549_input_result_json_artifact_valid",
+    "prompt549_input_result_json_subprocess_executed_true",
+    "prompt549_input_result_json_returncode_success_true",
+    "prompt549_input_result_json_changed_files_allowed_true",
+    "prompt549_input_result_json_unexpected_changed_files_present_false",
+    "prompt549_input_result_json_unexpected_diff_present_false",
+    "prompt549_input_result_json_timeout_occurred_false",
+    "prompt549_input_result_json_execution_error_present_false",
+    "prompt549_input_result_json_no_remote_mutation_verified_true",
+    "prompt549_input_runtime_smoke_verification_error_present",
+)
+
+
+def _build_prompt549_actual_runtime_smoke_artifact_verification_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt548_next_action = _normalize_text(
+        payload.get("prompt548_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt548_runtime_result_injection_to_contract_ready",
+            payload.get("prompt548_runtime_result_injection_to_contract_ready")
+            is True,
+        ),
+        (
+            "prompt548_runtime_result_injection_to_contract_success",
+            payload.get("prompt548_runtime_result_injection_to_contract_success")
+            is True,
+        ),
+        (
+            "prompt548_source_prompt547_ready",
+            payload.get("prompt548_source_prompt547_ready") is True,
+        ),
+        (
+            "prompt548_runtime_result_json_loaded",
+            payload.get("prompt548_runtime_result_json_loaded") is True,
+        ),
+        (
+            "prompt548_runtime_result_json_schema_valid",
+            payload.get("prompt548_runtime_result_json_schema_valid") is True,
+        ),
+        (
+            "prompt548_stdout_artifact_exists",
+            payload.get("prompt548_stdout_artifact_exists") is True,
+        ),
+        (
+            "prompt548_stderr_artifact_exists",
+            payload.get("prompt548_stderr_artifact_exists") is True,
+        ),
+        (
+            "prompt548_returncode_artifact_exists",
+            payload.get("prompt548_returncode_artifact_exists") is True,
+        ),
+        (
+            "prompt548_changed_files_artifact_exists",
+            payload.get("prompt548_changed_files_artifact_exists") is True,
+        ),
+        (
+            "prompt548_diff_artifact_exists",
+            payload.get("prompt548_diff_artifact_exists") is True,
+        ),
+        (
+            "prompt548_result_json_artifact_exists",
+            payload.get("prompt548_result_json_artifact_exists") is True,
+        ),
+        (
+            "prompt548_returncode_zero",
+            payload.get("prompt548_returncode_zero") is True,
+        ),
+        (
+            "prompt548_subprocess_executed",
+            payload.get("prompt548_subprocess_executed") is True,
+        ),
+        (
+            "prompt548_changed_files_allowed",
+            payload.get("prompt548_changed_files_allowed") is True,
+        ),
+        (
+            "prompt548_unexpected_changed_files_present",
+            payload.get("prompt548_unexpected_changed_files_present") is False,
+        ),
+        (
+            "prompt548_unexpected_diff_present",
+            payload.get("prompt548_unexpected_diff_present") is False,
+        ),
+        (
+            "prompt548_timeout_occurred",
+            payload.get("prompt548_timeout_occurred") is False,
+        ),
+        (
+            "prompt548_execution_error_present",
+            payload.get("prompt548_execution_error_present") is False,
+        ),
+        (
+            "prompt548_no_remote_mutation_verified",
+            payload.get("prompt548_no_remote_mutation_verified") is True,
+        ),
+        (
+            "prompt548_injection_error_present",
+            payload.get("prompt548_injection_error_present") is False,
+        ),
+        (
+            "prompt548_runtime_smoke_artifacts_loaded",
+            payload.get("prompt548_runtime_smoke_artifacts_loaded") is True,
+        ),
+        (
+            "prompt548_runtime_smoke_result_injected",
+            payload.get("prompt548_runtime_smoke_result_injected") is True,
+        ),
+        (
+            "prompt548_runtime_smoke_contract_fields_ready",
+            payload.get("prompt548_runtime_smoke_contract_fields_ready")
+            is True,
+        ),
+        (
+            "prompt548_ready_for_prompt549_actual_runtime_smoke_artifact_verification",
+            payload.get(
+                "prompt548_ready_for_prompt549_actual_runtime_smoke_artifact_verification"
+            )
+            is True,
+        ),
+        (
+            "prompt548_full_autonomous_flow_completed",
+            payload.get("prompt548_full_autonomous_flow_completed") is False,
+        ),
+        (
+            "prompt548_completion_claim_allowed",
+            payload.get("prompt548_completion_claim_allowed") is False,
+        ),
+        (
+            "prompt548_codex_execution_allowed",
+            payload.get("prompt548_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt548_subprocess_execution_allowed",
+            payload.get("prompt548_subprocess_execution_allowed") is False,
+        ),
+        (
+            "prompt548_git_mutation_allowed",
+            payload.get("prompt548_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt548_remote_mutation_allowed",
+            payload.get("prompt548_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt548_commit_tag_execution_allowed",
+            payload.get("prompt548_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt548_execution_performed_by_prompt548",
+            payload.get("prompt548_execution_performed_by_prompt548") is False,
+        ),
+        (
+            "prompt548_next_action",
+            prompt548_next_action
+            == "prepare_prompt549_actual_runtime_smoke_artifact_verification",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    inputs = {
+        field: payload.get(field) is True
+        for field in _PROMPT549_INPUT_FIELDS
+        if field != "prompt549_input_runtime_smoke_verification_error_present"
+    }
+    runtime_smoke_verification_error_present = (
+        payload.get("prompt549_input_runtime_smoke_verification_error_present")
+        is True
+    )
+    verification_result_present = (
+        inputs["prompt549_input_actual_runtime_smoke_verification_present"]
+        is True
+    )
+    verification_checks = (
+        ("base_readiness", base_readiness),
+        *tuple(inputs.items()),
+        (
+            "prompt549_input_runtime_smoke_verification_error_present",
+            not runtime_smoke_verification_error_present,
+        ),
+    )
+    verification_failure_reasons = [
+        f"failed_{field}"
+        for field, passed in verification_checks
+        if not passed
+    ]
+    verification_success = not verification_failure_reasons
+    artifacts_verified = bool(
+        inputs["prompt549_input_stdout_artifact_nonempty"]
+        and inputs["prompt549_input_stderr_artifact_exists"]
+        and inputs["prompt549_input_returncode_artifact_zero"]
+        and inputs["prompt549_input_changed_files_artifact_nonempty"]
+        and inputs["prompt549_input_diff_artifact_nonempty"]
+    )
+    result_json_verified = bool(
+        inputs["prompt549_input_result_json_artifact_valid"]
+        and inputs["prompt549_input_result_json_subprocess_executed_true"]
+        and inputs["prompt549_input_result_json_returncode_success_true"]
+        and inputs["prompt549_input_result_json_changed_files_allowed_true"]
+        and inputs[
+            "prompt549_input_result_json_unexpected_changed_files_present_false"
+        ]
+        and inputs["prompt549_input_result_json_unexpected_diff_present_false"]
+        and inputs["prompt549_input_result_json_timeout_occurred_false"]
+        and inputs["prompt549_input_result_json_execution_error_present_false"]
+    )
+    local_only_verified = bool(
+        result_json_verified
+        and inputs[
+            "prompt549_input_result_json_no_remote_mutation_verified_true"
+        ]
+    )
+
+    if verification_success:
+        status = "actual_runtime_smoke_artifact_verification_success"
+        next_action = (
+            "prepare_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion"
+        )
+        blocked_reasons: list[str] = []
+    elif base_readiness and not verification_result_present:
+        status = "awaiting_actual_runtime_smoke_artifact_verification"
+        next_action = "await_actual_runtime_smoke_artifact_verification"
+        blocked_reasons = []
+    elif base_readiness and verification_result_present:
+        status = "actual_runtime_smoke_artifact_verification_failed"
+        next_action = (
+            "manual_review_prompt549_actual_runtime_smoke_artifact_verification_failed"
+        )
+        blocked_reasons = verification_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt549_actual_runtime_smoke_artifact_verification"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    state = {
+        "local_only": True,
+        "source_prompt": "prompt549",
+        "prompt549_actual_runtime_smoke_artifact_verification_status": status,
+        "prompt549_actual_runtime_smoke_artifact_verification_ready": bool(
+            base_readiness
+        ),
+        "prompt549_actual_runtime_smoke_artifact_verification_success": bool(
+            verification_success
+        ),
+        "prompt549_source_prompt548_ready": bool(base_readiness),
+        "prompt549_runtime_smoke_verification_error_present": (
+            runtime_smoke_verification_error_present
+        ),
+        "prompt549_actual_runtime_smoke_verification_present": (
+            verification_result_present
+        ),
+        "prompt549_stdout_artifact_nonempty": inputs[
+            "prompt549_input_stdout_artifact_nonempty"
+        ],
+        "prompt549_stderr_artifact_exists": inputs[
+            "prompt549_input_stderr_artifact_exists"
+        ],
+        "prompt549_returncode_artifact_zero": inputs[
+            "prompt549_input_returncode_artifact_zero"
+        ],
+        "prompt549_changed_files_artifact_nonempty": inputs[
+            "prompt549_input_changed_files_artifact_nonempty"
+        ],
+        "prompt549_diff_artifact_nonempty": inputs[
+            "prompt549_input_diff_artifact_nonempty"
+        ],
+        "prompt549_result_json_artifact_valid": inputs[
+            "prompt549_input_result_json_artifact_valid"
+        ],
+        "prompt549_result_json_subprocess_executed_true": inputs[
+            "prompt549_input_result_json_subprocess_executed_true"
+        ],
+        "prompt549_result_json_returncode_success_true": inputs[
+            "prompt549_input_result_json_returncode_success_true"
+        ],
+        "prompt549_result_json_changed_files_allowed_true": inputs[
+            "prompt549_input_result_json_changed_files_allowed_true"
+        ],
+        "prompt549_result_json_unexpected_changed_files_present_false": (
+            inputs[
+                "prompt549_input_result_json_unexpected_changed_files_present_false"
+            ]
+        ),
+        "prompt549_result_json_unexpected_diff_present_false": inputs[
+            "prompt549_input_result_json_unexpected_diff_present_false"
+        ],
+        "prompt549_result_json_timeout_occurred_false": inputs[
+            "prompt549_input_result_json_timeout_occurred_false"
+        ],
+        "prompt549_result_json_execution_error_present_false": inputs[
+            "prompt549_input_result_json_execution_error_present_false"
+        ],
+        "prompt549_result_json_no_remote_mutation_verified_true": inputs[
+            "prompt549_input_result_json_no_remote_mutation_verified_true"
+        ],
+        "prompt549_actual_runtime_smoke_artifacts_verified": bool(
+            base_readiness and artifacts_verified
+        ),
+        "prompt549_actual_runtime_smoke_result_json_verified": bool(
+            base_readiness and result_json_verified
+        ),
+        "prompt549_actual_runtime_smoke_local_only_verified": bool(
+            base_readiness and local_only_verified
+        ),
+        "prompt549_ready_for_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion": (
+            bool(verification_success)
+        ),
+        "prompt549_full_autonomous_flow_completed": False,
+        "prompt549_completion_claim_allowed": False,
+        "prompt549_prompt378_execution_allowed": False,
+        "prompt549_prompt379_execution_allowed": False,
+        "prompt549_codex_execution_allowed": False,
+        "prompt549_subprocess_execution_allowed": False,
+        "prompt549_git_mutation_allowed": False,
+        "prompt549_remote_mutation_allowed": False,
+        "prompt549_commit_tag_execution_allowed": False,
+        "prompt549_execution_performed_by_prompt549": False,
+        "prompt549_next_action": next_action,
+        "prompt549_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt549_blocked_reasons": blocked_reasons,
+    }
+    for field, value in inputs.items():
+        state[field.replace("prompt549_input_", "prompt549_")] = value
+    return state
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -25704,4 +26051,5 @@ __all__ = [
     "_build_prompt546_runtime_internal_execution_adapter_connection_state",
     "_build_prompt547_real_runtime_internal_codex_smoke_state",
     "_build_prompt548_runtime_result_injection_to_contract_state",
+    "_build_prompt549_actual_runtime_smoke_artifact_verification_state",
 ]
