@@ -19933,6 +19933,241 @@ def _build_prompt535_bounded_real_dispatch_trial_gate_state(
     }
 
 
+def _build_prompt536_bounded_real_dispatch_trial_execution_request_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt535_next_action = _normalize_text(
+        payload.get("prompt535_next_action"),
+        default="",
+    )
+    request_readiness_checks = (
+        (
+            "prompt535_bounded_real_dispatch_trial_gate_ready",
+            payload.get("prompt535_bounded_real_dispatch_trial_gate_ready")
+            is True,
+        ),
+        (
+            "prompt535_bounded_real_dispatch_trial_candidate_ready",
+            payload.get(
+                "prompt535_bounded_real_dispatch_trial_candidate_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt535_source_prompt534_ready",
+            payload.get("prompt535_source_prompt534_ready") is True,
+        ),
+        (
+            "prompt535_bounded_real_dispatch_enable_present",
+            payload.get("prompt535_bounded_real_dispatch_enable_present")
+            is True,
+        ),
+        (
+            "prompt535_bounded_real_dispatch_enable_token_valid",
+            payload.get(
+                "prompt535_bounded_real_dispatch_enable_token_valid"
+            )
+            is True,
+        ),
+        (
+            "prompt535_one_shot_confirmed",
+            payload.get("prompt535_one_shot_confirmed") is True,
+        ),
+        (
+            "prompt535_pre_dispatch_worktree_clean",
+            payload.get("prompt535_pre_dispatch_worktree_clean") is True,
+        ),
+        (
+            "prompt535_dispatch_scope_valid",
+            payload.get("prompt535_dispatch_scope_valid") is True,
+        ),
+        (
+            "prompt535_allowed_files_contract_present",
+            payload.get("prompt535_allowed_files_contract_present") is True,
+        ),
+        (
+            "prompt535_artifact_paths_contract_present",
+            payload.get("prompt535_artifact_paths_contract_present") is True,
+        ),
+        (
+            "prompt535_double_run_prevention_token_available",
+            payload.get(
+                "prompt535_double_run_prevention_token_available"
+            )
+            is True,
+        ),
+        (
+            "prompt535_real_dispatch_error_present",
+            payload.get("prompt535_real_dispatch_error_present") is False,
+        ),
+        (
+            "prompt535_bounded_real_dispatch_required",
+            payload.get("prompt535_bounded_real_dispatch_required") is True,
+        ),
+        (
+            "prompt535_bounded_real_dispatch_allowed",
+            payload.get("prompt535_bounded_real_dispatch_allowed") is False,
+        ),
+        (
+            "prompt535_bounded_real_dispatch_performed",
+            payload.get("prompt535_bounded_real_dispatch_performed")
+            is False,
+        ),
+        (
+            "prompt535_actual_dispatch_command_artifact_required",
+            payload.get(
+                "prompt535_actual_dispatch_command_artifact_required"
+            )
+            is True,
+        ),
+        (
+            "prompt535_codex_execution_command_required",
+            payload.get("prompt535_codex_execution_command_required")
+            is True,
+        ),
+        (
+            "prompt535_execution_result_artifact_required",
+            payload.get("prompt535_execution_result_artifact_required")
+            is True,
+        ),
+        (
+            "prompt535_diff_review_required",
+            payload.get("prompt535_diff_review_required") is True,
+        ),
+        (
+            "prompt535_commit_tag_decision_required",
+            payload.get("prompt535_commit_tag_decision_required") is True,
+        ),
+        (
+            "prompt535_post_commit_clean_rerun_required",
+            payload.get("prompt535_post_commit_clean_rerun_required")
+            is True,
+        ),
+        (
+            "prompt535_prompt378_execution_allowed",
+            payload.get("prompt535_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt535_prompt379_execution_allowed",
+            payload.get("prompt535_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt535_codex_execution_allowed",
+            payload.get("prompt535_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt535_git_mutation_allowed",
+            payload.get("prompt535_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt535_remote_mutation_allowed",
+            payload.get("prompt535_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt535_commit_tag_execution_allowed",
+            payload.get("prompt535_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt535_execution_performed_by_prompt535",
+            payload.get("prompt535_execution_performed_by_prompt535")
+            is False,
+        ),
+        (
+            "prompt535_next_action",
+            prompt535_next_action
+            == "prepare_prompt536_bounded_real_dispatch_trial_execution_request",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in request_readiness_checks
+        if not passed
+    ]
+    request_readiness = not blocked_reasons
+
+    if request_readiness:
+        status = "ready_for_external_bounded_real_dispatch"
+        next_action = "run_external_bounded_real_dispatch_trial"
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt536_bounded_real_dispatch_trial_execution_request"
+        )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt536",
+        "prompt536_bounded_real_dispatch_trial_execution_request_status": (
+            status
+        ),
+        "prompt536_bounded_real_dispatch_trial_execution_request_ready": (
+            bool(request_readiness)
+        ),
+        "prompt536_source_prompt535_ready": bool(
+            payload.get("prompt535_bounded_real_dispatch_trial_gate_ready")
+        ),
+        "prompt536_external_bounded_real_dispatch_required": bool(
+            request_readiness
+        ),
+        "prompt536_external_execution_request_ready": bool(
+            request_readiness
+        ),
+        "prompt536_external_execution_request_kind": (
+            "bounded_real_dispatch_trial"
+        ),
+        "prompt536_external_execution_scope": "local_only_one_shot",
+        "prompt536_expected_dispatch_command_artifact_path": (
+            "artifacts/runtime_commands/prompt536_bounded_real_dispatch_command.sh"
+        ),
+        "prompt536_expected_codex_prompt_artifact_path": (
+            "artifacts/runtime_commands/prompt536_bounded_real_dispatch_prompt.md"
+        ),
+        "prompt536_expected_execution_result_artifact_path": (
+            "artifacts/runtime_commands/prompt536_bounded_real_dispatch_result.json"
+        ),
+        "prompt536_expected_stdout_artifact_path": (
+            "artifacts/runtime_commands/prompt536_bounded_real_dispatch_stdout.txt"
+        ),
+        "prompt536_expected_stderr_artifact_path": (
+            "artifacts/runtime_commands/prompt536_bounded_real_dispatch_stderr.txt"
+        ),
+        "prompt536_expected_diff_review_artifact_path": (
+            "artifacts/runtime_commands/prompt536_bounded_real_dispatch_diff_review.txt"
+        ),
+        "prompt536_expected_changed_files_artifact_path": (
+            "artifacts/runtime_commands/prompt536_bounded_real_dispatch_changed_files.txt"
+        ),
+        "prompt536_pre_dispatch_clean_worktree_required": bool(
+            request_readiness
+        ),
+        "prompt536_allowed_files_guard_required": bool(request_readiness),
+        "prompt536_one_shot_token_consumption_required": bool(
+            request_readiness
+        ),
+        "prompt536_double_run_prevention_required": bool(request_readiness),
+        "prompt536_post_execution_artifact_check_required": bool(
+            request_readiness
+        ),
+        "prompt536_no_remote_mutation_required": bool(request_readiness),
+        "prompt536_bounded_real_dispatch_allowed": False,
+        "prompt536_bounded_real_dispatch_performed": False,
+        "prompt536_prompt378_execution_allowed": False,
+        "prompt536_prompt379_execution_allowed": False,
+        "prompt536_codex_execution_allowed": False,
+        "prompt536_git_mutation_allowed": False,
+        "prompt536_remote_mutation_allowed": False,
+        "prompt536_commit_tag_execution_allowed": False,
+        "prompt536_execution_performed_by_prompt536": False,
+        "prompt536_next_action": next_action,
+        "prompt536_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt536_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -20982,4 +21217,5 @@ __all__ = [
     "_build_prompt533_full_one_cycle_autonomous_smoke_state",
     "_build_prompt534_runtime_synthetic_full_cycle_payload_verification_state",
     "_build_prompt535_bounded_real_dispatch_trial_gate_state",
+    "_build_prompt536_bounded_real_dispatch_trial_execution_request_state",
 ]
