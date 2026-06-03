@@ -756,6 +756,33 @@ def _prompt551_input_metadata(
     }
 
 
+def _prompt551_prompt550_base_ready(payload: Mapping[str, Any]) -> bool:
+    prompt550_next_action = _normalize_text(
+        payload.get("prompt550_next_action"),
+        default="",
+    )
+    return bool(
+        payload.get(
+            "prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_ready"
+        )
+        is True
+        and payload.get("prompt550_source_prompt549_ready") is True
+        and payload.get("prompt550_remote_push_pr_merge_rollback_included")
+        is False
+        and payload.get("prompt550_long_running_daemon_included") is False
+        and payload.get("prompt550_multi_cycle_unattended_loop_included")
+        is False
+        and payload.get("prompt550_completion_scope")
+        == "local_only_success_path_one_cycle_final_completion"
+        and prompt550_next_action
+        in {
+            "await_post_smoke_local_commit_tag_clean_rerun_final_completion",
+            "manual_review_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion",
+            "local_only_success_path_one_cycle_autonomous_development_completed",
+        }
+    )
+
+
 def run_prompt551_actual_runtime_adapter_execution_bridge(
     *,
     run_state_payload: Mapping[str, Any] | None = None,
@@ -771,20 +798,27 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
         default="",
     )
     repo_path = Path(repo_text) if repo_text else Path(".")
-    resolved_enabled = (
-        bool(enabled)
-        if enabled is not None
-        else bool(payload.get("prompt551_runtime_execution_enabled"))
-    )
     resolved_enable_token = _normalize_text(
         enable_token
         if enable_token is not None
         else payload.get("prompt551_runtime_execution_enable_token"),
         default="",
     )
+    explicit_arg_enable_token = _normalize_text(enable_token, default="")
+    explicit_arg_enable_present = bool(
+        enabled is True and explicit_arg_enable_token
+    )
+    payload_explicit_execution_enable_present = bool(
+        payload.get("prompt551_runtime_execution_enabled") is True
+        and _normalize_text(
+            payload.get("prompt551_runtime_execution_enable_token"),
+            default="",
+        )
+        == PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+    )
     explicit_execution_enable_present = bool(
-        resolved_enabled
-        and resolved_enable_token == PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+        explicit_arg_enable_present
+        or payload_explicit_execution_enable_present
     )
     timeout = max(
         1,
@@ -801,7 +835,11 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
     merged = dict(payload)
 
     result_payload: dict[str, Any] | None = None
-    if repo_text and explicit_execution_enable_present:
+    if (
+        repo_text
+        and _prompt551_prompt550_base_ready(merged)
+        and explicit_execution_enable_present
+    ):
         prompt_path = repo_path / _PROMPT551_MINIMAL_PROMPT_ARTIFACT
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(

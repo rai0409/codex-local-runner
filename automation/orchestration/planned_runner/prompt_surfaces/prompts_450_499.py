@@ -25868,6 +25868,78 @@ def _build_prompt552_final_runtime_completion_smoke_state(
     return state
 
 
+def _build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt551_next_action = _normalize_text(
+        payload.get("prompt551_next_action"),
+        default="",
+    )
+    prompt551_bridge_ready = bool(
+        payload.get("prompt551_actual_runtime_adapter_execution_bridge_ready")
+        is True
+        and payload.get("prompt551_source_prompt550_ready") is True
+        and payload.get("prompt551_runtime_execution_bridge_present") is True
+        and payload.get("prompt551_full_autonomous_flow_completed") is False
+        and payload.get("prompt551_completion_claim_allowed") is False
+        and prompt551_next_action
+        in {
+            "await_actual_runtime_adapter_execution_bridge",
+            "prepare_prompt552_final_runtime_completion_smoke",
+            "manual_review_prompt551_actual_runtime_adapter_execution_bridge_failed",
+        }
+    )
+    enabled_arg_supported = True
+    enable_token_arg_supported = True
+    payload_enable_still_supported = True
+    fixed = bool(
+        prompt551_bridge_ready
+        and enabled_arg_supported
+        and enable_token_arg_supported
+        and payload_enable_still_supported
+    )
+
+    if fixed:
+        status = "prompt551_bridge_explicit_enable_mapping_fixed"
+        next_action = (
+            "retry_prompt552_real_runtime_completion_smoke_with_explicit_enable"
+        )
+        blocked_reasons: list[str] = []
+    else:
+        status = "manual_review_required"
+        next_action = (
+            "manual_review_prompt553_prompt551_bridge_explicit_enable_mapping"
+        )
+        blocked_reasons = [
+            "missing_prompt551_actual_runtime_adapter_execution_bridge_ready"
+        ]
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt553",
+        "prompt553_prompt551_bridge_explicit_enable_mapping_status": status,
+        "prompt553_prompt551_bridge_explicit_enable_mapping_ready": bool(
+            fixed
+        ),
+        "prompt553_prompt551_bridge_explicit_enable_mapping_fixed": bool(
+            fixed
+        ),
+        "prompt553_enabled_arg_supported": enabled_arg_supported,
+        "prompt553_enable_token_arg_supported": enable_token_arg_supported,
+        "prompt553_payload_enable_still_supported": payload_enable_still_supported,
+        "prompt553_ready_for_prompt554_real_runtime_smoke_retry": bool(fixed),
+        "prompt553_full_autonomous_flow_completed": False,
+        "prompt553_completion_claim_allowed": False,
+        "prompt553_next_action": next_action,
+        "prompt553_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt553_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -26934,4 +27006,5 @@ __all__ = [
     "_build_prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_state",
     "_build_prompt551_actual_runtime_adapter_execution_bridge_state",
     "_build_prompt552_final_runtime_completion_smoke_state",
+    "_build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state",
 ]
