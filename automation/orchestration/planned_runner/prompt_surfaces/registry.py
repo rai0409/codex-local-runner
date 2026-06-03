@@ -207,6 +207,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt542_internal_execution_result_review_and_guard_state,
     _build_prompt543_internal_local_commit_tag_executor_state,
     _build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state,
+    _build_prompt545_end_to_end_local_autonomous_real_smoke_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -410,6 +411,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt542_internal_execution_result_review_and_guard_state": _build_prompt542_internal_execution_result_review_and_guard_state,
     "_build_prompt543_internal_local_commit_tag_executor_state": _build_prompt543_internal_local_commit_tag_executor_state,
     "_build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state": _build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state,
+    "_build_prompt545_end_to_end_local_autonomous_real_smoke_state": _build_prompt545_end_to_end_local_autonomous_real_smoke_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -618,4 +620,5 @@ __all__ = [
     "_build_prompt542_internal_execution_result_review_and_guard_state",
     "_build_prompt543_internal_local_commit_tag_executor_state",
     "_build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state",
+    "_build_prompt545_end_to_end_local_autonomous_real_smoke_state",
 ]

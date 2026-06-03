@@ -23171,6 +23171,468 @@ def _build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state(
     }
 
 
+def _build_prompt545_end_to_end_local_autonomous_real_smoke_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt544_next_action = _normalize_text(
+        payload.get("prompt544_next_action"),
+        default="",
+    )
+
+    base_readiness_checks = (
+        (
+            "prompt544_post_commit_clean_rerun_and_next_cycle_handoff_ready",
+            payload.get(
+                "prompt544_post_commit_clean_rerun_and_next_cycle_handoff_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt544_post_commit_clean_rerun_and_handoff_success",
+            payload.get("prompt544_post_commit_clean_rerun_and_handoff_success")
+            is True,
+        ),
+        (
+            "prompt544_source_prompt543_ready",
+            payload.get("prompt544_source_prompt543_ready") is True,
+        ),
+        (
+            "prompt544_internal_local_commit_tag_result_present",
+            payload.get("prompt544_internal_local_commit_tag_result_present")
+            is True,
+        ),
+        (
+            "prompt544_local_commit_created",
+            payload.get("prompt544_local_commit_created") is True,
+        ),
+        (
+            "prompt544_local_commit_hash_present",
+            payload.get("prompt544_local_commit_hash_present") is True,
+        ),
+        (
+            "prompt544_local_tag_created",
+            payload.get("prompt544_local_tag_created") is True,
+        ),
+        (
+            "prompt544_local_tag_name_present",
+            payload.get("prompt544_local_tag_name_present") is True,
+        ),
+        (
+            "prompt544_local_tag_points_at_head",
+            payload.get("prompt544_local_tag_points_at_head") is True,
+        ),
+        (
+            "prompt544_post_commit_worktree_clean",
+            payload.get("prompt544_post_commit_worktree_clean") is True,
+        ),
+        (
+            "prompt544_post_commit_clean_rerun_performed",
+            payload.get("prompt544_post_commit_clean_rerun_performed") is True,
+        ),
+        (
+            "prompt544_post_commit_clean_rerun_success",
+            payload.get("prompt544_post_commit_clean_rerun_success") is True,
+        ),
+        (
+            "prompt544_post_commit_py_compile_ok",
+            payload.get("prompt544_post_commit_py_compile_ok") is True,
+        ),
+        (
+            "prompt544_post_commit_required_fields_present",
+            payload.get("prompt544_post_commit_required_fields_present")
+            is True,
+        ),
+        (
+            "prompt544_post_commit_no_remote_mutation_verified",
+            payload.get("prompt544_post_commit_no_remote_mutation_verified")
+            is True,
+        ),
+        (
+            "prompt544_post_commit_changed_files_empty",
+            payload.get("prompt544_post_commit_changed_files_empty") is True,
+        ),
+        (
+            "prompt544_next_cycle_handoff_artifact_present",
+            payload.get("prompt544_next_cycle_handoff_artifact_present")
+            is True,
+        ),
+        (
+            "prompt544_next_cycle_handoff_ready",
+            payload.get("prompt544_next_cycle_handoff_ready") is True,
+        ),
+        (
+            "prompt544_post_commit_error_present",
+            payload.get("prompt544_post_commit_error_present") is False,
+        ),
+        (
+            "prompt544_internal_local_commit_tag_cycle_completed",
+            payload.get("prompt544_internal_local_commit_tag_cycle_completed")
+            is True,
+        ),
+        (
+            "prompt544_local_only_autonomous_success_cycle_completed",
+            payload.get(
+                "prompt544_local_only_autonomous_success_cycle_completed"
+            )
+            is True,
+        ),
+        (
+            "prompt544_success_path_only_cycle_completed",
+            payload.get("prompt544_success_path_only_cycle_completed") is True,
+        ),
+        (
+            "prompt544_ready_for_end_to_end_local_autonomous_real_smoke",
+            payload.get(
+                "prompt544_ready_for_end_to_end_local_autonomous_real_smoke"
+            )
+            is True,
+        ),
+        (
+            "prompt544_next_prompt545_ready",
+            payload.get("prompt544_next_prompt545_ready") is True,
+        ),
+        (
+            "prompt544_prompt378_execution_allowed",
+            payload.get("prompt544_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt544_prompt379_execution_allowed",
+            payload.get("prompt544_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt544_codex_execution_allowed",
+            payload.get("prompt544_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt544_subprocess_execution_allowed",
+            payload.get("prompt544_subprocess_execution_allowed") is False,
+        ),
+        (
+            "prompt544_git_mutation_allowed",
+            payload.get("prompt544_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt544_remote_mutation_allowed",
+            payload.get("prompt544_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt544_commit_tag_execution_allowed",
+            payload.get("prompt544_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt544_execution_performed_by_prompt544",
+            payload.get("prompt544_execution_performed_by_prompt544") is False,
+        ),
+        (
+            "prompt544_next_action",
+            prompt544_next_action
+            == "prepare_prompt545_end_to_end_local_autonomous_real_smoke",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    e2e_local_autonomous_smoke_result_present = (
+        payload.get("prompt545_input_e2e_local_autonomous_smoke_result_present")
+        is True
+    )
+    internal_codex_subprocess_executed = (
+        payload.get("prompt545_input_internal_codex_subprocess_executed")
+        is True
+    )
+    internal_codex_returncode_success = (
+        payload.get("prompt545_input_internal_codex_returncode_success")
+        is True
+    )
+    internal_codex_stdout_captured = (
+        payload.get("prompt545_input_internal_codex_stdout_captured") is True
+    )
+    internal_codex_stderr_captured = (
+        payload.get("prompt545_input_internal_codex_stderr_captured") is True
+    )
+    internal_changed_files_captured = (
+        payload.get("prompt545_input_internal_changed_files_captured") is True
+    )
+    internal_diff_captured = (
+        payload.get("prompt545_input_internal_diff_captured") is True
+    )
+    internal_changed_files_allowed = (
+        payload.get("prompt545_input_internal_changed_files_allowed") is True
+    )
+    internal_unexpected_changed_files_present = (
+        payload.get(
+            "prompt545_input_internal_unexpected_changed_files_present"
+        )
+        is True
+    )
+    internal_unexpected_diff_present = (
+        payload.get("prompt545_input_internal_unexpected_diff_present") is True
+    )
+    internal_py_compile_ok = (
+        payload.get("prompt545_input_internal_py_compile_ok") is True
+    )
+    internal_required_fields_present = (
+        payload.get("prompt545_input_internal_required_fields_present") is True
+    )
+    internal_no_remote_mutation_verified = (
+        payload.get("prompt545_input_internal_no_remote_mutation_verified")
+        is True
+    )
+    internal_local_commit_created = (
+        payload.get("prompt545_input_internal_local_commit_created") is True
+    )
+    internal_local_commit_hash_present = (
+        payload.get("prompt545_input_internal_local_commit_hash_present")
+        is True
+    )
+    internal_local_tag_created = (
+        payload.get("prompt545_input_internal_local_tag_created") is True
+    )
+    internal_local_tag_points_at_head = (
+        payload.get("prompt545_input_internal_local_tag_points_at_head")
+        is True
+    )
+    internal_post_commit_worktree_clean = (
+        payload.get("prompt545_input_internal_post_commit_worktree_clean")
+        is True
+    )
+    internal_post_commit_clean_rerun_success = (
+        payload.get(
+            "prompt545_input_internal_post_commit_clean_rerun_success"
+        )
+        is True
+    )
+    internal_next_cycle_handoff_ready = (
+        payload.get("prompt545_input_internal_next_cycle_handoff_ready")
+        is True
+    )
+    e2e_smoke_error_present = (
+        payload.get("prompt545_input_e2e_smoke_error_present") is True
+    )
+
+    e2e_smoke_success_checks = (
+        ("base_readiness", base_readiness),
+        (
+            "prompt545_input_e2e_local_autonomous_smoke_result_present",
+            e2e_local_autonomous_smoke_result_present,
+        ),
+        (
+            "prompt545_input_internal_codex_subprocess_executed",
+            internal_codex_subprocess_executed,
+        ),
+        (
+            "prompt545_input_internal_codex_returncode_success",
+            internal_codex_returncode_success,
+        ),
+        (
+            "prompt545_input_internal_codex_stdout_captured",
+            internal_codex_stdout_captured,
+        ),
+        (
+            "prompt545_input_internal_codex_stderr_captured",
+            internal_codex_stderr_captured,
+        ),
+        (
+            "prompt545_input_internal_changed_files_captured",
+            internal_changed_files_captured,
+        ),
+        (
+            "prompt545_input_internal_diff_captured",
+            internal_diff_captured,
+        ),
+        (
+            "prompt545_input_internal_changed_files_allowed",
+            internal_changed_files_allowed,
+        ),
+        (
+            "prompt545_input_internal_unexpected_changed_files_present",
+            not internal_unexpected_changed_files_present,
+        ),
+        (
+            "prompt545_input_internal_unexpected_diff_present",
+            not internal_unexpected_diff_present,
+        ),
+        (
+            "prompt545_input_internal_py_compile_ok",
+            internal_py_compile_ok,
+        ),
+        (
+            "prompt545_input_internal_required_fields_present",
+            internal_required_fields_present,
+        ),
+        (
+            "prompt545_input_internal_no_remote_mutation_verified",
+            internal_no_remote_mutation_verified,
+        ),
+        (
+            "prompt545_input_internal_local_commit_created",
+            internal_local_commit_created,
+        ),
+        (
+            "prompt545_input_internal_local_commit_hash_present",
+            internal_local_commit_hash_present,
+        ),
+        (
+            "prompt545_input_internal_local_tag_created",
+            internal_local_tag_created,
+        ),
+        (
+            "prompt545_input_internal_local_tag_points_at_head",
+            internal_local_tag_points_at_head,
+        ),
+        (
+            "prompt545_input_internal_post_commit_worktree_clean",
+            internal_post_commit_worktree_clean,
+        ),
+        (
+            "prompt545_input_internal_post_commit_clean_rerun_success",
+            internal_post_commit_clean_rerun_success,
+        ),
+        (
+            "prompt545_input_internal_next_cycle_handoff_ready",
+            internal_next_cycle_handoff_ready,
+        ),
+        (
+            "prompt545_input_e2e_smoke_error_present",
+            not e2e_smoke_error_present,
+        ),
+    )
+    e2e_smoke_blocked_reasons = [
+        f"failed_{field}"
+        for field, passed in e2e_smoke_success_checks
+        if not passed
+    ]
+    e2e_smoke_success = not e2e_smoke_blocked_reasons
+
+    if e2e_smoke_success:
+        status = "end_to_end_local_autonomous_real_smoke_passed"
+        next_action = "local_only_success_path_autonomous_development_completed"
+        blocked_reasons: list[str] = []
+    elif base_readiness and not e2e_local_autonomous_smoke_result_present:
+        status = "awaiting_end_to_end_local_autonomous_real_smoke_result"
+        next_action = "await_end_to_end_local_autonomous_real_smoke_result"
+        blocked_reasons = []
+    elif base_readiness and e2e_local_autonomous_smoke_result_present:
+        status = "end_to_end_local_autonomous_real_smoke_failed"
+        next_action = (
+            "manual_review_prompt545_end_to_end_local_autonomous_real_smoke_failed"
+        )
+        blocked_reasons = e2e_smoke_blocked_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt545_end_to_end_local_autonomous_real_smoke"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt545",
+        "prompt545_end_to_end_local_autonomous_real_smoke_status": status,
+        "prompt545_end_to_end_local_autonomous_real_smoke_ready": bool(
+            base_readiness
+        ),
+        "prompt545_end_to_end_local_autonomous_real_smoke_success": bool(
+            e2e_smoke_success
+        ),
+        "prompt545_source_prompt544_ready": bool(
+            payload.get(
+                "prompt544_post_commit_clean_rerun_and_next_cycle_handoff_ready"
+            )
+        ),
+        "prompt545_e2e_local_autonomous_smoke_result_present": (
+            e2e_local_autonomous_smoke_result_present
+        ),
+        "prompt545_internal_codex_subprocess_executed": (
+            internal_codex_subprocess_executed
+        ),
+        "prompt545_internal_codex_returncode_success": (
+            internal_codex_returncode_success
+        ),
+        "prompt545_internal_codex_stdout_captured": (
+            internal_codex_stdout_captured
+        ),
+        "prompt545_internal_codex_stderr_captured": (
+            internal_codex_stderr_captured
+        ),
+        "prompt545_internal_changed_files_captured": (
+            internal_changed_files_captured
+        ),
+        "prompt545_internal_diff_captured": internal_diff_captured,
+        "prompt545_internal_changed_files_allowed": (
+            internal_changed_files_allowed
+        ),
+        "prompt545_internal_unexpected_changed_files_present": (
+            internal_unexpected_changed_files_present
+        ),
+        "prompt545_internal_unexpected_diff_present": (
+            internal_unexpected_diff_present
+        ),
+        "prompt545_internal_py_compile_ok": internal_py_compile_ok,
+        "prompt545_internal_required_fields_present": (
+            internal_required_fields_present
+        ),
+        "prompt545_internal_no_remote_mutation_verified": (
+            internal_no_remote_mutation_verified
+        ),
+        "prompt545_internal_local_commit_created": (
+            internal_local_commit_created
+        ),
+        "prompt545_internal_local_commit_hash_present": (
+            internal_local_commit_hash_present
+        ),
+        "prompt545_internal_local_tag_created": internal_local_tag_created,
+        "prompt545_internal_local_tag_points_at_head": (
+            internal_local_tag_points_at_head
+        ),
+        "prompt545_internal_post_commit_worktree_clean": (
+            internal_post_commit_worktree_clean
+        ),
+        "prompt545_internal_post_commit_clean_rerun_success": (
+            internal_post_commit_clean_rerun_success
+        ),
+        "prompt545_internal_next_cycle_handoff_ready": (
+            internal_next_cycle_handoff_ready
+        ),
+        "prompt545_e2e_smoke_error_present": e2e_smoke_error_present,
+        "prompt545_local_only_success_path_autonomous_development_completed": (
+            bool(e2e_smoke_success)
+        ),
+        "prompt545_humanless_success_only_local_autonomous_development_ready": (
+            bool(e2e_smoke_success)
+        ),
+        "prompt545_one_cycle_internal_codex_to_commit_tag_completed": (
+            bool(e2e_smoke_success)
+        ),
+        "prompt545_internal_codex_execution_to_next_cycle_handoff_completed": (
+            bool(e2e_smoke_success)
+        ),
+        "prompt545_remote_push_pr_merge_rollback_included": False,
+        "prompt545_long_running_daemon_included": False,
+        "prompt545_multi_cycle_unattended_loop_included": False,
+        "prompt545_completion_scope": "local_only_success_path_one_cycle",
+        "prompt545_prompt378_execution_allowed": False,
+        "prompt545_prompt379_execution_allowed": False,
+        "prompt545_codex_execution_allowed": False,
+        "prompt545_subprocess_execution_allowed": False,
+        "prompt545_git_mutation_allowed": False,
+        "prompt545_remote_mutation_allowed": False,
+        "prompt545_commit_tag_execution_allowed": False,
+        "prompt545_execution_performed_by_prompt545": False,
+        "prompt545_next_action": next_action,
+        "prompt545_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt545_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -24229,4 +24691,5 @@ __all__ = [
     "_build_prompt542_internal_execution_result_review_and_guard_state",
     "_build_prompt543_internal_local_commit_tag_executor_state",
     "_build_prompt544_post_commit_clean_rerun_and_next_cycle_handoff_state",
+    "_build_prompt545_end_to_end_local_autonomous_real_smoke_state",
 ]
