@@ -22353,6 +22353,397 @@ def _build_prompt542_internal_execution_result_review_and_guard_state(
     }
 
 
+def _build_prompt543_internal_local_commit_tag_executor_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt542_next_action = _normalize_text(
+        payload.get("prompt542_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt542_internal_execution_result_review_and_guard_ready",
+            payload.get(
+                "prompt542_internal_execution_result_review_and_guard_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt542_internal_execution_result_review_success",
+            payload.get("prompt542_internal_execution_result_review_success")
+            is True,
+        ),
+        (
+            "prompt542_source_prompt541_ready",
+            payload.get("prompt542_source_prompt541_ready") is True,
+        ),
+        (
+            "prompt542_internal_execution_result_present",
+            payload.get("prompt542_internal_execution_result_present")
+            is True,
+        ),
+        (
+            "prompt542_internal_codex_subprocess_executed",
+            payload.get("prompt542_internal_codex_subprocess_executed")
+            is True,
+        ),
+        (
+            "prompt542_codex_returncode_present",
+            payload.get("prompt542_codex_returncode_present") is True,
+        ),
+        (
+            "prompt542_codex_returncode_success",
+            payload.get("prompt542_codex_returncode_success") is True,
+        ),
+        (
+            "prompt542_stdout_artifact_present",
+            payload.get("prompt542_stdout_artifact_present") is True,
+        ),
+        (
+            "prompt542_stderr_artifact_present",
+            payload.get("prompt542_stderr_artifact_present") is True,
+        ),
+        (
+            "prompt542_changed_files_artifact_present",
+            payload.get("prompt542_changed_files_artifact_present") is True,
+        ),
+        (
+            "prompt542_diff_artifact_present",
+            payload.get("prompt542_diff_artifact_present") is True,
+        ),
+        (
+            "prompt542_result_json_artifact_present",
+            payload.get("prompt542_result_json_artifact_present") is True,
+        ),
+        (
+            "prompt542_changed_files_present",
+            payload.get("prompt542_changed_files_present") is True,
+        ),
+        (
+            "prompt542_changed_files_allowed",
+            payload.get("prompt542_changed_files_allowed") is True,
+        ),
+        (
+            "prompt542_unexpected_changed_files_present",
+            payload.get("prompt542_unexpected_changed_files_present")
+            is False,
+        ),
+        (
+            "prompt542_diff_present",
+            payload.get("prompt542_diff_present") is True,
+        ),
+        (
+            "prompt542_unexpected_diff_present",
+            payload.get("prompt542_unexpected_diff_present") is False,
+        ),
+        (
+            "prompt542_py_compile_ok",
+            payload.get("prompt542_py_compile_ok") is True,
+        ),
+        (
+            "prompt542_required_fields_present",
+            payload.get("prompt542_required_fields_present") is True,
+        ),
+        (
+            "prompt542_no_remote_mutation_verified",
+            payload.get("prompt542_no_remote_mutation_verified") is True,
+        ),
+        (
+            "prompt542_double_run_prevention_token_consumed",
+            payload.get("prompt542_double_run_prevention_token_consumed")
+            is True,
+        ),
+        (
+            "prompt542_internal_execution_error_present",
+            payload.get("prompt542_internal_execution_error_present")
+            is False,
+        ),
+        (
+            "prompt542_internal_commit_tag_route_required",
+            payload.get("prompt542_internal_commit_tag_route_required")
+            is True,
+        ),
+        (
+            "prompt542_internal_commit_tag_route_ready",
+            payload.get("prompt542_internal_commit_tag_route_ready") is True,
+        ),
+        (
+            "prompt542_internal_local_commit_candidate_ready",
+            payload.get("prompt542_internal_local_commit_candidate_ready")
+            is True,
+        ),
+        (
+            "prompt542_internal_local_tag_candidate_ready",
+            payload.get("prompt542_internal_local_tag_candidate_ready")
+            is True,
+        ),
+        (
+            "prompt542_post_commit_clean_rerun_required",
+            payload.get("prompt542_post_commit_clean_rerun_required")
+            is True,
+        ),
+        (
+            "prompt542_next_cycle_handoff_required",
+            payload.get("prompt542_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt542_prompt378_execution_allowed",
+            payload.get("prompt542_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt542_prompt379_execution_allowed",
+            payload.get("prompt542_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt542_codex_execution_allowed",
+            payload.get("prompt542_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt542_subprocess_execution_allowed",
+            payload.get("prompt542_subprocess_execution_allowed") is False,
+        ),
+        (
+            "prompt542_git_mutation_allowed",
+            payload.get("prompt542_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt542_remote_mutation_allowed",
+            payload.get("prompt542_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt542_commit_tag_execution_allowed",
+            payload.get("prompt542_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt542_execution_performed_by_prompt542",
+            payload.get("prompt542_execution_performed_by_prompt542")
+            is False,
+        ),
+        (
+            "prompt542_next_action",
+            prompt542_next_action
+            == "prepare_prompt543_internal_local_commit_tag_executor",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    internal_commit_tag_executor_present = (
+        payload.get("prompt543_input_internal_commit_tag_executor_present")
+        is True
+    )
+    commit_message_present = (
+        payload.get("prompt543_input_commit_message_present") is True
+    )
+    tag_name_present = payload.get("prompt543_input_tag_name_present") is True
+    tag_name_available = (
+        payload.get("prompt543_input_tag_name_available") is True
+    )
+    expected_changed_files_staged_or_stageable = (
+        payload.get(
+            "prompt543_input_expected_changed_files_staged_or_stageable"
+        )
+        is True
+    )
+    pre_commit_worktree_has_expected_changes = (
+        payload.get(
+            "prompt543_input_pre_commit_worktree_has_expected_changes"
+        )
+        is True
+    )
+    pre_commit_changed_files_allowed = (
+        payload.get("prompt543_input_pre_commit_changed_files_allowed")
+        is True
+    )
+    pre_commit_unexpected_changes_present = (
+        payload.get(
+            "prompt543_input_pre_commit_unexpected_changes_present"
+        )
+        is True
+    )
+    pre_commit_py_compile_ok = (
+        payload.get("prompt543_input_pre_commit_py_compile_ok") is True
+    )
+    pre_commit_required_fields_present = (
+        payload.get("prompt543_input_pre_commit_required_fields_present")
+        is True
+    )
+    pre_commit_no_remote_mutation_verified = (
+        payload.get(
+            "prompt543_input_pre_commit_no_remote_mutation_verified"
+        )
+        is True
+    )
+    git_identity_available = (
+        payload.get("prompt543_input_git_identity_available") is True
+    )
+    commit_tag_error_present = (
+        payload.get("prompt543_input_commit_tag_error_present") is True
+    )
+
+    executor_readiness_checks = (
+        ("base_readiness", base_readiness),
+        (
+            "prompt543_input_internal_commit_tag_executor_present",
+            internal_commit_tag_executor_present,
+        ),
+        ("prompt543_input_commit_message_present", commit_message_present),
+        ("prompt543_input_tag_name_present", tag_name_present),
+        ("prompt543_input_tag_name_available", tag_name_available),
+        (
+            "prompt543_input_expected_changed_files_staged_or_stageable",
+            expected_changed_files_staged_or_stageable,
+        ),
+        (
+            "prompt543_input_pre_commit_worktree_has_expected_changes",
+            pre_commit_worktree_has_expected_changes,
+        ),
+        (
+            "prompt543_input_pre_commit_changed_files_allowed",
+            pre_commit_changed_files_allowed,
+        ),
+        (
+            "prompt543_input_pre_commit_unexpected_changes_present",
+            not pre_commit_unexpected_changes_present,
+        ),
+        (
+            "prompt543_input_pre_commit_py_compile_ok",
+            pre_commit_py_compile_ok,
+        ),
+        (
+            "prompt543_input_pre_commit_required_fields_present",
+            pre_commit_required_fields_present,
+        ),
+        (
+            "prompt543_input_pre_commit_no_remote_mutation_verified",
+            pre_commit_no_remote_mutation_verified,
+        ),
+        (
+            "prompt543_input_git_identity_available",
+            git_identity_available,
+        ),
+        (
+            "prompt543_input_commit_tag_error_present",
+            not commit_tag_error_present,
+        ),
+    )
+    executor_blocked_reasons = [
+        f"failed_{field}"
+        for field, passed in executor_readiness_checks
+        if not passed
+    ]
+    executor_readiness = not executor_blocked_reasons
+
+    if executor_readiness:
+        status = "ready_for_internal_local_commit_tag_execution"
+        next_action = (
+            "prepare_prompt544_post_commit_clean_rerun_and_next_cycle_handoff"
+        )
+        blocked_reasons: list[str] = []
+    elif base_readiness and not internal_commit_tag_executor_present:
+        status = "awaiting_internal_local_commit_tag_executor"
+        next_action = "await_internal_local_commit_tag_executor"
+        blocked_reasons = []
+    elif base_readiness and internal_commit_tag_executor_present:
+        status = "blocked_internal_local_commit_tag_executor"
+        next_action = (
+            "manual_review_prompt543_internal_local_commit_tag_executor_blocked"
+        )
+        blocked_reasons = executor_blocked_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt543_internal_local_commit_tag_executor"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt543",
+        "prompt543_internal_local_commit_tag_executor_status": status,
+        "prompt543_internal_local_commit_tag_executor_ready": bool(
+            base_readiness
+        ),
+        "prompt543_internal_local_commit_tag_executor_candidate_ready": bool(
+            executor_readiness
+        ),
+        "prompt543_source_prompt542_ready": bool(
+            payload.get(
+                "prompt542_internal_execution_result_review_and_guard_ready"
+            )
+        ),
+        "prompt543_internal_commit_tag_executor_present": (
+            internal_commit_tag_executor_present
+        ),
+        "prompt543_commit_message_present": commit_message_present,
+        "prompt543_tag_name_present": tag_name_present,
+        "prompt543_tag_name_available": tag_name_available,
+        "prompt543_expected_changed_files_staged_or_stageable": (
+            expected_changed_files_staged_or_stageable
+        ),
+        "prompt543_pre_commit_worktree_has_expected_changes": (
+            pre_commit_worktree_has_expected_changes
+        ),
+        "prompt543_pre_commit_changed_files_allowed": (
+            pre_commit_changed_files_allowed
+        ),
+        "prompt543_pre_commit_unexpected_changes_present": (
+            pre_commit_unexpected_changes_present
+        ),
+        "prompt543_pre_commit_py_compile_ok": pre_commit_py_compile_ok,
+        "prompt543_pre_commit_required_fields_present": (
+            pre_commit_required_fields_present
+        ),
+        "prompt543_pre_commit_no_remote_mutation_verified": (
+            pre_commit_no_remote_mutation_verified
+        ),
+        "prompt543_git_identity_available": git_identity_available,
+        "prompt543_commit_tag_error_present": commit_tag_error_present,
+        "prompt543_expected_commit_message": (
+            "Run internal local autonomous cycle"
+        ),
+        "prompt543_expected_tag_name_prefix": (
+            "prompt543-internal-local-autonomous-cycle"
+        ),
+        "prompt543_expected_commit_scope": "local_only",
+        "prompt543_expected_remote_mutation": False,
+        "prompt543_internal_local_commit_execution_required": bool(
+            executor_readiness
+        ),
+        "prompt543_internal_local_tag_execution_required": bool(
+            executor_readiness
+        ),
+        "prompt543_internal_local_commit_tag_execution_allowed": False,
+        "prompt543_internal_local_commit_tag_execution_performed": False,
+        "prompt543_post_commit_clean_rerun_required": bool(
+            executor_readiness
+        ),
+        "prompt543_post_commit_result_capture_required": bool(
+            executor_readiness
+        ),
+        "prompt543_next_cycle_handoff_required": bool(executor_readiness),
+        "prompt543_prompt378_execution_allowed": False,
+        "prompt543_prompt379_execution_allowed": False,
+        "prompt543_codex_execution_allowed": False,
+        "prompt543_subprocess_execution_allowed": False,
+        "prompt543_git_mutation_allowed": False,
+        "prompt543_remote_mutation_allowed": False,
+        "prompt543_commit_tag_execution_allowed": False,
+        "prompt543_execution_performed_by_prompt543": False,
+        "prompt543_next_action": next_action,
+        "prompt543_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt543_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -23409,4 +23800,5 @@ __all__ = [
     "_build_prompt540_internal_codex_execution_adapter_state",
     "_build_prompt541_internal_codex_subprocess_execution_adapter_state",
     "_build_prompt542_internal_execution_result_review_and_guard_state",
+    "_build_prompt543_internal_local_commit_tag_executor_state",
 ]
