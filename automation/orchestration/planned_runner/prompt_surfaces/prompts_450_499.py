@@ -26436,6 +26436,165 @@ def _build_prompt567_final_handoff_and_hardening_plan_state(
     }
 
 
+def _build_prompt568_production_hardening_entrypoint_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    def _prompt568_int(value: Any) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt568_enabled") is True
+    enable_token_valid = payload.get("prompt568_enable_token_valid") is True
+    max_daemon_runs = _prompt568_int(payload.get("prompt568_max_daemon_runs"))
+    daemon_runs_executed = _prompt568_int(
+        payload.get("prompt568_daemon_runs_executed")
+    )
+    successful_daemon_runs = _prompt568_int(
+        payload.get("prompt568_successful_daemon_runs")
+    )
+    failed_daemon_run_index = payload.get("prompt568_failed_daemon_run_index")
+    stop_on_failure = payload.get("prompt568_stop_on_failure") is True
+    resume_state_written = payload.get("prompt568_resume_state_written") is True
+    hardening_summary_written = (
+        payload.get("prompt568_hardening_summary_written") is True
+    )
+    final_worktree_clean = payload.get("prompt568_final_worktree_clean") is True
+    no_remote_mutation_verified = (
+        payload.get("prompt568_no_remote_mutation_verified") is True
+    )
+    prompt550_payload_materialized = (
+        payload.get("prompt568_prompt550_payload_materialized") is True
+    )
+    remote_workflow_included = False
+
+    daemon_run_results = list(payload.get("prompt568_daemon_run_results") or [])
+    daemon_evidence_ready = bool(
+        daemon_run_results
+        and all(
+            isinstance(daemon_run_result, Mapping)
+            and daemon_run_result.get("daemon_run_success") is True
+            and isinstance(daemon_run_result.get("daemon_result"), Mapping)
+            and daemon_run_result["daemon_result"].get(
+                "prompt565_multi_cycle_daemon_autonomous_loop_success"
+            )
+            is True
+            and _prompt568_int(
+                daemon_run_result["daemon_result"].get(
+                    "prompt565_cycles_executed"
+                )
+            )
+            >= 2
+            and _prompt568_int(
+                daemon_run_result["daemon_result"].get(
+                    "prompt565_successful_cycles"
+                )
+            )
+            >= 2
+            and daemon_run_result["daemon_result"].get(
+                "prompt565_full_autonomous_development_completed"
+            )
+            is True
+            and daemon_run_result["daemon_result"].get(
+                "prompt565_no_remote_mutation_verified"
+            )
+            is True
+            for daemon_run_result in daemon_run_results
+        )
+    )
+    success = bool(
+        payload.get("prompt568_production_hardening_entrypoint_success") is True
+        and enabled
+        and enable_token_valid
+        and max_daemon_runs >= 1
+        and daemon_runs_executed >= 1
+        and successful_daemon_runs == daemon_runs_executed
+        and successful_daemon_runs >= 1
+        and daemon_evidence_ready
+        and resume_state_written
+        and hardening_summary_written
+        and final_worktree_clean
+        and no_remote_mutation_verified
+        and prompt550_payload_materialized
+        and not remote_workflow_included
+    )
+    blocked_reasons = list(payload.get("prompt568_blocked_reasons") or [])
+    readiness_checks = (
+        ("prompt568_enabled", enabled),
+        ("prompt568_enable_token_valid", enable_token_valid),
+        ("prompt568_max_daemon_runs", max_daemon_runs >= 1),
+        ("prompt568_daemon_runs_executed", daemon_runs_executed >= 1),
+        (
+            "prompt568_successful_daemon_runs",
+            successful_daemon_runs >= 1
+            and successful_daemon_runs == daemon_runs_executed,
+        ),
+        ("prompt568_daemon_evidence_ready", daemon_evidence_ready),
+        ("prompt568_resume_state_written", resume_state_written),
+        ("prompt568_hardening_summary_written", hardening_summary_written),
+        ("prompt568_final_worktree_clean", final_worktree_clean),
+        ("prompt568_no_remote_mutation_verified", no_remote_mutation_verified),
+        (
+            "prompt568_prompt550_payload_materialized",
+            prompt550_payload_materialized,
+        ),
+        (
+            "prompt568_remote_workflow_included_false",
+            not remote_workflow_included,
+        ),
+    )
+    for field, passed in readiness_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    status = (
+        "production_hardening_entrypoint_completed_local_only"
+        if success
+        else _normalize_text(
+            payload.get("prompt568_production_hardening_entrypoint_status"),
+            default="blocked",
+        )
+    )
+    next_action = (
+        "production_hardening_entrypoint_completed_local_only"
+        if success
+        else "manual_review_prompt568_production_hardening_entrypoint_failed"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt568",
+        "prompt568_production_hardening_entrypoint_status": status,
+        "prompt568_production_hardening_entrypoint_ready": bool(
+            enabled and enable_token_valid and max_daemon_runs >= 1
+        ),
+        "prompt568_production_hardening_entrypoint_success": success,
+        "prompt568_enabled": enabled,
+        "prompt568_enable_token_valid": enable_token_valid,
+        "prompt568_max_daemon_runs": max_daemon_runs,
+        "prompt568_daemon_runs_executed": daemon_runs_executed,
+        "prompt568_successful_daemon_runs": successful_daemon_runs,
+        "prompt568_failed_daemon_run_index": failed_daemon_run_index,
+        "prompt568_stop_on_failure": stop_on_failure,
+        "prompt568_prompt550_payload_materialized": (
+            prompt550_payload_materialized
+        ),
+        "prompt568_resume_state_written": resume_state_written,
+        "prompt568_hardening_summary_written": hardening_summary_written,
+        "prompt568_final_worktree_clean": final_worktree_clean,
+        "prompt568_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt568_production_hardening_completed": success,
+        "prompt568_completion_claim_allowed": success,
+        "prompt568_remote_workflow_included": False,
+        "prompt568_next_action": next_action,
+        "prompt568_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -28315,4 +28474,5 @@ __all__ = [
     "_build_prompt565_multi_cycle_daemon_autonomous_loop_state",
     "_build_prompt566_fix_prompt565_daemon_artifact_clean_state",
     "_build_prompt567_final_handoff_and_hardening_plan_state",
+    "_build_prompt568_production_hardening_entrypoint_state",
 ]

@@ -117,6 +117,9 @@ PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE_TOKEN = (
 PROMPT565_MULTI_CYCLE_DAEMON_AUTONOMOUS_LOOP_ENABLE_TOKEN = (
     "PROMPT565_MULTI_CYCLE_DAEMON_AUTONOMOUS_LOOP_ENABLE"
 )
+PROMPT568_PRODUCTION_HARDENING_ENTRYPOINT_ENABLE_TOKEN = (
+    "PROMPT568_PRODUCTION_HARDENING_ENTRYPOINT_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -192,6 +195,9 @@ _PROMPT563_ALLOWED_PYTHON_FILES = (
 )
 _PROMPT565_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/prompt565_multi_cycle_daemon"
+)
+_PROMPT568_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/prompt568_production_hardening_entrypoint"
 )
 _PROMPT565_REQUIRED_CYCLE_TRUE_FIELDS = (
     "prompt563_prompt552_final_smoke_success",
@@ -1621,6 +1627,303 @@ def run_prompt565_multi_cycle_daemon_autonomous_loop(
                 cycle_result,
             )
         _write_json(daemon_artifact_dir / "daemon_summary.json", summary)
+    return summary
+
+
+def run_prompt568_production_hardening_entrypoint(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    timeout_seconds: int = 180,
+    allowed_files: Sequence[str] | None = None,
+    max_cycles: int = 2,
+    stop_on_failure: bool = True,
+    max_daemon_runs: int = 1,
+    artifact_dir: str | Path | None = None,
+    resume_state_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt565_payload = dict(payload)
+    prompt565_payload.update(
+        {
+            "prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_ready": True,
+            "prompt550_source_prompt549_ready": True,
+            "prompt550_remote_push_pr_merge_rollback_included": False,
+            "prompt550_long_running_daemon_included": False,
+            "prompt550_multi_cycle_unattended_loop_included": False,
+            "prompt550_completion_scope": (
+                "local_only_success_path_one_cycle_final_completion"
+            ),
+            "prompt550_next_action": (
+                "await_post_smoke_local_commit_tag_clean_rerun_final_completion"
+            ),
+        }
+    )
+    prompt568_prompt550_payload_materialized = all(
+        (
+            prompt565_payload.get(
+                "prompt550_post_smoke_local_commit_tag_clean_rerun_final_completion_ready"
+            )
+            is True,
+            prompt565_payload.get("prompt550_source_prompt549_ready") is True,
+            prompt565_payload.get(
+                "prompt550_remote_push_pr_merge_rollback_included"
+            )
+            is False,
+            prompt565_payload.get("prompt550_long_running_daemon_included")
+            is False,
+            prompt565_payload.get(
+                "prompt550_multi_cycle_unattended_loop_included"
+            )
+            is False,
+            prompt565_payload.get("prompt550_completion_scope")
+            == "local_only_success_path_one_cycle_final_completion",
+            prompt565_payload.get("prompt550_next_action")
+            == "await_post_smoke_local_commit_tag_clean_rerun_final_completion",
+        )
+    )
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    hardening_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT568_DEFAULT_ARTIFACT_DIR
+    )
+    if not hardening_artifact_dir.is_absolute():
+        hardening_artifact_dir = repo_path / hardening_artifact_dir
+    resume_path = (
+        Path(resume_state_path)
+        if resume_state_path is not None
+        else hardening_artifact_dir / "resume_state.json"
+    )
+    if not resume_path.is_absolute():
+        resume_path = repo_path / resume_path
+
+    prompt568_enabled = enabled is True
+    prompt568_enable_token_valid = (
+        _normalize_text(enable_token, default="")
+        == PROMPT568_PRODUCTION_HARDENING_ENTRYPOINT_ENABLE_TOKEN
+    )
+    try:
+        requested_max_cycles = max(0, int(max_cycles))
+    except (TypeError, ValueError):
+        requested_max_cycles = 0
+    try:
+        requested_max_daemon_runs = max(0, int(max_daemon_runs))
+    except (TypeError, ValueError):
+        requested_max_daemon_runs = 0
+
+    blocked_reasons: list[str] = []
+    if not prompt568_enabled:
+        blocked_reasons.append("prompt568_enabled_required")
+    if not prompt568_enable_token_valid:
+        blocked_reasons.append("prompt568_enable_token_invalid")
+    if requested_max_daemon_runs < 1:
+        blocked_reasons.append("prompt568_max_daemon_runs_below_1")
+    if requested_max_cycles < 2:
+        blocked_reasons.append("prompt568_requested_max_cycles_below_2")
+
+    daemon_run_results: list[dict[str, Any]] = []
+    failed_daemon_run_index: int | None = None
+    if not blocked_reasons:
+        for daemon_run_index in range(1, requested_max_daemon_runs + 1):
+            daemon_result = run_prompt565_multi_cycle_daemon_autonomous_loop(
+                run_state_payload=prompt565_payload,
+                execution_repo_path=str(repo_path),
+                enabled=True,
+                enable_token=PROMPT565_MULTI_CYCLE_DAEMON_AUTONOMOUS_LOOP_ENABLE_TOKEN,
+                timeout_seconds=timeout_seconds,
+                allowed_files=allowed_files,
+                max_cycles=requested_max_cycles,
+                stop_on_failure=stop_on_failure,
+                artifact_dir=hardening_artifact_dir,
+            )
+            daemon_success = bool(
+                daemon_result.get(
+                    "prompt565_multi_cycle_daemon_autonomous_loop_success"
+                )
+                is True
+                and int(daemon_result.get("prompt565_cycles_executed") or 0) >= 2
+                and int(daemon_result.get("prompt565_successful_cycles") or 0)
+                >= 2
+                and daemon_result.get(
+                    "prompt565_full_autonomous_development_completed"
+                )
+                is True
+                and daemon_result.get("prompt565_final_worktree_clean") is True
+                and daemon_result.get("prompt565_no_remote_mutation_verified")
+                is True
+            )
+            daemon_summary = {
+                "daemon_run_index": daemon_run_index,
+                "daemon_run_artifact_name": (
+                    f"daemon_run_{daemon_run_index:03d}.json"
+                ),
+                "daemon_run_success": daemon_success,
+                "daemon_result": dict(daemon_result),
+            }
+            daemon_run_results.append(daemon_summary)
+            if not daemon_success and failed_daemon_run_index is None:
+                failed_daemon_run_index = daemon_run_index
+                blocked_reasons.append(
+                    f"prompt568_daemon_run_{daemon_run_index:03d}_failed"
+                )
+                if stop_on_failure:
+                    break
+
+    daemon_runs_executed = len(daemon_run_results)
+    successful_daemon_runs = sum(
+        1
+        for daemon_run_result in daemon_run_results
+        if daemon_run_result["daemon_run_success"]
+    )
+    final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
+        repo_path=repo_path,
+        daemon_artifact_dir=hardening_artifact_dir,
+    )
+    no_remote_mutation_verified = bool(
+        daemon_runs_executed > 0
+        and all(
+            daemon_run_result["daemon_result"].get(
+                "prompt565_no_remote_mutation_verified"
+            )
+            is True
+            for daemon_run_result in daemon_run_results
+        )
+    )
+    success_without_artifacts = bool(
+        prompt568_enabled
+        and prompt568_enable_token_valid
+        and requested_max_daemon_runs >= 1
+        and requested_max_cycles >= 2
+        and prompt568_prompt550_payload_materialized
+        and daemon_runs_executed >= 1
+        and successful_daemon_runs == daemon_runs_executed
+        and successful_daemon_runs >= 1
+        and final_worktree_clean
+        and no_remote_mutation_verified
+    )
+    if daemon_runs_executed > 0 and not final_worktree_clean:
+        blocked_reasons.append("prompt568_final_worktree_not_clean")
+    if daemon_runs_executed < requested_max_daemon_runs and not stop_on_failure:
+        blocked_reasons.append("prompt568_less_than_requested_daemon_runs_executed")
+
+    last_completed_daemon_run = daemon_runs_executed
+    last_success = (
+        daemon_run_results[-1]["daemon_run_success"]
+        if daemon_run_results
+        else False
+    )
+    next_action = (
+        "production_hardening_entrypoint_completed_local_only"
+        if success_without_artifacts
+        else "manual_review_prompt568_production_hardening_entrypoint_failed"
+    )
+    status = (
+        "production_hardening_entrypoint_completed_local_only"
+        if success_without_artifacts
+        else "blocked"
+    )
+    success = False
+    resume_state = {
+        "last_completed_daemon_run": last_completed_daemon_run,
+        "last_status": status,
+        "last_next_action": next_action,
+        "last_success": last_success,
+        "total_daemon_runs_requested": requested_max_daemon_runs,
+        "total_daemon_runs_completed": daemon_runs_executed,
+        "stopped_on_failure": bool(
+            failed_daemon_run_index is not None and stop_on_failure
+        ),
+        "local_only": True,
+        "remote_workflow_included": False,
+    }
+    summary = {
+        "local_only": True,
+        "source_prompt": "prompt568",
+        "prompt568_production_hardening_entrypoint_status": status,
+        "prompt568_production_hardening_entrypoint_ready": bool(
+            prompt568_enabled
+            and prompt568_enable_token_valid
+            and requested_max_daemon_runs >= 1
+            and requested_max_cycles >= 2
+        ),
+        "prompt568_production_hardening_entrypoint_success": False,
+        "prompt568_enabled": prompt568_enabled,
+        "prompt568_enable_token_valid": prompt568_enable_token_valid,
+        "prompt568_requested_max_cycles": requested_max_cycles,
+        "prompt568_max_daemon_runs": requested_max_daemon_runs,
+        "prompt568_daemon_runs_executed": daemon_runs_executed,
+        "prompt568_successful_daemon_runs": successful_daemon_runs,
+        "prompt568_failed_daemon_run_index": failed_daemon_run_index,
+        "prompt568_stop_on_failure": bool(stop_on_failure),
+        "prompt568_prompt550_payload_materialized": (
+            prompt568_prompt550_payload_materialized
+        ),
+        "prompt568_resume_state_written": False,
+        "prompt568_hardening_summary_written": False,
+        "prompt568_final_worktree_clean": final_worktree_clean,
+        "prompt568_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt568_production_hardening_completed": success,
+        "prompt568_completion_claim_allowed": success,
+        "prompt568_remote_workflow_included": False,
+        "prompt568_next_action": next_action,
+        "prompt568_blocked_reasons": blocked_reasons,
+        "prompt568_artifact_dir": str(hardening_artifact_dir),
+        "prompt568_resume_state_path": str(resume_path),
+        "prompt568_daemon_run_artifacts": [
+            daemon_run_result["daemon_run_artifact_name"]
+            for daemon_run_result in daemon_run_results
+        ],
+        "prompt568_daemon_run_results": daemon_run_results,
+        "resume_state": resume_state,
+    }
+
+    hardening_artifact_dir.mkdir(parents=True, exist_ok=True)
+    for daemon_run_result in daemon_run_results:
+        _write_json(
+            hardening_artifact_dir / daemon_run_result["daemon_run_artifact_name"],
+            daemon_run_result,
+        )
+    resume_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(resume_path, resume_state)
+    summary["prompt568_resume_state_written"] = resume_path.exists()
+    summary_path = hardening_artifact_dir / "hardening_summary.json"
+    _write_json(summary_path, summary)
+    summary["prompt568_hardening_summary_written"] = summary_path.exists()
+    success = bool(
+        success_without_artifacts
+        and summary["prompt568_resume_state_written"]
+        and summary["prompt568_hardening_summary_written"]
+    )
+    next_action = (
+        "production_hardening_entrypoint_completed_local_only"
+        if success
+        else "manual_review_prompt568_production_hardening_entrypoint_failed"
+    )
+    status = (
+        "production_hardening_entrypoint_completed_local_only"
+        if success
+        else "blocked"
+    )
+    resume_state["last_status"] = status
+    resume_state["last_next_action"] = next_action
+    resume_state["last_success"] = last_success and success
+    summary["prompt568_production_hardening_entrypoint_status"] = status
+    summary["prompt568_production_hardening_entrypoint_success"] = success
+    summary["prompt568_production_hardening_completed"] = success
+    summary["prompt568_completion_claim_allowed"] = success
+    summary["prompt568_next_action"] = next_action
+    summary["resume_state"] = resume_state
+    if summary["prompt568_resume_state_written"]:
+        _write_json(resume_path, resume_state)
+    if summary["prompt568_hardening_summary_written"]:
+        _write_json(summary_path, summary)
     return summary
 
 
