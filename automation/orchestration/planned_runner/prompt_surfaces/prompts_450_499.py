@@ -25943,6 +25943,117 @@ def _build_prompt552_final_runtime_completion_smoke_state(
     return state
 
 
+def _build_prompt563_materialize_prompt552_final_smoke_inputs_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt552_next_action = _normalize_text(
+        payload.get("prompt552_next_action"),
+        default="",
+    )
+    prompt552_success = bool(
+        payload.get("prompt552_final_runtime_completion_smoke_success")
+        is True
+    )
+    prompt552_full_flow_completed = bool(
+        payload.get("prompt552_full_autonomous_flow_completed") is True
+    )
+    prompt552_completion_claim_allowed = bool(
+        payload.get("prompt552_completion_claim_allowed") is True
+    )
+    prompt552_success_next_action = bool(
+        prompt552_next_action
+        == "local_only_success_path_one_cycle_autonomous_development_completed"
+    )
+    prompt552_inputs_materialized = all(
+        payload.get(field) is True
+        for field in _PROMPT552_INPUT_FIELDS
+        if field != "prompt552_input_final_completion_error_present"
+    ) and payload.get("prompt552_input_final_completion_error_present") is False
+    prompt552_scope_preserved = bool(
+        payload.get("prompt552_remote_push_pr_merge_rollback_included")
+        is False
+        and payload.get("prompt552_long_running_daemon_included") is False
+        and payload.get("prompt552_multi_cycle_unattended_loop_included")
+        is False
+        and payload.get("prompt552_completion_scope")
+        == "local_only_success_path_one_cycle"
+    )
+    ready = bool(
+        prompt552_success
+        and prompt552_full_flow_completed
+        and prompt552_completion_claim_allowed
+        and prompt552_success_next_action
+        and prompt552_inputs_materialized
+        and prompt552_scope_preserved
+    )
+    readiness_checks = (
+        ("prompt552_final_runtime_completion_smoke_success", prompt552_success),
+        (
+            "prompt552_full_autonomous_flow_completed",
+            prompt552_full_flow_completed,
+        ),
+        (
+            "prompt552_completion_claim_allowed",
+            prompt552_completion_claim_allowed,
+        ),
+        ("prompt552_next_action", prompt552_success_next_action),
+        ("prompt552_input_fields_materialized", prompt552_inputs_materialized),
+        ("prompt552_scope_preserved", prompt552_scope_preserved),
+    )
+    blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in readiness_checks
+        if not passed
+    ]
+    if ready:
+        status = "prompt552_final_smoke_inputs_materialized"
+        next_action = (
+            "local_only_success_path_one_cycle_autonomous_development_completed"
+        )
+    else:
+        status = "prompt552_final_smoke_inputs_failed"
+        next_action = "manual_review_prompt563_prompt552_final_smoke_failed"
+
+    state = {
+        "local_only": True,
+        "source_prompt": "prompt563",
+        "prompt563_prompt552_final_smoke_status": status,
+        "prompt563_prompt552_final_smoke_ready": bool(ready),
+        "prompt563_prompt552_final_smoke_success": bool(prompt552_success),
+        "prompt563_prompt552_full_autonomous_flow_completed": bool(
+            prompt552_full_flow_completed
+        ),
+        "prompt563_prompt552_completion_claim_allowed": bool(
+            prompt552_completion_claim_allowed
+        ),
+        "prompt563_local_only_success_path_one_cycle_completed": bool(ready),
+        "prompt563_remote_push_pr_merge_rollback_included": False,
+        "prompt563_long_running_daemon_included": False,
+        "prompt563_multi_cycle_unattended_loop_included": False,
+        "prompt563_execution_performed_by_prompt563_builder": False,
+        "prompt563_next_action": next_action,
+        "prompt563_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt563_blocked_reasons": blocked_reasons,
+        "prompt552_final_runtime_completion_smoke_success": prompt552_success,
+        "prompt552_full_autonomous_flow_completed": bool(
+            prompt552_full_flow_completed
+        ),
+        "prompt552_completion_claim_allowed": bool(
+            prompt552_completion_claim_allowed
+        ),
+        "prompt552_next_action": prompt552_next_action,
+    }
+    for field in _PROMPT552_INPUT_FIELDS:
+        state[field] = payload.get(field) is True
+        if field == "prompt552_input_final_completion_error_present":
+            state[field] = payload.get(field) is True
+    return state
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -27817,4 +27928,5 @@ __all__ = [
     "_build_prompt560_fix_token_bridge_and_false_success_state",
     "_build_prompt561_exclude_generated_smoke_prompt_artifact_from_changed_files_state",
     "_build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state",
+    "_build_prompt563_materialize_prompt552_final_smoke_inputs_state",
 ]

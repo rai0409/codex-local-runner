@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import hashlib
+import os
 from pathlib import Path
 import subprocess
 from typing import Any
@@ -168,6 +169,21 @@ _PROMPT547_DEFAULT_ALLOWED_FILES = _PROMPT546_DEFAULT_ALLOWED_FILES
 
 _PROMPT551_MINIMAL_PROMPT_ARTIFACT = (
     Path("artifacts/runtime_commands/prompt551_minimal_runtime_smoke_prompt.txt")
+)
+_PROMPT563_GENERATED_RUNTIME_ARTIFACTS = (
+    PROMPT546_STDOUT_ARTIFACT,
+    PROMPT546_STDERR_ARTIFACT,
+    PROMPT546_RETURNCODE_ARTIFACT,
+    PROMPT546_CHANGED_FILES_ARTIFACT,
+    PROMPT546_DIFF_ARTIFACT,
+    PROMPT546_RESULT_ARTIFACT,
+    _PROMPT551_MINIMAL_PROMPT_ARTIFACT,
+)
+_PROMPT563_ALLOWED_PYTHON_FILES = (
+    "automation/orchestration/planned_runner/runtime_output_wiring.py",
+    "automation/orchestration/planned_runner/runtime_internal_execution_adapter.py",
+    "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py",
+    "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
 )
 
 _PROMPT380_RESULT_REVIEW_ROUTE_FIELDS = (
@@ -1020,6 +1036,259 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
         "_build_prompt551_actual_runtime_adapter_execution_bridge_state"
     ]
     merged.update(builder(run_state_payload=merged))
+    return merged
+
+
+def _prompt563_read_returncode(repo_path: Path) -> int | None:
+    try:
+        raw_returncode = (
+            repo_path / PROMPT546_RETURNCODE_ARTIFACT
+        ).read_text(encoding="utf-8")
+        return int(raw_returncode.strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _prompt563_result_json_schema_valid(
+    result_payload: Mapping[str, Any],
+) -> bool:
+    required_fields = (
+        *_PROMPT551_RESULT_JSON_SCHEMA_FIELDS,
+        "prompt546_internal_execution_enable_token_valid",
+        "prompt546_internal_execution_allowed",
+    )
+    return all(field in result_payload for field in required_fields)
+
+
+def _prompt563_changed_files(result_payload: Mapping[str, Any]) -> list[str]:
+    raw_changed_files = result_payload.get(
+        "prompt546_internal_semantic_changed_files"
+    )
+    if not isinstance(raw_changed_files, Iterable) or isinstance(
+        raw_changed_files,
+        (str, bytes),
+    ):
+        raw_changed_files = result_payload.get("prompt546_internal_changed_files")
+    if not isinstance(raw_changed_files, Iterable) or isinstance(
+        raw_changed_files,
+        (str, bytes),
+    ):
+        return []
+    return [
+        str(item).strip()
+        for item in raw_changed_files
+        if str(item).strip()
+    ]
+
+
+def _prompt563_py_compile(
+    *,
+    repo_path: Path,
+    result_payload: Mapping[str, Any],
+) -> bool:
+    changed_python_files = [
+        path
+        for path in _prompt563_changed_files(result_payload)
+        if path in _PROMPT563_ALLOWED_PYTHON_FILES and path.endswith(".py")
+    ]
+    compile_targets = (
+        changed_python_files
+        if changed_python_files
+        else list(_PROMPT563_ALLOWED_PYTHON_FILES)
+    )
+    env = dict(os.environ)
+    env["PYTHONPYCACHEPREFIX"] = "/tmp/prompt563_pycache"
+    completed = subprocess.run(
+        ["python", "-m", "py_compile", *compile_targets],
+        cwd=str(repo_path),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    return completed.returncode == 0
+
+
+def _prompt563_remove_generated_runtime_artifacts(repo_path: Path) -> None:
+    for artifact_path in _PROMPT563_GENERATED_RUNTIME_ARTIFACTS:
+        try:
+            (repo_path / artifact_path).unlink()
+        except FileNotFoundError:
+            continue
+
+
+def _prompt563_worktree_clean(repo_path: Path) -> bool:
+    completed = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=all"],
+        cwd=str(repo_path),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return completed.returncode == 0 and not completed.stdout.strip()
+
+
+def _prompt563_prompt552_inputs(
+    *,
+    repo_path: Path,
+    bridge_state: Mapping[str, Any],
+    result_payload: Mapping[str, Any],
+    post_smoke_worktree_clean: bool,
+    py_compile_success: bool,
+) -> dict[str, Any]:
+    return {
+        "prompt552_input_final_runtime_smoke_result_present": True,
+        "prompt552_input_runtime_bridge_invoked_with_explicit_enable": bool(
+            bridge_state.get("prompt551_runtime_adapter_invoked") is True
+            and bridge_state.get("prompt551_explicit_execution_enable_present")
+            is True
+            and bridge_state.get("prompt551_token_bridge_applied") is True
+            and result_payload.get(
+                "prompt546_internal_execution_enable_token_valid"
+            )
+            is True
+            and result_payload.get("prompt546_internal_execution_allowed")
+            is True
+        ),
+        "prompt552_input_stdout_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_STDOUT_ARTIFACT,
+        ),
+        "prompt552_input_stdout_artifact_nonempty": _artifact_nonempty(
+            repo_path,
+            PROMPT546_STDOUT_ARTIFACT,
+        ),
+        "prompt552_input_stderr_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_STDERR_ARTIFACT,
+        ),
+        "prompt552_input_returncode_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_RETURNCODE_ARTIFACT,
+        ),
+        "prompt552_input_returncode_zero": _prompt563_read_returncode(repo_path)
+        == 0,
+        "prompt552_input_changed_files_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_CHANGED_FILES_ARTIFACT,
+        ),
+        "prompt552_input_changed_files_artifact_nonempty": _artifact_nonempty(
+            repo_path,
+            PROMPT546_CHANGED_FILES_ARTIFACT,
+        ),
+        "prompt552_input_diff_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_DIFF_ARTIFACT,
+        ),
+        "prompt552_input_diff_artifact_nonempty": _artifact_nonempty(
+            repo_path,
+            PROMPT546_DIFF_ARTIFACT,
+        ),
+        "prompt552_input_result_json_artifact_exists": _prompt546_artifact_ready(
+            repo_path,
+            PROMPT546_RESULT_ARTIFACT,
+        ),
+        "prompt552_input_result_json_schema_valid": bool(
+            _prompt563_result_json_schema_valid(result_payload)
+        ),
+        "prompt552_input_result_json_subprocess_executed_true": bool(
+            result_payload.get("prompt546_internal_codex_subprocess_executed")
+            is True
+        ),
+        "prompt552_input_result_json_returncode_success_true": bool(
+            result_payload.get("prompt546_internal_codex_returncode_success")
+            is True
+        ),
+        "prompt552_input_result_json_changed_files_allowed_true": bool(
+            result_payload.get("prompt546_internal_changed_files_allowed")
+            is True
+        ),
+        "prompt552_input_result_json_unexpected_changed_files_present_false": bool(
+            result_payload.get(
+                "prompt546_internal_unexpected_changed_files_present"
+            )
+            is False
+        ),
+        "prompt552_input_result_json_unexpected_diff_present_false": bool(
+            result_payload.get("prompt546_internal_unexpected_diff_present")
+            is False
+        ),
+        "prompt552_input_result_json_timeout_occurred_false": bool(
+            result_payload.get("prompt546_internal_execution_timeout_occurred")
+            is False
+        ),
+        "prompt552_input_result_json_execution_error_present_false": bool(
+            result_payload.get("prompt546_internal_execution_error_present")
+            is False
+        ),
+        "prompt552_input_result_json_no_remote_mutation_verified_true": bool(
+            result_payload.get("prompt546_internal_no_remote_mutation_verified")
+            is True
+        ),
+        "prompt552_input_post_smoke_worktree_clean": bool(
+            post_smoke_worktree_clean
+        ),
+        "prompt552_input_final_py_compile_success": bool(py_compile_success),
+        "prompt552_input_final_completion_error_present": False,
+    }
+
+
+def run_prompt563_prompt552_final_runtime_completion_smoke(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str = "",
+    timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+
+    bridge_state = run_prompt551_actual_runtime_adapter_execution_bridge(
+        run_state_payload=payload,
+        execution_repo_path=str(repo_path),
+        enabled=True,
+        enable_token=PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE_TOKEN,
+        timeout_seconds=timeout_seconds,
+        allowed_files=_PROMPT563_ALLOWED_PYTHON_FILES,
+    )
+    result_payload = _read_json_object_if_exists(
+        repo_path / PROMPT546_RESULT_ARTIFACT
+    )
+    if not isinstance(result_payload, Mapping):
+        result_payload = {}
+
+    py_compile_success = _prompt563_py_compile(
+        repo_path=repo_path,
+        result_payload=result_payload,
+    )
+    prompt552_inputs = _prompt563_prompt552_inputs(
+        repo_path=repo_path,
+        bridge_state=bridge_state,
+        result_payload=result_payload,
+        post_smoke_worktree_clean=False,
+        py_compile_success=py_compile_success,
+    )
+    _prompt563_remove_generated_runtime_artifacts(repo_path)
+    post_smoke_worktree_clean = _prompt563_worktree_clean(repo_path)
+    prompt552_inputs["prompt552_input_post_smoke_worktree_clean"] = bool(
+        post_smoke_worktree_clean
+    )
+
+    merged = dict(bridge_state)
+    merged.update(prompt552_inputs)
+    builders = get_prompt_builders()
+    prompt552_state = builders[
+        "_build_prompt552_final_runtime_completion_smoke_state"
+    ](run_state_payload=merged)
+    merged.update(prompt552_state)
+    merged.update(
+        builders[
+            "_build_prompt563_materialize_prompt552_final_smoke_inputs_state"
+        ](run_state_payload=merged)
+    )
     return merged
 
 
