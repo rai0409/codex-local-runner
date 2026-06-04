@@ -26356,6 +26356,86 @@ def _build_prompt566_fix_prompt565_daemon_artifact_clean_state(
     }
 
 
+def _build_prompt567_final_handoff_and_hardening_plan_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    try:
+        cycles_executed = int(payload.get("prompt565_cycles_executed") or 0)
+    except (TypeError, ValueError):
+        cycles_executed = 0
+    try:
+        successful_cycles = int(
+            payload.get("prompt565_successful_cycles") or 0
+        )
+    except (TypeError, ValueError):
+        successful_cycles = 0
+
+    full_autonomous_development_completed = (
+        payload.get("prompt565_full_autonomous_development_completed") is True
+    )
+    completion_claim_allowed = (
+        payload.get("prompt565_completion_claim_allowed") is True
+    )
+    all_cycles_succeeded = (
+        payload.get("prompt565_all_cycles_succeeded") is True
+    )
+    long_running_daemon_included = (
+        payload.get("prompt565_long_running_daemon_included") is True
+    )
+    multi_cycle_unattended_loop_included = (
+        payload.get("prompt565_multi_cycle_unattended_loop_included") is True
+    )
+    remote_push_pr_merge_rollback_included = (
+        payload.get("prompt565_remote_push_pr_merge_rollback_included") is True
+    )
+    ready = bool(
+        full_autonomous_development_completed
+        and completion_claim_allowed
+        and cycles_executed >= 2
+        and successful_cycles >= 2
+        and all_cycles_succeeded
+        and long_running_daemon_included
+        and multi_cycle_unattended_loop_included
+        and not remote_push_pr_merge_rollback_included
+    )
+    status = (
+        "handoff_ready_local_only_multi_cycle_daemon_completed"
+        if ready
+        else "manual_review_required"
+    )
+    next_action = (
+        "handoff_ready_local_only_multi_cycle_daemon_completed"
+        if ready
+        else "manual_review_prompt567_handoff_evidence_missing"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt567",
+        "prompt567_final_handoff_status": status,
+        "prompt567_final_handoff_ready": ready,
+        "prompt567_local_only_multi_cycle_daemon_completed": ready,
+        "prompt567_full_autonomous_development_completed_local_only": ready,
+        "prompt567_cycles_executed": cycles_executed,
+        "prompt567_successful_cycles": successful_cycles,
+        "prompt567_long_running_daemon_included": long_running_daemon_included,
+        "prompt567_multi_cycle_unattended_loop_included": (
+            multi_cycle_unattended_loop_included
+        ),
+        "prompt567_remote_push_pr_merge_rollback_included": False,
+        "prompt567_production_hardening_completed": False,
+        "prompt567_next_hardening_actions": [
+            "daemon process wrapper/systemd or supervisor mode",
+            "longer run soak test",
+            "failure recovery/resume hardening",
+            "configurable stop conditions",
+            "remote workflow phase only if explicitly requested",
+        ],
+        "prompt567_next_action": next_action,
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -28234,4 +28314,5 @@ __all__ = [
     "_build_prompt564_fix_prompt563_runtime_helper_signature_state",
     "_build_prompt565_multi_cycle_daemon_autonomous_loop_state",
     "_build_prompt566_fix_prompt565_daemon_artifact_clean_state",
+    "_build_prompt567_final_handoff_and_hardening_plan_state",
 ]
