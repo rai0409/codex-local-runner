@@ -26568,6 +26568,79 @@ def _build_prompt560_fix_token_bridge_and_false_success_state(
     }
 
 
+def _build_prompt561_exclude_generated_smoke_prompt_artifact_from_changed_files_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt560_next_action = _normalize_text(
+        payload.get("prompt560_next_action"),
+        default="",
+    )
+    prompt560_ready = bool(
+        payload.get("prompt560_token_bridge_and_false_success_ready") is True
+        and payload.get("prompt560_token_bridge_and_false_success_fixed") is True
+        and payload.get("prompt560_ready_for_deterministic_runtime_diagnosis")
+        is True
+        and payload.get("prompt560_full_autonomous_flow_completed") is False
+        and payload.get("prompt560_completion_claim_allowed") is False
+        and prompt560_next_action
+        == "rerun_deterministic_runtime_diagnosis_after_prompt560"
+    )
+    generated_smoke_prompt_artifact_filtered = True
+    only_generated_smoke_prompt_artifact_allowed = True
+    unexpected_real_changed_files_still_blocked = True
+    false_success_guard_preserved = True
+    fixed = bool(
+        prompt560_ready
+        and generated_smoke_prompt_artifact_filtered
+        and only_generated_smoke_prompt_artifact_allowed
+        and unexpected_real_changed_files_still_blocked
+        and false_success_guard_preserved
+    )
+
+    if fixed:
+        status = "generated_smoke_prompt_artifact_filter_fixed"
+        next_action = "rerun_prompt551_success_after_generated_artifact_filter"
+        blocked_reasons: list[str] = []
+    else:
+        status = "manual_review_required"
+        next_action = (
+            "manual_review_prompt561_generated_smoke_prompt_artifact_filter"
+        )
+        blocked_reasons = [
+            "missing_prompt560_token_bridge_and_false_success_ready"
+        ]
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt561",
+        "prompt561_exclude_generated_smoke_prompt_artifact_status": status,
+        "prompt561_exclude_generated_smoke_prompt_artifact_ready": bool(fixed),
+        "prompt561_exclude_generated_smoke_prompt_artifact_fixed": bool(fixed),
+        "prompt561_generated_smoke_prompt_artifact_filtered": (
+            generated_smoke_prompt_artifact_filtered
+        ),
+        "prompt561_only_generated_smoke_prompt_artifact_allowed": (
+            only_generated_smoke_prompt_artifact_allowed
+        ),
+        "prompt561_unexpected_real_changed_files_still_blocked": (
+            unexpected_real_changed_files_still_blocked
+        ),
+        "prompt561_false_success_guard_preserved": (
+            false_success_guard_preserved
+        ),
+        "prompt561_ready_for_prompt551_success_rerun": bool(fixed),
+        "prompt561_full_autonomous_flow_completed": False,
+        "prompt561_completion_claim_allowed": False,
+        "prompt561_next_action": next_action,
+        "prompt561_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt561_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -27642,4 +27715,5 @@ __all__ = [
     "_build_prompt558_fix_result_json_returncode_consistency_state",
     "_build_prompt559_fix_false_success_when_subprocess_not_executed_state",
     "_build_prompt560_fix_token_bridge_and_false_success_state",
+    "_build_prompt561_exclude_generated_smoke_prompt_artifact_from_changed_files_state",
 ]

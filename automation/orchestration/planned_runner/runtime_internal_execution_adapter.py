@@ -112,14 +112,18 @@ PROMPT551_MINIMAL_RUNTIME_SMOKE_PROMPT_LITERAL = (
 )
 
 
-def _changed_files_only_generated_prompt_artifacts(
+def _semantic_changed_files_for_validation(
     changed_files: Iterable[str],
-) -> bool:
-    changed = {str(item).strip() for item in changed_files if str(item).strip()}
+) -> list[str]:
     generated_prompt_artifacts = {
         PROMPT551_MINIMAL_RUNTIME_SMOKE_PROMPT_LITERAL,
     }
-    return bool(changed) and changed.issubset(generated_prompt_artifacts)
+    return [
+        str(item).strip()
+        for item in changed_files
+        if str(item).strip()
+        and str(item).strip() not in generated_prompt_artifacts
+    ]
 
 
 def capture_git_diff(repo_dir: str) -> str:
@@ -307,15 +311,14 @@ def run_internal_codex_subprocess(
 
     changed_files = capture_git_changed_files(str(repo_path))
     diff_text = capture_git_diff(str(repo_path))
-    changed_files_allowed = changed_files_within_allowed(
-        changed_files,
-        allowed_files,
+    semantic_changed_files = _semantic_changed_files_for_validation(changed_files)
+    changed_files_allowed = (
+        not semantic_changed_files
+        or changed_files_within_allowed(
+            semantic_changed_files,
+            allowed_files,
+        )
     )
-    prompt_artifact_only_change = _changed_files_only_generated_prompt_artifacts(
-        changed_files
-    )
-    if prompt_artifact_only_change:
-        changed_files_allowed = False
     unexpected_changed_files_present = not changed_files_allowed
     unexpected_diff_present = bool(diff_text) and not changed_files_allowed
 
@@ -352,6 +355,7 @@ def run_internal_codex_subprocess(
         f"{prefix}_internal_execution_allowed": bool(execution_allowed),
         f"{prefix}_internal_codex_prompt_path": str(prompt_file),
         f"{prefix}_internal_changed_files": changed_files,
+        f"{prefix}_internal_semantic_changed_files": semantic_changed_files,
         f"{prefix}_internal_error": error_text,
     }
     artifact_paths = write_internal_execution_artifacts(
