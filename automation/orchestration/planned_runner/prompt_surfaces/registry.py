@@ -227,6 +227,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state,
     _build_prompt563_materialize_prompt552_final_smoke_inputs_state,
     _build_prompt564_fix_prompt563_runtime_helper_signature_state,
+    _build_prompt565_multi_cycle_daemon_autonomous_loop_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -450,6 +451,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state": _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state,
     "_build_prompt563_materialize_prompt552_final_smoke_inputs_state": _build_prompt563_materialize_prompt552_final_smoke_inputs_state,
     "_build_prompt564_fix_prompt563_runtime_helper_signature_state": _build_prompt564_fix_prompt563_runtime_helper_signature_state,
+    "_build_prompt565_multi_cycle_daemon_autonomous_loop_state": _build_prompt565_multi_cycle_daemon_autonomous_loop_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -677,4 +679,5 @@ __all__ = [
     "_build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state",
     "_build_prompt563_materialize_prompt552_final_smoke_inputs_state",
     "_build_prompt564_fix_prompt563_runtime_helper_signature_state",
+    "_build_prompt565_multi_cycle_daemon_autonomous_loop_state",
 ]

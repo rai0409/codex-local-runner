@@ -113,6 +113,9 @@ from automation.orchestration.planned_runner.utils import _write_json
 PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE_TOKEN = (
     "PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE"
 )
+PROMPT565_MULTI_CYCLE_DAEMON_AUTONOMOUS_LOOP_ENABLE_TOKEN = (
+    "PROMPT565_MULTI_CYCLE_DAEMON_AUTONOMOUS_LOOP_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -186,6 +189,18 @@ _PROMPT563_ALLOWED_PYTHON_FILES = (
     "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py",
     "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
 )
+_PROMPT565_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/prompt565_multi_cycle_daemon"
+)
+_PROMPT565_REQUIRED_CYCLE_TRUE_FIELDS = (
+    "prompt563_prompt552_final_smoke_success",
+    "prompt563_prompt552_full_autonomous_flow_completed",
+    "prompt563_prompt552_completion_claim_allowed",
+    "prompt552_final_runtime_completion_smoke_success",
+    "prompt552_full_autonomous_flow_completed",
+    "prompt552_completion_claim_allowed",
+)
+_PROMPT565_MINIMUM_CYCLE_ARTIFACTS = ("cycle_001.json", "cycle_002.json")
 
 _PROMPT380_RESULT_REVIEW_ROUTE_FIELDS = (
     "prompt380_prompt379_result_review_status",
@@ -1298,6 +1313,259 @@ def run_prompt563_prompt552_final_runtime_completion_smoke(
         ](run_state_payload=merged)
     )
     return merged
+
+
+def _prompt565_worktree_clean_excluding_daemon_artifacts(
+    *,
+    repo_path: Path,
+    daemon_artifact_dir: Path,
+) -> bool:
+    completed = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=all"],
+        cwd=str(repo_path),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return False
+    daemon_artifact_root = daemon_artifact_dir
+    if daemon_artifact_root.is_absolute():
+        try:
+            daemon_artifact_root = daemon_artifact_root.relative_to(repo_path)
+        except ValueError:
+            daemon_artifact_root = Path()
+    daemon_artifact_prefix = daemon_artifact_root.as_posix().rstrip("/") + "/"
+    for raw_line in completed.stdout.splitlines():
+        path_text = raw_line[3:].strip()
+        if path_text.startswith(daemon_artifact_prefix):
+            continue
+        return False
+    return True
+
+
+def _prompt565_cycle_succeeded(cycle_result: Mapping[str, Any]) -> bool:
+    return all(
+        cycle_result.get(field) is True
+        for field in _PROMPT565_REQUIRED_CYCLE_TRUE_FIELDS
+    )
+
+
+def run_prompt565_multi_cycle_daemon_autonomous_loop(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    timeout_seconds: int = 180,
+    allowed_files: Sequence[str] | None = None,
+    max_cycles: int = 2,
+    stop_on_failure: bool = True,
+    artifact_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    try:
+        requested_max_cycles = max(0, int(max_cycles))
+    except (TypeError, ValueError):
+        requested_max_cycles = 0
+    daemon_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT565_DEFAULT_ARTIFACT_DIR
+    )
+    if not daemon_artifact_dir.is_absolute():
+        daemon_artifact_dir = repo_path / daemon_artifact_dir
+
+    prompt565_enabled = enabled is True
+    prompt565_enable_token_valid = (
+        _normalize_text(enable_token, default="")
+        == PROMPT565_MULTI_CYCLE_DAEMON_AUTONOMOUS_LOOP_ENABLE_TOKEN
+    )
+    blocked_reasons: list[str] = []
+    if not prompt565_enabled:
+        blocked_reasons.append("prompt565_enabled_required")
+    if not prompt565_enable_token_valid:
+        blocked_reasons.append("prompt565_enable_token_invalid")
+    if requested_max_cycles < 2:
+        blocked_reasons.append("prompt565_requested_max_cycles_below_2")
+
+    cycle_results: list[dict[str, Any]] = []
+    failed_cycle_index: int | None = None
+    final_worktree_clean = False
+    if not blocked_reasons:
+        daemon_artifact_dir.mkdir(parents=True, exist_ok=True)
+        for cycle_index in range(1, requested_max_cycles + 1):
+            cycle_result = run_prompt563_prompt552_final_runtime_completion_smoke(
+                run_state_payload=payload,
+                execution_repo_path=str(repo_path),
+                enabled=True,
+                enable_token=(
+                    PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE_TOKEN
+                ),
+                timeout_seconds=timeout_seconds,
+                allowed_files=allowed_files,
+            )
+            _prompt563_remove_generated_runtime_artifacts(repo_path)
+            cycle_worktree_clean = (
+                _prompt565_worktree_clean_excluding_daemon_artifacts(
+                    repo_path=repo_path,
+                    daemon_artifact_dir=daemon_artifact_dir,
+                )
+            )
+            cycle_success = bool(
+                _prompt565_cycle_succeeded(cycle_result)
+                and cycle_worktree_clean
+            )
+            cycle_summary = {
+                "cycle_index": cycle_index,
+                "cycle_artifact_name": f"cycle_{cycle_index:03d}.json",
+                "cycle_success": cycle_success,
+                "cycle_worktree_clean_after_artifact_cleanup": (
+                    cycle_worktree_clean
+                ),
+                "required_cycle_true_fields": {
+                    field: cycle_result.get(field) is True
+                    for field in _PROMPT565_REQUIRED_CYCLE_TRUE_FIELDS
+                },
+                "prompt563_prompt552_final_smoke_success": bool(
+                    cycle_result.get("prompt563_prompt552_final_smoke_success")
+                    is True
+                ),
+                "prompt563_prompt552_full_autonomous_flow_completed": bool(
+                    cycle_result.get(
+                        "prompt563_prompt552_full_autonomous_flow_completed"
+                    )
+                    is True
+                ),
+                "prompt563_prompt552_completion_claim_allowed": bool(
+                    cycle_result.get(
+                        "prompt563_prompt552_completion_claim_allowed"
+                    )
+                    is True
+                ),
+                "prompt552_final_runtime_completion_smoke_success": bool(
+                    cycle_result.get(
+                        "prompt552_final_runtime_completion_smoke_success"
+                    )
+                    is True
+                ),
+                "prompt552_full_autonomous_flow_completed": bool(
+                    cycle_result.get("prompt552_full_autonomous_flow_completed")
+                    is True
+                ),
+                "prompt552_completion_claim_allowed": bool(
+                    cycle_result.get("prompt552_completion_claim_allowed")
+                    is True
+                ),
+                "prompt552_result_json_no_remote_mutation_verified_true": bool(
+                    cycle_result.get(
+                        "prompt552_result_json_no_remote_mutation_verified_true"
+                    )
+                    is True
+                ),
+                "cycle_result": dict(cycle_result),
+            }
+            cycle_results.append(cycle_summary)
+            _write_json(
+                daemon_artifact_dir / f"cycle_{cycle_index:03d}.json",
+                cycle_summary,
+            )
+            if not cycle_success and failed_cycle_index is None:
+                failed_cycle_index = cycle_index
+                blocked_reasons.append(f"prompt565_cycle_{cycle_index:03d}_failed")
+                if stop_on_failure:
+                    break
+
+        final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
+            repo_path=repo_path,
+            daemon_artifact_dir=daemon_artifact_dir,
+        )
+
+    cycles_executed = len(cycle_results)
+    successful_cycles = sum(
+        1 for cycle_result in cycle_results if cycle_result["cycle_success"]
+    )
+    all_cycles_succeeded = bool(
+        cycles_executed > 0 and successful_cycles == cycles_executed
+    )
+    no_remote_mutation_verified = bool(
+        all(
+            cycle_result.get(
+                "prompt552_result_json_no_remote_mutation_verified_true"
+            )
+            is True
+            for cycle_result in cycle_results
+        )
+        and cycles_executed > 0
+    )
+    success = bool(
+        prompt565_enabled
+        and prompt565_enable_token_valid
+        and requested_max_cycles >= 2
+        and cycles_executed >= 2
+        and all_cycles_succeeded
+        and final_worktree_clean
+        and no_remote_mutation_verified
+    )
+    if cycles_executed > 0 and not final_worktree_clean and not success:
+        blocked_reasons.append("prompt565_final_worktree_not_clean")
+    if cycles_executed < 2 and prompt565_enabled and prompt565_enable_token_valid:
+        blocked_reasons.append("prompt565_less_than_2_cycles_executed")
+
+    summary = {
+        "local_only": True,
+        "source_prompt": "prompt565",
+        "prompt565_multi_cycle_daemon_autonomous_loop_status": (
+            "multi_cycle_daemon_autonomous_loop_success"
+            if success
+            else "blocked"
+        ),
+        "prompt565_multi_cycle_daemon_autonomous_loop_ready": bool(
+            prompt565_enabled
+            and prompt565_enable_token_valid
+            and requested_max_cycles >= 2
+        ),
+        "prompt565_multi_cycle_daemon_autonomous_loop_success": success,
+        "prompt565_enabled": prompt565_enabled,
+        "prompt565_enable_token_valid": prompt565_enable_token_valid,
+        "prompt565_requested_max_cycles": requested_max_cycles,
+        "prompt565_cycles_executed": cycles_executed,
+        "prompt565_successful_cycles": successful_cycles,
+        "prompt565_failed_cycle_index": failed_cycle_index,
+        "prompt565_all_cycles_succeeded": all_cycles_succeeded,
+        "prompt565_final_worktree_clean": final_worktree_clean,
+        "prompt565_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt565_full_autonomous_development_completed": success,
+        "prompt565_completion_claim_allowed": success,
+        "prompt565_long_running_daemon_included": True,
+        "prompt565_multi_cycle_unattended_loop_included": True,
+        "prompt565_remote_push_pr_merge_rollback_included": False,
+        "prompt565_stop_on_failure": bool(stop_on_failure),
+        "prompt565_artifact_dir": str(daemon_artifact_dir),
+        "prompt565_cycle_artifacts": [
+            cycle_result["cycle_artifact_name"]
+            for cycle_result in cycle_results
+        ],
+        "prompt565_minimum_cycle_artifacts": list(
+            _PROMPT565_MINIMUM_CYCLE_ARTIFACTS
+        ),
+        "prompt565_next_action": (
+            "full_autonomous_development_completed_multi_cycle_daemon"
+            if success
+            else "manual_review_prompt565_multi_cycle_daemon_failed"
+        ),
+        "prompt565_blocked_reasons": blocked_reasons,
+        "prompt565_cycle_results": cycle_results,
+    }
+    if not blocked_reasons or cycle_results:
+        daemon_artifact_dir.mkdir(parents=True, exist_ok=True)
+        _write_json(daemon_artifact_dir / "daemon_summary.json", summary)
+    return summary
 
 
 def _prompt548_returncode_zero(repo_path: Path) -> bool:
