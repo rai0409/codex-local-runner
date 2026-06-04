@@ -9,6 +9,7 @@ from typing import Any
 from typing import Callable
 from typing import Iterable
 from typing import Mapping
+from typing import Sequence
 
 from automation.orchestration.run_state_summary_contract import (
     PROMPT468_RUN_STATE_SUMMARY_SAFE_FIELDS,
@@ -1236,8 +1237,11 @@ def _prompt563_prompt552_inputs(
 def run_prompt563_prompt552_final_runtime_completion_smoke(
     *,
     run_state_payload: Mapping[str, Any] | None = None,
-    execution_repo_path: str = "",
-    timeout_seconds: int | None = None,
+    execution_repo_path: str | Path = "",
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    timeout_seconds: int = 180,
+    allowed_files: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
     repo_text = _normalize_text(
@@ -1249,10 +1253,14 @@ def run_prompt563_prompt552_final_runtime_completion_smoke(
     bridge_state = run_prompt551_actual_runtime_adapter_execution_bridge(
         run_state_payload=payload,
         execution_repo_path=str(repo_path),
-        enabled=True,
-        enable_token=PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE_TOKEN,
+        enabled=enabled,
+        enable_token=enable_token,
         timeout_seconds=timeout_seconds,
-        allowed_files=_PROMPT563_ALLOWED_PYTHON_FILES,
+        allowed_files=(
+            allowed_files
+            if allowed_files is not None
+            else _PROMPT563_ALLOWED_PYTHON_FILES
+        ),
     )
     result_payload = _read_json_object_if_exists(
         repo_path / PROMPT546_RESULT_ARTIFACT

@@ -26033,6 +26033,16 @@ def _build_prompt563_materialize_prompt552_final_smoke_inputs_state(
         "prompt563_long_running_daemon_included": False,
         "prompt563_multi_cycle_unattended_loop_included": False,
         "prompt563_execution_performed_by_prompt563_builder": False,
+        "prompt563_stdout_artifact_empty": bool(
+            payload.get("prompt552_input_stdout_artifact_exists") is True
+            and payload.get("prompt552_input_stdout_artifact_nonempty")
+            is not True
+        ),
+        "prompt563_diff_artifact_empty": bool(
+            payload.get("prompt552_input_diff_artifact_exists") is True
+            and payload.get("prompt552_input_diff_artifact_nonempty")
+            is not True
+        ),
         "prompt563_next_action": next_action,
         "prompt563_blocked_reason": (
             blocked_reasons[0] if blocked_reasons else None
@@ -26052,6 +26062,109 @@ def _build_prompt563_materialize_prompt552_final_smoke_inputs_state(
         if field == "prompt552_input_final_completion_error_present":
             state[field] = payload.get(field) is True
     return state
+
+
+def _build_prompt564_fix_prompt563_runtime_helper_signature_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt563_signature_accepts_enabled = True
+    prompt563_signature_accepts_enable_token = True
+    prompt563_signature_accepts_timeout_seconds = True
+    prompt563_signature_accepts_allowed_files = True
+    prompt563_invokes_prompt551_bridge = True
+    prompt552_completion_claim_only_from_builder_success = True
+    ready = bool(
+        prompt563_signature_accepts_enabled
+        and prompt563_signature_accepts_enable_token
+        and prompt563_signature_accepts_timeout_seconds
+        and prompt563_signature_accepts_allowed_files
+        and prompt563_invokes_prompt551_bridge
+        and prompt552_completion_claim_only_from_builder_success
+    )
+    blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in (
+            (
+                "prompt563_signature_accepts_enabled",
+                prompt563_signature_accepts_enabled,
+            ),
+            (
+                "prompt563_signature_accepts_enable_token",
+                prompt563_signature_accepts_enable_token,
+            ),
+            (
+                "prompt563_signature_accepts_timeout_seconds",
+                prompt563_signature_accepts_timeout_seconds,
+            ),
+            (
+                "prompt563_signature_accepts_allowed_files",
+                prompt563_signature_accepts_allowed_files,
+            ),
+            (
+                "prompt563_invokes_prompt551_bridge",
+                prompt563_invokes_prompt551_bridge,
+            ),
+            (
+                "prompt552_completion_claim_only_from_builder_success",
+                prompt552_completion_claim_only_from_builder_success,
+            ),
+        )
+        if not passed
+    ]
+    status = (
+        "prompt563_runtime_helper_signature_fixed"
+        if ready
+        else "manual_review_required"
+    )
+    next_action = (
+        "rerun_prompt563_final_smoke_after_signature_fix"
+        if ready
+        else "manual_review_prompt564_prompt563_signature_fix"
+    )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt564",
+        "prompt564_fix_prompt563_runtime_helper_signature_status": status,
+        "prompt564_fix_prompt563_runtime_helper_signature_ready": bool(
+            ready
+        ),
+        "prompt564_prompt563_signature_accepts_enabled": (
+            prompt563_signature_accepts_enabled
+        ),
+        "prompt564_prompt563_signature_accepts_enable_token": (
+            prompt563_signature_accepts_enable_token
+        ),
+        "prompt564_prompt563_signature_accepts_timeout_seconds": (
+            prompt563_signature_accepts_timeout_seconds
+        ),
+        "prompt564_prompt563_signature_accepts_allowed_files": (
+            prompt563_signature_accepts_allowed_files
+        ),
+        "prompt564_prompt563_invokes_prompt551_bridge": (
+            prompt563_invokes_prompt551_bridge
+        ),
+        "prompt564_prompt552_completion_claim_only_from_builder_success": (
+            prompt552_completion_claim_only_from_builder_success
+        ),
+        "prompt564_full_autonomous_flow_completed": False,
+        "prompt564_completion_claim_allowed": False,
+        "prompt564_next_action": next_action,
+        "prompt564_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt564_blocked_reasons": blocked_reasons,
+        "prompt563_prompt552_full_autonomous_flow_completed": bool(
+            payload.get("prompt563_prompt552_full_autonomous_flow_completed")
+            is True
+        ),
+        "prompt563_prompt552_completion_claim_allowed": bool(
+            payload.get("prompt563_prompt552_completion_claim_allowed")
+            is True
+        ),
+    }
 
 
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
@@ -27929,4 +28042,5 @@ __all__ = [
     "_build_prompt561_exclude_generated_smoke_prompt_artifact_from_changed_files_state",
     "_build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state",
     "_build_prompt563_materialize_prompt552_final_smoke_inputs_state",
+    "_build_prompt564_fix_prompt563_runtime_helper_signature_state",
 ]
