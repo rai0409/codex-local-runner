@@ -26595,6 +26595,163 @@ def _build_prompt568_production_hardening_entrypoint_state(
     }
 
 
+def _build_prompt569_soak_runner_supervisor_wrapper_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    def _prompt569_int(value: Any) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt569_enabled") is True
+    enable_token_valid = payload.get("prompt569_enable_token_valid") is True
+    requested_soak_runs = _prompt569_int(
+        payload.get("prompt569_requested_soak_runs")
+    )
+    soak_runs_executed = _prompt569_int(
+        payload.get("prompt569_soak_runs_executed")
+    )
+    successful_soak_runs = _prompt569_int(
+        payload.get("prompt569_successful_soak_runs")
+    )
+    failed_soak_run_index = payload.get("prompt569_failed_soak_run_index")
+    stop_on_failure = payload.get("prompt569_stop_on_failure") is True
+    stop_reason = _normalize_text(
+        payload.get("prompt569_stop_reason"),
+        default="",
+    )
+    resume_state_written = payload.get("prompt569_resume_state_written") is True
+    soak_summary_written = payload.get("prompt569_soak_summary_written") is True
+    final_worktree_clean = payload.get("prompt569_final_worktree_clean") is True
+    no_remote_mutation_verified = (
+        payload.get("prompt569_no_remote_mutation_verified") is True
+    )
+    remote_workflow_included = False
+
+    soak_run_results = list(payload.get("prompt569_soak_run_results") or [])
+    soak_evidence_ready = bool(
+        soak_run_results
+        and all(
+            isinstance(soak_run_result, Mapping)
+            and soak_run_result.get("soak_run_success") is True
+            and isinstance(soak_run_result.get("prompt568_result"), Mapping)
+            and soak_run_result["prompt568_result"].get(
+                "prompt568_production_hardening_entrypoint_success"
+            )
+            is True
+            and soak_run_result["prompt568_result"].get(
+                "prompt568_production_hardening_completed"
+            )
+            is True
+            and soak_run_result["prompt568_result"].get(
+                "prompt568_completion_claim_allowed"
+            )
+            is True
+            and soak_run_result["prompt568_result"].get(
+                "prompt568_no_remote_mutation_verified"
+            )
+            is True
+            and soak_run_result["prompt568_result"].get(
+                "prompt568_remote_workflow_included"
+            )
+            is False
+            for soak_run_result in soak_run_results
+        )
+    )
+    success = bool(
+        payload.get("prompt569_soak_runner_supervisor_wrapper_success") is True
+        and enabled
+        and enable_token_valid
+        and requested_soak_runs >= 2
+        and soak_runs_executed == requested_soak_runs
+        and successful_soak_runs == requested_soak_runs
+        and soak_evidence_ready
+        and stop_reason == "completed_requested_soak_runs"
+        and resume_state_written
+        and soak_summary_written
+        and final_worktree_clean
+        and no_remote_mutation_verified
+        and not remote_workflow_included
+    )
+    blocked_reasons = list(payload.get("prompt569_blocked_reasons") or [])
+    readiness_checks = (
+        ("prompt569_enabled", enabled),
+        ("prompt569_enable_token_valid", enable_token_valid),
+        ("prompt569_requested_soak_runs", requested_soak_runs >= 2),
+        (
+            "prompt569_soak_runs_executed",
+            soak_runs_executed == requested_soak_runs
+            and soak_runs_executed >= 2,
+        ),
+        (
+            "prompt569_successful_soak_runs",
+            successful_soak_runs == requested_soak_runs
+            and successful_soak_runs >= 2,
+        ),
+        ("prompt569_soak_evidence_ready", soak_evidence_ready),
+        (
+            "prompt569_stop_reason_completed",
+            stop_reason == "completed_requested_soak_runs",
+        ),
+        ("prompt569_resume_state_written", resume_state_written),
+        ("prompt569_soak_summary_written", soak_summary_written),
+        ("prompt569_final_worktree_clean", final_worktree_clean),
+        ("prompt569_no_remote_mutation_verified", no_remote_mutation_verified),
+        (
+            "prompt569_remote_workflow_included_false",
+            not remote_workflow_included,
+        ),
+    )
+    for field, passed in readiness_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    status = (
+        "production_hardening_soak_runner_completed_local_only"
+        if success
+        else _normalize_text(
+            payload.get("prompt569_soak_runner_supervisor_wrapper_status"),
+            default="blocked",
+        )
+    )
+    next_action = (
+        "production_hardening_soak_runner_completed_local_only"
+        if success
+        else "manual_review_prompt569_soak_runner_supervisor_wrapper_failed"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt569",
+        "prompt569_soak_runner_supervisor_wrapper_status": status,
+        "prompt569_soak_runner_supervisor_wrapper_ready": bool(
+            enabled and enable_token_valid and requested_soak_runs >= 2
+        ),
+        "prompt569_soak_runner_supervisor_wrapper_success": success,
+        "prompt569_enabled": enabled,
+        "prompt569_enable_token_valid": enable_token_valid,
+        "prompt569_requested_soak_runs": requested_soak_runs,
+        "prompt569_soak_runs_executed": soak_runs_executed,
+        "prompt569_successful_soak_runs": successful_soak_runs,
+        "prompt569_failed_soak_run_index": failed_soak_run_index,
+        "prompt569_stop_on_failure": stop_on_failure,
+        "prompt569_stop_reason": stop_reason,
+        "prompt569_resume_state_written": resume_state_written,
+        "prompt569_soak_summary_written": soak_summary_written,
+        "prompt569_final_worktree_clean": final_worktree_clean,
+        "prompt569_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt569_production_hardening_soak_completed": success,
+        "prompt569_completion_claim_allowed": success,
+        "prompt569_remote_workflow_included": False,
+        "prompt569_next_action": next_action,
+        "prompt569_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -28475,4 +28632,5 @@ __all__ = [
     "_build_prompt566_fix_prompt565_daemon_artifact_clean_state",
     "_build_prompt567_final_handoff_and_hardening_plan_state",
     "_build_prompt568_production_hardening_entrypoint_state",
+    "_build_prompt569_soak_runner_supervisor_wrapper_state",
 ]

@@ -120,6 +120,9 @@ PROMPT565_MULTI_CYCLE_DAEMON_AUTONOMOUS_LOOP_ENABLE_TOKEN = (
 PROMPT568_PRODUCTION_HARDENING_ENTRYPOINT_ENABLE_TOKEN = (
     "PROMPT568_PRODUCTION_HARDENING_ENTRYPOINT_ENABLE"
 )
+PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN = (
+    "PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -198,6 +201,9 @@ _PROMPT565_DEFAULT_ARTIFACT_DIR = Path(
 )
 _PROMPT568_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/prompt568_production_hardening_entrypoint"
+)
+_PROMPT569_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/prompt569_soak_runner_supervisor_wrapper"
 )
 _PROMPT565_REQUIRED_CYCLE_TRUE_FIELDS = (
     "prompt563_prompt552_final_smoke_success",
@@ -1923,6 +1929,291 @@ def run_prompt568_production_hardening_entrypoint(
     if summary["prompt568_resume_state_written"]:
         _write_json(resume_path, resume_state)
     if summary["prompt568_hardening_summary_written"]:
+        _write_json(summary_path, summary)
+    return summary
+
+
+def run_prompt569_soak_runner_supervisor_wrapper(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    timeout_seconds: int = 180,
+    allowed_files: Sequence[str] | None = None,
+    max_cycles: int = 2,
+    stop_on_failure: bool = True,
+    max_daemon_runs: int = 1,
+    soak_runs: int = 2,
+    artifact_dir: str | Path | None = None,
+    resume_state_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    supervisor_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT569_DEFAULT_ARTIFACT_DIR
+    )
+    if not supervisor_artifact_dir.is_absolute():
+        supervisor_artifact_dir = repo_path / supervisor_artifact_dir
+    resume_path = (
+        Path(resume_state_path)
+        if resume_state_path is not None
+        else supervisor_artifact_dir / "supervisor_resume_state.json"
+    )
+    if not resume_path.is_absolute():
+        resume_path = repo_path / resume_path
+
+    prompt569_enabled = enabled is True
+    prompt569_enable_token_valid = (
+        _normalize_text(enable_token, default="")
+        == PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN
+    )
+    try:
+        requested_soak_runs = max(0, int(soak_runs))
+    except (TypeError, ValueError):
+        requested_soak_runs = 0
+
+    blocked_reasons: list[str] = []
+    if not prompt569_enabled:
+        blocked_reasons.append("prompt569_enabled_required")
+    if not prompt569_enable_token_valid:
+        blocked_reasons.append("prompt569_enable_token_invalid")
+    if requested_soak_runs < 2:
+        blocked_reasons.append("prompt569_soak_runs_below_2")
+
+    soak_run_results: list[dict[str, Any]] = []
+    failed_soak_run_index: int | None = None
+    stop_reason = ""
+    can_execute_soak = bool(
+        prompt569_enabled
+        and prompt569_enable_token_valid
+        and requested_soak_runs >= 2
+    )
+    if can_execute_soak:
+        for soak_run_index in range(1, requested_soak_runs + 1):
+            prompt568_artifact_dir = (
+                supervisor_artifact_dir
+                / f"prompt568_soak_run_{soak_run_index:03d}"
+            )
+            prompt568_result = run_prompt568_production_hardening_entrypoint(
+                run_state_payload=payload,
+                execution_repo_path=str(repo_path),
+                enabled=True,
+                enable_token=PROMPT568_PRODUCTION_HARDENING_ENTRYPOINT_ENABLE_TOKEN,
+                timeout_seconds=timeout_seconds,
+                allowed_files=allowed_files,
+                max_cycles=2,
+                stop_on_failure=bool(stop_on_failure),
+                max_daemon_runs=1,
+                artifact_dir=prompt568_artifact_dir,
+                resume_state_path=(
+                    prompt568_artifact_dir / "resume_state.json"
+                ),
+            )
+            prompt568_success = bool(
+                prompt568_result.get(
+                    "prompt568_production_hardening_entrypoint_success"
+                )
+                is True
+                and prompt568_result.get(
+                    "prompt568_production_hardening_completed"
+                )
+                is True
+                and prompt568_result.get("prompt568_completion_claim_allowed")
+                is True
+                and prompt568_result.get(
+                    "prompt568_no_remote_mutation_verified"
+                )
+                is True
+                and prompt568_result.get("prompt568_remote_workflow_included")
+                is False
+            )
+            soak_run_summary = {
+                "soak_run_index": soak_run_index,
+                "soak_run_artifact_name": (
+                    f"soak_run_{soak_run_index:03d}.json"
+                ),
+                "soak_run_success": prompt568_success,
+                "prompt568_artifact_dir": str(prompt568_artifact_dir),
+                "prompt568_result": dict(prompt568_result),
+            }
+            soak_run_results.append(soak_run_summary)
+            if not prompt568_success and failed_soak_run_index is None:
+                failed_soak_run_index = soak_run_index
+                blocked_reasons.append(
+                    f"prompt569_soak_run_{soak_run_index:03d}_failed"
+                )
+                if stop_on_failure:
+                    stop_reason = "stopped_on_failed_soak_run"
+                    break
+
+    soak_runs_executed = len(soak_run_results)
+    successful_soak_runs = sum(
+        1 for soak_run_result in soak_run_results if soak_run_result["soak_run_success"]
+    )
+    if not stop_reason:
+        if not (prompt569_enabled and prompt569_enable_token_valid):
+            stop_reason = "blocked_by_enable_token"
+        elif requested_soak_runs < 2:
+            stop_reason = "blocked_by_invalid_soak_runs"
+        elif (
+            soak_runs_executed == requested_soak_runs
+            and successful_soak_runs == requested_soak_runs
+        ):
+            stop_reason = "completed_requested_soak_runs"
+        elif failed_soak_run_index is not None and stop_on_failure:
+            stop_reason = "stopped_on_failed_soak_run"
+        else:
+            stop_reason = "stopped_on_failed_soak_run"
+
+    final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
+        repo_path=repo_path,
+        daemon_artifact_dir=supervisor_artifact_dir,
+    )
+    no_remote_mutation_verified = bool(
+        soak_runs_executed > 0
+        and all(
+            soak_run_result["prompt568_result"].get(
+                "prompt568_no_remote_mutation_verified"
+            )
+            is True
+            for soak_run_result in soak_run_results
+        )
+    )
+    all_soak_runs_executed = soak_runs_executed == requested_soak_runs
+    every_prompt568_succeeded = bool(
+        soak_runs_executed > 0
+        and all(soak_run_result["soak_run_success"] for soak_run_result in soak_run_results)
+    )
+    success_without_artifacts = bool(
+        prompt569_enabled
+        and prompt569_enable_token_valid
+        and requested_soak_runs >= 2
+        and all_soak_runs_executed
+        and every_prompt568_succeeded
+        and final_worktree_clean
+        and no_remote_mutation_verified
+    )
+    if soak_runs_executed > 0 and not final_worktree_clean:
+        blocked_reasons.append("prompt569_final_worktree_not_clean")
+    if can_execute_soak and not all_soak_runs_executed:
+        blocked_reasons.append("prompt569_less_than_requested_soak_runs_executed")
+
+    next_action = (
+        "production_hardening_soak_runner_completed_local_only"
+        if success_without_artifacts
+        else "manual_review_prompt569_soak_runner_supervisor_wrapper_failed"
+    )
+    status = (
+        "production_hardening_soak_runner_completed_local_only"
+        if success_without_artifacts
+        else "blocked"
+    )
+    last_success = (
+        soak_run_results[-1]["soak_run_success"] if soak_run_results else False
+    )
+    resume_state = {
+        "last_completed_soak_run": soak_runs_executed,
+        "last_status": status,
+        "last_next_action": next_action,
+        "last_success": last_success,
+        "total_soak_runs_requested": requested_soak_runs,
+        "total_soak_runs_completed": soak_runs_executed,
+        "failed_soak_run_index": failed_soak_run_index,
+        "stop_reason": stop_reason,
+        "stopped_on_failure": bool(
+            failed_soak_run_index is not None and stop_on_failure
+        ),
+        "local_only": True,
+        "remote_workflow_included": False,
+    }
+    summary = {
+        "local_only": True,
+        "source_prompt": "prompt569",
+        "prompt569_soak_runner_supervisor_wrapper_status": status,
+        "prompt569_soak_runner_supervisor_wrapper_ready": bool(
+            prompt569_enabled
+            and prompt569_enable_token_valid
+            and requested_soak_runs >= 2
+        ),
+        "prompt569_soak_runner_supervisor_wrapper_success": False,
+        "prompt569_enabled": prompt569_enabled,
+        "prompt569_enable_token_valid": prompt569_enable_token_valid,
+        "prompt569_requested_soak_runs": requested_soak_runs,
+        "prompt569_soak_runs_executed": soak_runs_executed,
+        "prompt569_successful_soak_runs": successful_soak_runs,
+        "prompt569_failed_soak_run_index": failed_soak_run_index,
+        "prompt569_stop_on_failure": bool(stop_on_failure),
+        "prompt569_stop_reason": stop_reason,
+        "prompt569_resume_state_written": False,
+        "prompt569_soak_summary_written": False,
+        "prompt569_final_worktree_clean": final_worktree_clean,
+        "prompt569_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt569_production_hardening_soak_completed": False,
+        "prompt569_completion_claim_allowed": False,
+        "prompt569_remote_workflow_included": False,
+        "prompt569_next_action": next_action,
+        "prompt569_blocked_reasons": blocked_reasons,
+        "prompt569_artifact_dir": str(supervisor_artifact_dir),
+        "prompt569_resume_state_path": str(resume_path),
+        "prompt569_soak_run_artifacts": [
+            soak_run_result["soak_run_artifact_name"]
+            for soak_run_result in soak_run_results
+        ],
+        "prompt569_soak_run_results": soak_run_results,
+        "resume_state": resume_state,
+    }
+
+    supervisor_artifact_dir.mkdir(parents=True, exist_ok=True)
+    for soak_run_result in soak_run_results:
+        _write_json(
+            supervisor_artifact_dir / soak_run_result["soak_run_artifact_name"],
+            soak_run_result,
+        )
+    resume_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(resume_path, resume_state)
+    summary["prompt569_resume_state_written"] = resume_path.exists()
+    summary_path = supervisor_artifact_dir / "soak_summary.json"
+    _write_json(summary_path, summary)
+    summary["prompt569_soak_summary_written"] = summary_path.exists()
+
+    artifacts_written = bool(
+        summary["prompt569_resume_state_written"]
+        and summary["prompt569_soak_summary_written"]
+        and all(
+            (supervisor_artifact_dir / soak_run_result["soak_run_artifact_name"]).exists()
+            for soak_run_result in soak_run_results
+        )
+    )
+    success = bool(success_without_artifacts and artifacts_written)
+    next_action = (
+        "production_hardening_soak_runner_completed_local_only"
+        if success
+        else "manual_review_prompt569_soak_runner_supervisor_wrapper_failed"
+    )
+    status = (
+        "production_hardening_soak_runner_completed_local_only"
+        if success
+        else "blocked"
+    )
+    resume_state["last_status"] = status
+    resume_state["last_next_action"] = next_action
+    resume_state["last_success"] = last_success and success
+    summary["prompt569_soak_runner_supervisor_wrapper_status"] = status
+    summary["prompt569_soak_runner_supervisor_wrapper_success"] = success
+    summary["prompt569_production_hardening_soak_completed"] = success
+    summary["prompt569_completion_claim_allowed"] = success
+    summary["prompt569_next_action"] = next_action
+    summary["resume_state"] = resume_state
+    if summary["prompt569_resume_state_written"]:
+        _write_json(resume_path, resume_state)
+    if summary["prompt569_soak_summary_written"]:
         _write_json(summary_path, summary)
     return summary
 
