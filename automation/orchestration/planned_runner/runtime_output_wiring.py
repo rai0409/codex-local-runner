@@ -4,6 +4,7 @@ from datetime import datetime
 import hashlib
 import os
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any
 from typing import Callable
@@ -201,6 +202,7 @@ _PROMPT565_REQUIRED_CYCLE_TRUE_FIELDS = (
     "prompt552_completion_claim_allowed",
 )
 _PROMPT565_MINIMUM_CYCLE_ARTIFACTS = ("cycle_001.json", "cycle_002.json")
+_PROMPT565_CLEANUP_RUNTIME_ARTIFACTS = _PROMPT563_GENERATED_RUNTIME_ARTIFACTS
 
 _PROMPT380_RESULT_REVIEW_ROUTE_FIELDS = (
     "prompt380_prompt379_result_review_status",
@@ -1330,18 +1332,52 @@ def _prompt565_worktree_clean_excluding_daemon_artifacts(
     if completed.returncode != 0:
         return False
     daemon_artifact_root = daemon_artifact_dir
+    daemon_artifact_under_repo = True
     if daemon_artifact_root.is_absolute():
         try:
             daemon_artifact_root = daemon_artifact_root.relative_to(repo_path)
         except ValueError:
-            daemon_artifact_root = Path()
-    daemon_artifact_prefix = daemon_artifact_root.as_posix().rstrip("/") + "/"
+            daemon_artifact_under_repo = False
+    daemon_artifact_prefix = (
+        daemon_artifact_root.as_posix().rstrip("/") + "/"
+        if daemon_artifact_under_repo
+        else ""
+    )
     for raw_line in completed.stdout.splitlines():
         path_text = raw_line[3:].strip()
-        if path_text.startswith(daemon_artifact_prefix):
+        if daemon_artifact_prefix and path_text.startswith(daemon_artifact_prefix):
             continue
         return False
     return True
+
+
+def _prompt565_remove_known_generated_runtime_artifacts(repo_path: Path) -> bool:
+    removed_any = False
+    for artifact_path in _PROMPT565_CLEANUP_RUNTIME_ARTIFACTS:
+        candidate = repo_path / artifact_path
+        if not candidate.exists():
+            continue
+        if candidate.is_dir():
+            shutil.rmtree(candidate)
+        else:
+            candidate.unlink()
+        removed_any = True
+    return removed_any
+
+
+def _prompt565_remove_existing_daemon_artifact_dir(
+    *,
+    repo_path: Path,
+    daemon_artifact_dir: Path,
+) -> bool:
+    expected_dir = (repo_path / _PROMPT565_DEFAULT_ARTIFACT_DIR).resolve()
+    candidate_dir = daemon_artifact_dir.resolve()
+    if candidate_dir != expected_dir or not daemon_artifact_dir.exists():
+        return False
+    if daemon_artifact_dir.is_dir():
+        shutil.rmtree(daemon_artifact_dir)
+        return True
+    return False
 
 
 def _prompt565_cycle_succeeded(cycle_result: Mapping[str, Any]) -> bool:
@@ -1397,8 +1433,18 @@ def run_prompt565_multi_cycle_daemon_autonomous_loop(
     cycle_results: list[dict[str, Any]] = []
     failed_cycle_index: int | None = None
     final_worktree_clean = False
+    existing_daemon_artifacts_cleaned_before_cycle = False
+    known_runtime_artifacts_cleaned_between_cycles = False
     if not blocked_reasons:
-        daemon_artifact_dir.mkdir(parents=True, exist_ok=True)
+        existing_daemon_artifacts_cleaned_before_cycle = (
+            _prompt565_remove_existing_daemon_artifact_dir(
+                repo_path=repo_path,
+                daemon_artifact_dir=daemon_artifact_dir,
+            )
+        )
+        known_runtime_artifacts_cleaned_between_cycles = (
+            _prompt565_remove_known_generated_runtime_artifacts(repo_path)
+        )
         for cycle_index in range(1, requested_max_cycles + 1):
             cycle_result = run_prompt563_prompt552_final_runtime_completion_smoke(
                 run_state_payload=payload,
@@ -1410,7 +1456,8 @@ def run_prompt565_multi_cycle_daemon_autonomous_loop(
                 timeout_seconds=timeout_seconds,
                 allowed_files=allowed_files,
             )
-            _prompt563_remove_generated_runtime_artifacts(repo_path)
+            if _prompt565_remove_known_generated_runtime_artifacts(repo_path):
+                known_runtime_artifacts_cleaned_between_cycles = True
             cycle_worktree_clean = (
                 _prompt565_worktree_clean_excluding_daemon_artifacts(
                     repo_path=repo_path,
@@ -1471,10 +1518,6 @@ def run_prompt565_multi_cycle_daemon_autonomous_loop(
                 "cycle_result": dict(cycle_result),
             }
             cycle_results.append(cycle_summary)
-            _write_json(
-                daemon_artifact_dir / f"cycle_{cycle_index:03d}.json",
-                cycle_summary,
-            )
             if not cycle_success and failed_cycle_index is None:
                 failed_cycle_index = cycle_index
                 blocked_reasons.append(f"prompt565_cycle_{cycle_index:03d}_failed")
@@ -1547,6 +1590,14 @@ def run_prompt565_multi_cycle_daemon_autonomous_loop(
         "prompt565_remote_push_pr_merge_rollback_included": False,
         "prompt565_stop_on_failure": bool(stop_on_failure),
         "prompt565_artifact_dir": str(daemon_artifact_dir),
+        "prompt565_existing_daemon_artifacts_cleaned_before_cycle": (
+            existing_daemon_artifacts_cleaned_before_cycle
+        ),
+        "prompt565_known_runtime_artifacts_cleaned_between_cycles": (
+            known_runtime_artifacts_cleaned_between_cycles
+        ),
+        "prompt565_daemon_artifact_dir_excluded_from_clean_check": True,
+        "prompt565_arbitrary_untracked_files_still_block": True,
         "prompt565_cycle_artifacts": [
             cycle_result["cycle_artifact_name"]
             for cycle_result in cycle_results
@@ -1564,6 +1615,11 @@ def run_prompt565_multi_cycle_daemon_autonomous_loop(
     }
     if not blocked_reasons or cycle_results:
         daemon_artifact_dir.mkdir(parents=True, exist_ok=True)
+        for cycle_result in cycle_results:
+            _write_json(
+                daemon_artifact_dir / cycle_result["cycle_artifact_name"],
+                cycle_result,
+            )
         _write_json(daemon_artifact_dir / "daemon_summary.json", summary)
     return summary
 

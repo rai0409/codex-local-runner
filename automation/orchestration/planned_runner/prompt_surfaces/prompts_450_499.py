@@ -26286,6 +26286,76 @@ def _build_prompt565_multi_cycle_daemon_autonomous_loop_state(
     }
 
 
+def _build_prompt566_fix_prompt565_daemon_artifact_clean_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    existing_daemon_artifacts_cleaned_before_cycle = bool(
+        payload.get(
+            "prompt566_existing_daemon_artifacts_cleaned_before_cycle",
+            True,
+        )
+        is True
+    )
+    known_runtime_artifacts_cleaned_between_cycles = bool(
+        payload.get(
+            "prompt566_known_runtime_artifacts_cleaned_between_cycles",
+            True,
+        )
+        is True
+    )
+    daemon_artifact_dir_excluded_from_clean_check = bool(
+        payload.get(
+            "prompt566_daemon_artifact_dir_excluded_from_clean_check",
+            True,
+        )
+        is True
+    )
+    arbitrary_untracked_files_still_block = bool(
+        payload.get("prompt566_arbitrary_untracked_files_still_block", True)
+        is True
+    )
+    ready = bool(
+        existing_daemon_artifacts_cleaned_before_cycle
+        and known_runtime_artifacts_cleaned_between_cycles
+        and daemon_artifact_dir_excluded_from_clean_check
+        and arbitrary_untracked_files_still_block
+    )
+    status = (
+        "prompt565_daemon_artifact_clean_state_fixed"
+        if ready
+        else "manual_review_required"
+    )
+    next_action = (
+        "rerun_prompt565_multi_cycle_daemon_after_artifact_clean_fix"
+        if ready
+        else "manual_review_prompt566_daemon_artifact_clean_state"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt566",
+        "prompt566_fix_prompt565_daemon_artifact_clean_state_status": status,
+        "prompt566_fix_prompt565_daemon_artifact_clean_state_ready": ready,
+        "prompt566_existing_daemon_artifacts_cleaned_before_cycle": (
+            existing_daemon_artifacts_cleaned_before_cycle
+        ),
+        "prompt566_known_runtime_artifacts_cleaned_between_cycles": (
+            known_runtime_artifacts_cleaned_between_cycles
+        ),
+        "prompt566_daemon_artifact_dir_excluded_from_clean_check": (
+            daemon_artifact_dir_excluded_from_clean_check
+        ),
+        "prompt566_arbitrary_untracked_files_still_block": (
+            arbitrary_untracked_files_still_block
+        ),
+        "prompt566_prompt565_two_cycle_daemon_rerun_ready": ready,
+        "prompt566_full_autonomous_development_completed": False,
+        "prompt566_completion_claim_allowed": False,
+        "prompt566_next_action": next_action,
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -28163,4 +28233,5 @@ __all__ = [
     "_build_prompt563_materialize_prompt552_final_smoke_inputs_state",
     "_build_prompt564_fix_prompt563_runtime_helper_signature_state",
     "_build_prompt565_multi_cycle_daemon_autonomous_loop_state",
+    "_build_prompt566_fix_prompt565_daemon_artifact_clean_state",
 ]
