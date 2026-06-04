@@ -25943,6 +25943,106 @@ def _build_prompt552_final_runtime_completion_smoke_state(
     return state
 
 
+def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt551_next_action = _normalize_text(
+        payload.get("prompt551_next_action"),
+        default="",
+    )
+    prompt551_bridge_success_confirmed = bool(
+        payload.get("prompt551_actual_runtime_adapter_execution_bridge_success")
+        is True
+    )
+    prompt551_ready_for_prompt552_confirmed = bool(
+        payload.get("prompt551_ready_for_prompt552_final_runtime_completion_smoke")
+        is True
+    )
+    prompt551_full_autonomous_flow_still_false = bool(
+        payload.get("prompt551_full_autonomous_flow_completed") is False
+    )
+    prompt551_completion_claim_still_false = bool(
+        payload.get("prompt551_completion_claim_allowed") is False
+    )
+    prompt551_next_action_confirmed = bool(
+        prompt551_next_action
+        == "prepare_prompt552_final_runtime_completion_smoke"
+    )
+    local_only_scope_preserved = True
+    remote_mutation_excluded = True
+
+    readiness_checks = (
+        (
+            "prompt551_actual_runtime_adapter_execution_bridge_success",
+            prompt551_bridge_success_confirmed,
+        ),
+        (
+            "prompt551_ready_for_prompt552_final_runtime_completion_smoke",
+            prompt551_ready_for_prompt552_confirmed,
+        ),
+        (
+            "prompt551_full_autonomous_flow_completed_false",
+            prompt551_full_autonomous_flow_still_false,
+        ),
+        (
+            "prompt551_completion_claim_allowed_false",
+            prompt551_completion_claim_still_false,
+        ),
+        ("prompt551_next_action", prompt551_next_action_confirmed),
+        ("local_only_scope_preserved", local_only_scope_preserved),
+        ("remote_mutation_excluded", remote_mutation_excluded),
+    )
+    blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in readiness_checks
+        if not passed
+    ]
+    ready = not blocked_reasons
+
+    if ready:
+        status = "prompt552_final_runtime_completion_smoke_prepared"
+        next_action = "run_prompt552_final_runtime_completion_smoke"
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt562_prepare_prompt552_final_runtime_completion_smoke"
+        )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt562",
+        "prompt562_prepare_prompt552_final_runtime_completion_smoke_status": status,
+        "prompt562_prepare_prompt552_final_runtime_completion_smoke_ready": bool(
+            ready
+        ),
+        "prompt562_prompt551_bridge_success_confirmed": (
+            prompt551_bridge_success_confirmed
+        ),
+        "prompt562_prompt551_ready_for_prompt552_confirmed": (
+            prompt551_ready_for_prompt552_confirmed
+        ),
+        "prompt562_prompt552_final_smoke_prepared": bool(ready),
+        "prompt562_local_only_scope_preserved": local_only_scope_preserved,
+        "prompt562_remote_mutation_excluded": remote_mutation_excluded,
+        "prompt562_full_autonomous_flow_completed": False,
+        "prompt562_completion_claim_allowed": False,
+        "prompt562_next_action": next_action,
+        "prompt562_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt562_blocked_reasons": blocked_reasons,
+        "prompt552_final_runtime_completion_smoke_prepared": bool(ready),
+        "prompt552_final_runtime_completion_smoke_local_only": True,
+        "prompt552_final_runtime_completion_smoke_remote_push_excluded": True,
+        "prompt552_final_runtime_completion_smoke_pr_excluded": True,
+        "prompt552_final_runtime_completion_smoke_merge_excluded": True,
+        "prompt552_final_runtime_completion_smoke_rollback_excluded": True,
+        "prompt552_final_runtime_completion_smoke_completion_claim_allowed": False,
+    }
+
+
 def _build_prompt553_fix_prompt551_bridge_explicit_enable_mapping_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -27716,4 +27816,5 @@ __all__ = [
     "_build_prompt559_fix_false_success_when_subprocess_not_executed_state",
     "_build_prompt560_fix_token_bridge_and_false_success_state",
     "_build_prompt561_exclude_generated_smoke_prompt_artifact_from_changed_files_state",
+    "_build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state",
 ]
