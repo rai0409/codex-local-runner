@@ -710,12 +710,22 @@ def _prompt551_materialize_result_artifacts(
     repo_path: Path,
     result_payload: Mapping[str, Any],
 ) -> None:
-    returncode = _prompt551_result_returncode(result_payload)
-    if returncode is not None:
-        (repo_path / PROMPT546_RETURNCODE_ARTIFACT).write_text(
-            f"{returncode}\n",
-            encoding="utf-8",
-        )
+    materialized_payload = dict(result_payload)
+    returncode = _prompt551_result_returncode(materialized_payload)
+    missing_returncode_fallback = returncode is None
+    if missing_returncode_fallback:
+        returncode = 1
+    materialized_payload["prompt546_internal_codex_returncode"] = int(returncode)
+    materialized_payload["prompt546_internal_codex_returncode_success"] = (
+        returncode == 0
+    )
+    if missing_returncode_fallback:
+        materialized_payload["prompt546_internal_execution_error_present"] = True
+
+    (repo_path / PROMPT546_RETURNCODE_ARTIFACT).write_text(
+        f"{returncode}\n",
+        encoding="utf-8",
+    )
 
     changed_files = result_payload.get("prompt546_internal_changed_files")
     if isinstance(changed_files, Iterable) and not isinstance(
@@ -737,7 +747,7 @@ def _prompt551_materialize_result_artifacts(
         if not full_path.is_file():
             full_path.write_text("", encoding="utf-8")
 
-    _write_json(repo_path / PROMPT546_RESULT_ARTIFACT, dict(result_payload))
+    _write_json(repo_path / PROMPT546_RESULT_ARTIFACT, materialized_payload)
 
 
 def _prompt551_input_metadata(

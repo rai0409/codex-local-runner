@@ -342,6 +342,20 @@ def run_internal_codex_subprocess(
         result_payload=result_payload,
         prompt_id=prompt_id,
     )
+    missing_returncode_after_attempt = bool(
+        executed
+        and result_payload.get(f"{prefix}_internal_codex_returncode") is None
+    )
+    if missing_returncode_after_attempt:
+        returncode = 1
+    result_payload[f"{prefix}_internal_codex_returncode"] = int(
+        1 if returncode is None else returncode
+    )
+    result_payload[f"{prefix}_internal_codex_returncode_success"] = (
+        result_payload[f"{prefix}_internal_codex_returncode"] == 0
+    )
+    if missing_returncode_after_attempt:
+        result_payload[f"{prefix}_internal_execution_error_present"] = True
     result_payload[f"{prefix}_internal_artifact_paths"] = artifact_paths
     result_path = repo_path / _artifact_paths_for_prompt(prompt_id)["result"]
     result_path.write_text(

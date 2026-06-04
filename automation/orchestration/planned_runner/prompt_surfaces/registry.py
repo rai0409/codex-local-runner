@@ -220,6 +220,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt555_fix_prompt554_enable_regression_state,
     _build_prompt556_fix_returncode_artifact_write_state,
     _build_prompt557_fix_actual_returncode_writer_state,
+    _build_prompt558_fix_result_json_returncode_consistency_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -436,6 +437,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt555_fix_prompt554_enable_regression_state": _build_prompt555_fix_prompt554_enable_regression_state,
     "_build_prompt556_fix_returncode_artifact_write_state": _build_prompt556_fix_returncode_artifact_write_state,
     "_build_prompt557_fix_actual_returncode_writer_state": _build_prompt557_fix_actual_returncode_writer_state,
+    "_build_prompt558_fix_result_json_returncode_consistency_state": _build_prompt558_fix_result_json_returncode_consistency_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -656,4 +658,5 @@ __all__ = [
     "_build_prompt555_fix_prompt554_enable_regression_state",
     "_build_prompt556_fix_returncode_artifact_write_state",
     "_build_prompt557_fix_actual_returncode_writer_state",
+    "_build_prompt558_fix_result_json_returncode_consistency_state",
 ]

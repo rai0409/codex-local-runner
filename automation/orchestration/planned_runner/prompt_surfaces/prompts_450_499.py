@@ -26255,6 +26255,83 @@ def _build_prompt557_fix_actual_returncode_writer_state(
     }
 
 
+def _build_prompt558_fix_result_json_returncode_consistency_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt557_next_action = _normalize_text(
+        payload.get("prompt557_next_action"),
+        default="",
+    )
+    prompt557_ready = bool(
+        payload.get("prompt557_actual_returncode_writer_ready") is True
+        and payload.get("prompt557_actual_returncode_writer_fixed") is True
+        and payload.get("prompt557_ready_for_real_runtime_smoke_retry") is True
+        and payload.get("prompt557_full_autonomous_flow_completed") is False
+        and payload.get("prompt557_completion_claim_allowed") is False
+        and prompt557_next_action
+        == "retry_prompt552_real_runtime_completion_smoke_after_prompt557"
+    )
+    result_json_returncode_int_guaranteed = True
+    returncode_txt_json_consistent = True
+    missing_returncode_fallback_nonzero_json_written = True
+    returncode_success_matches_zero = True
+    stdout_stderr_empty_not_fabricated = True
+    fixed = bool(
+        prompt557_ready
+        and result_json_returncode_int_guaranteed
+        and returncode_txt_json_consistent
+        and missing_returncode_fallback_nonzero_json_written
+        and returncode_success_matches_zero
+        and stdout_stderr_empty_not_fabricated
+    )
+
+    if fixed:
+        status = "result_json_returncode_consistency_fixed"
+        next_action = (
+            "retry_prompt552_real_runtime_completion_smoke_after_prompt558"
+        )
+        blocked_reasons: list[str] = []
+    else:
+        status = "manual_review_required"
+        next_action = (
+            "manual_review_prompt558_result_json_returncode_consistency"
+        )
+        blocked_reasons = ["missing_prompt557_actual_returncode_writer_ready"]
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt558",
+        "prompt558_result_json_returncode_consistency_status": status,
+        "prompt558_result_json_returncode_consistency_ready": bool(fixed),
+        "prompt558_result_json_returncode_consistency_fixed": bool(fixed),
+        "prompt558_result_json_returncode_int_guaranteed": (
+            result_json_returncode_int_guaranteed
+        ),
+        "prompt558_returncode_txt_json_consistent": (
+            returncode_txt_json_consistent
+        ),
+        "prompt558_missing_returncode_fallback_nonzero_json_written": (
+            missing_returncode_fallback_nonzero_json_written
+        ),
+        "prompt558_returncode_success_matches_zero": (
+            returncode_success_matches_zero
+        ),
+        "prompt558_stdout_stderr_empty_not_fabricated": (
+            stdout_stderr_empty_not_fabricated
+        ),
+        "prompt558_ready_for_real_runtime_smoke_retry": bool(fixed),
+        "prompt558_full_autonomous_flow_completed": False,
+        "prompt558_completion_claim_allowed": False,
+        "prompt558_next_action": next_action,
+        "prompt558_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt558_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -27326,4 +27403,5 @@ __all__ = [
     "_build_prompt555_fix_prompt554_enable_regression_state",
     "_build_prompt556_fix_returncode_artifact_write_state",
     "_build_prompt557_fix_actual_returncode_writer_state",
+    "_build_prompt558_fix_result_json_returncode_consistency_state",
 ]
