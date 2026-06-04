@@ -221,6 +221,8 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt556_fix_returncode_artifact_write_state,
     _build_prompt557_fix_actual_returncode_writer_state,
     _build_prompt558_fix_result_json_returncode_consistency_state,
+    _build_prompt559_fix_false_success_when_subprocess_not_executed_state,
+    _build_prompt560_fix_token_bridge_and_false_success_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -438,6 +440,8 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt556_fix_returncode_artifact_write_state": _build_prompt556_fix_returncode_artifact_write_state,
     "_build_prompt557_fix_actual_returncode_writer_state": _build_prompt557_fix_actual_returncode_writer_state,
     "_build_prompt558_fix_result_json_returncode_consistency_state": _build_prompt558_fix_result_json_returncode_consistency_state,
+    "_build_prompt559_fix_false_success_when_subprocess_not_executed_state": _build_prompt559_fix_false_success_when_subprocess_not_executed_state,
+    "_build_prompt560_fix_token_bridge_and_false_success_state": _build_prompt560_fix_token_bridge_and_false_success_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -659,4 +663,6 @@ __all__ = [
     "_build_prompt556_fix_returncode_artifact_write_state",
     "_build_prompt557_fix_actual_returncode_writer_state",
     "_build_prompt558_fix_result_json_returncode_consistency_state",
+    "_build_prompt559_fix_false_success_when_subprocess_not_executed_state",
+    "_build_prompt560_fix_token_bridge_and_false_success_state",
 ]

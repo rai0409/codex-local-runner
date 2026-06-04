@@ -108,6 +108,10 @@ from automation.orchestration.planned_runner.utils import _read_json_object_if_e
 from automation.orchestration.planned_runner.utils import _write_json
 
 
+PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE_TOKEN = (
+    "PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE"
+)
+
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
     "prompt373_codex_execution_receipt.json",
@@ -719,7 +723,7 @@ def _prompt551_materialize_result_artifacts(
     materialized_payload["prompt546_internal_codex_returncode_success"] = (
         returncode == 0
     )
-    if missing_returncode_fallback:
+    if missing_returncode_fallback or returncode != 0:
         materialized_payload["prompt546_internal_execution_error_present"] = True
 
     (repo_path / PROMPT546_RETURNCODE_ARTIFACT).write_text(
@@ -814,6 +818,35 @@ def _prompt551_input_metadata(
             loaded_payload.get("prompt546_internal_execution_error_present")
             is True
         ),
+        "prompt551_input_result_json_subprocess_executed_true": bool(
+            loaded_payload.get("prompt546_internal_codex_subprocess_executed")
+            is True
+        ),
+        "prompt551_input_result_json_returncode_success_true": bool(
+            loaded_payload.get("prompt546_internal_codex_returncode_success")
+            is True
+        ),
+        "prompt551_input_result_json_returncode_zero": bool(
+            _prompt551_result_returncode(loaded_payload) == 0
+        ),
+        "prompt551_input_result_json_changed_files_allowed_true": bool(
+            loaded_payload.get("prompt546_internal_changed_files_allowed")
+            is True
+        ),
+        "prompt551_input_result_json_unexpected_changed_files_present_false": (
+            loaded_payload.get(
+                "prompt546_internal_unexpected_changed_files_present"
+            )
+            is False
+        ),
+        "prompt551_input_result_json_unexpected_diff_present_false": bool(
+            loaded_payload.get("prompt546_internal_unexpected_diff_present")
+            is False
+        ),
+        "prompt551_input_result_json_no_remote_mutation_verified_true": bool(
+            loaded_payload.get("prompt546_internal_no_remote_mutation_verified")
+            is True
+        ),
     }
 
 
@@ -865,6 +898,26 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
         else payload.get("prompt551_runtime_execution_enable_token"),
         default="",
     )
+    outer_enable_token_present = bool(resolved_enable_token)
+    outer_enable_token_accepted = (
+        resolved_enable_token
+        == PROMPT551_ACTUAL_RUNTIME_ADAPTER_EXECUTION_BRIDGE_ENABLE_TOKEN
+    )
+    internal_adapter_enable_token = (
+        PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+        if outer_enable_token_accepted
+        else ""
+    )
+    internal_adapter_enable_token_resolved = bool(
+        internal_adapter_enable_token
+    )
+    internal_adapter_enable_token_valid = (
+        internal_adapter_enable_token
+        == PROMPT546_INTERNAL_CODEX_ENABLE_TOKEN
+    )
+    token_bridge_applied = bool(
+        outer_enable_token_accepted and internal_adapter_enable_token_valid
+    )
     explicit_arg_enable_token = _normalize_text(enable_token, default="")
     explicit_arg_enable_present = bool(
         enabled is True and explicit_arg_enable_token
@@ -901,6 +954,7 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
         repo_text
         and _prompt551_prompt550_base_ready(merged)
         and explicit_execution_enable_present
+        and token_bridge_applied
     ):
         prompt_path = repo_path / _PROMPT551_MINIMAL_PROMPT_ARTIFACT
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -929,7 +983,7 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
                 else _PROMPT546_DEFAULT_ALLOWED_FILES
             ),
             enabled=True,
-            enable_token=resolved_enable_token,
+            enable_token=internal_adapter_enable_token,
             timeout_seconds=timeout,
         )
         if isinstance(result_payload, Mapping):
@@ -947,6 +1001,20 @@ def run_prompt551_actual_runtime_adapter_execution_bridge(
                 runtime_adapter_invocation_attempted
             ),
         )
+    )
+    merged.update(
+        {
+            "prompt551_outer_enable_token_present": bool(
+                outer_enable_token_present
+            ),
+            "prompt551_internal_adapter_enable_token_resolved": bool(
+                internal_adapter_enable_token_resolved
+            ),
+            "prompt551_internal_adapter_enable_token_valid": bool(
+                internal_adapter_enable_token_valid
+            ),
+            "prompt551_token_bridge_applied": bool(token_bridge_applied),
+        }
     )
     builder = get_prompt_builders()[
         "_build_prompt551_actual_runtime_adapter_execution_bridge_state"

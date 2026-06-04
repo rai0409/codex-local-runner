@@ -107,6 +107,21 @@ PROMPT546_DIFF_ARTIFACT_LITERAL = (
 PROMPT546_RESULT_JSON_ARTIFACT_LITERAL = (
     "artifacts/runtime_commands/prompt546_internal_codex_result.json"
 )
+PROMPT551_MINIMAL_RUNTIME_SMOKE_PROMPT_LITERAL = (
+    "artifacts/runtime_commands/prompt551_minimal_runtime_smoke_prompt.txt"
+)
+
+
+def _changed_files_only_generated_prompt_artifacts(
+    changed_files: Iterable[str],
+) -> bool:
+    changed = {str(item).strip() for item in changed_files if str(item).strip()}
+    generated_prompt_artifacts = {
+        PROMPT551_MINIMAL_RUNTIME_SMOKE_PROMPT_LITERAL,
+    }
+    return bool(changed) and changed.issubset(generated_prompt_artifacts)
+
+
 def capture_git_diff(repo_dir: str) -> str:
     tracked = subprocess.run(
         ["git", "diff", "--binary", "HEAD", "--"],
@@ -296,6 +311,11 @@ def run_internal_codex_subprocess(
         changed_files,
         allowed_files,
     )
+    prompt_artifact_only_change = _changed_files_only_generated_prompt_artifacts(
+        changed_files
+    )
+    if prompt_artifact_only_change:
+        changed_files_allowed = False
     unexpected_changed_files_present = not changed_files_allowed
     unexpected_diff_present = bool(diff_text) and not changed_files_allowed
 
@@ -323,7 +343,9 @@ def run_internal_codex_subprocess(
             unexpected_diff_present
         ),
         f"{prefix}_internal_execution_timeout_occurred": bool(timeout_occurred),
-        f"{prefix}_internal_execution_error_present": bool(error_text),
+        f"{prefix}_internal_execution_error_present": bool(
+            error_text or returncode != 0
+        ),
         f"{prefix}_internal_no_remote_mutation_verified": True,
         f"{prefix}_internal_execution_enabled": bool(enabled),
         f"{prefix}_internal_execution_enable_token_valid": bool(token_valid),

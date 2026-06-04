@@ -24692,6 +24692,13 @@ _PROMPT551_INPUT_FIELDS = (
     "prompt551_input_result_json_schema_valid",
     "prompt551_input_remote_mutation_absent",
     "prompt551_input_execution_error_present",
+    "prompt551_input_result_json_subprocess_executed_true",
+    "prompt551_input_result_json_returncode_success_true",
+    "prompt551_input_result_json_returncode_zero",
+    "prompt551_input_result_json_changed_files_allowed_true",
+    "prompt551_input_result_json_unexpected_changed_files_present_false",
+    "prompt551_input_result_json_unexpected_diff_present_false",
+    "prompt551_input_result_json_no_remote_mutation_verified_true",
 )
 
 
@@ -25457,8 +25464,55 @@ def _build_prompt551_actual_runtime_adapter_execution_bridge_state(
     )
     success_checks = (
         ("base_readiness", base_readiness),
-        *tuple(inputs.items()),
+        (
+            "prompt551_input_explicit_execution_enable_present",
+            inputs["prompt551_input_explicit_execution_enable_present"],
+        ),
+        (
+            "prompt551_input_runtime_adapter_invoked",
+            inputs["prompt551_input_runtime_adapter_invoked"],
+        ),
+        (
+            "prompt551_input_result_json_artifact_exists",
+            inputs["prompt551_input_result_json_artifact_exists"],
+        ),
+        (
+            "prompt551_input_result_json_schema_valid",
+            inputs["prompt551_input_result_json_schema_valid"],
+        ),
+        (
+            "prompt546_internal_codex_subprocess_executed",
+            inputs["prompt551_input_result_json_subprocess_executed_true"],
+        ),
+        (
+            "prompt546_internal_codex_returncode_success",
+            inputs["prompt551_input_result_json_returncode_success_true"],
+        ),
+        (
+            "prompt546_internal_codex_returncode",
+            inputs["prompt551_input_result_json_returncode_zero"],
+        ),
         ("prompt551_input_execution_error_present", not execution_error_present),
+        (
+            "prompt546_internal_changed_files_allowed",
+            inputs["prompt551_input_result_json_changed_files_allowed_true"],
+        ),
+        (
+            "prompt546_internal_unexpected_changed_files_present",
+            inputs[
+                "prompt551_input_result_json_unexpected_changed_files_present_false"
+            ],
+        ),
+        (
+            "prompt546_internal_unexpected_diff_present",
+            inputs["prompt551_input_result_json_unexpected_diff_present_false"],
+        ),
+        (
+            "prompt546_internal_no_remote_mutation_verified",
+            inputs[
+                "prompt551_input_result_json_no_remote_mutation_verified_true"
+            ],
+        ),
     )
     failure_reasons = [
         f"failed_{field}"
@@ -25542,6 +25596,27 @@ def _build_prompt551_actual_runtime_adapter_execution_bridge_state(
             "prompt551_input_remote_mutation_absent"
         ],
         "prompt551_execution_error_present": execution_error_present,
+        "prompt551_result_json_subprocess_executed_true": inputs[
+            "prompt551_input_result_json_subprocess_executed_true"
+        ],
+        "prompt551_result_json_returncode_success_true": inputs[
+            "prompt551_input_result_json_returncode_success_true"
+        ],
+        "prompt551_result_json_returncode_zero": inputs[
+            "prompt551_input_result_json_returncode_zero"
+        ],
+        "prompt551_result_json_changed_files_allowed_true": inputs[
+            "prompt551_input_result_json_changed_files_allowed_true"
+        ],
+        "prompt551_result_json_unexpected_changed_files_present_false": inputs[
+            "prompt551_input_result_json_unexpected_changed_files_present_false"
+        ],
+        "prompt551_result_json_unexpected_diff_present_false": inputs[
+            "prompt551_input_result_json_unexpected_diff_present_false"
+        ],
+        "prompt551_result_json_no_remote_mutation_verified_true": inputs[
+            "prompt551_input_result_json_no_remote_mutation_verified_true"
+        ],
         "prompt551_full_autonomous_flow_completed": False,
         "prompt551_completion_claim_allowed": False,
         "prompt551_prompt378_execution_allowed": False,
@@ -26329,6 +26404,167 @@ def _build_prompt558_fix_result_json_returncode_consistency_state(
             blocked_reasons[0] if blocked_reasons else None
         ),
         "prompt558_blocked_reasons": blocked_reasons,
+    }
+
+
+def _build_prompt559_fix_false_success_when_subprocess_not_executed_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt558_next_action = _normalize_text(
+        payload.get("prompt558_next_action"),
+        default="",
+    )
+    prompt558_ready = bool(
+        payload.get("prompt558_result_json_returncode_consistency_ready")
+        is True
+        and payload.get("prompt558_result_json_returncode_consistency_fixed")
+        is True
+        and payload.get("prompt558_ready_for_real_runtime_smoke_retry")
+        is True
+        and payload.get("prompt558_full_autonomous_flow_completed") is False
+        and payload.get("prompt558_completion_claim_allowed") is False
+        and prompt558_next_action
+        == "retry_prompt552_real_runtime_completion_smoke_after_prompt558"
+    )
+    prompt551_success_requires_subprocess_executed = True
+    prompt551_success_requires_returncode_zero = True
+    prompt551_success_requires_allowed_changed_files = True
+    nonzero_returncode_sets_execution_error_true = True
+    prompt_artifact_not_counted_as_execution_output = True
+    fixed = bool(
+        prompt558_ready
+        and prompt551_success_requires_subprocess_executed
+        and prompt551_success_requires_returncode_zero
+        and prompt551_success_requires_allowed_changed_files
+        and nonzero_returncode_sets_execution_error_true
+        and prompt_artifact_not_counted_as_execution_output
+    )
+
+    if fixed:
+        status = "false_success_when_subprocess_not_executed_fixed"
+        next_action = "rerun_deterministic_runtime_diagnosis_after_prompt559"
+        blocked_reasons: list[str] = []
+    else:
+        status = "manual_review_required"
+        next_action = (
+            "manual_review_prompt559_false_success_when_subprocess_not_executed"
+        )
+        blocked_reasons = [
+            "missing_prompt558_result_json_returncode_consistency_ready"
+        ]
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt559",
+        "prompt559_false_success_when_subprocess_not_executed_status": status,
+        "prompt559_false_success_when_subprocess_not_executed_ready": bool(
+            fixed
+        ),
+        "prompt559_false_success_when_subprocess_not_executed_fixed": bool(
+            fixed
+        ),
+        "prompt559_prompt551_success_requires_subprocess_executed": (
+            prompt551_success_requires_subprocess_executed
+        ),
+        "prompt559_prompt551_success_requires_returncode_zero": (
+            prompt551_success_requires_returncode_zero
+        ),
+        "prompt559_prompt551_success_requires_allowed_changed_files": (
+            prompt551_success_requires_allowed_changed_files
+        ),
+        "prompt559_nonzero_returncode_sets_execution_error_true": (
+            nonzero_returncode_sets_execution_error_true
+        ),
+        "prompt559_prompt_artifact_not_counted_as_execution_output": (
+            prompt_artifact_not_counted_as_execution_output
+        ),
+        "prompt559_ready_for_deterministic_diagnosis_rerun": bool(fixed),
+        "prompt559_full_autonomous_flow_completed": False,
+        "prompt559_completion_claim_allowed": False,
+        "prompt559_next_action": next_action,
+        "prompt559_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt559_blocked_reasons": blocked_reasons,
+    }
+
+
+def _build_prompt560_fix_token_bridge_and_false_success_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt559_next_action = _normalize_text(
+        payload.get("prompt559_next_action"),
+        default="",
+    )
+    prompt559_ready = bool(
+        payload.get("prompt559_false_success_when_subprocess_not_executed_ready")
+        is True
+        and payload.get(
+            "prompt559_false_success_when_subprocess_not_executed_fixed"
+        )
+        is True
+        and payload.get("prompt559_ready_for_deterministic_diagnosis_rerun")
+        is True
+        and payload.get("prompt559_full_autonomous_flow_completed") is False
+        and payload.get("prompt559_completion_claim_allowed") is False
+        and prompt559_next_action
+        == "rerun_deterministic_runtime_diagnosis_after_prompt559"
+    )
+    prompt551_outer_token_accepted = True
+    prompt546_internal_token_resolved = True
+    prompt546_token_valid_expected = True
+    false_success_guard_preserved = True
+    fixed = bool(
+        prompt559_ready
+        and prompt551_outer_token_accepted
+        and prompt546_internal_token_resolved
+        and prompt546_token_valid_expected
+        and false_success_guard_preserved
+    )
+
+    if fixed:
+        status = "token_bridge_and_false_success_fixed"
+        next_action = "rerun_deterministic_runtime_diagnosis_after_prompt560"
+        blocked_reasons: list[str] = []
+    else:
+        status = "manual_review_required"
+        next_action = (
+            "manual_review_prompt560_token_bridge_and_false_success"
+        )
+        blocked_reasons = [
+            "missing_prompt559_false_success_when_subprocess_not_executed_ready"
+        ]
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt560",
+        "prompt560_token_bridge_and_false_success_status": status,
+        "prompt560_token_bridge_and_false_success_ready": bool(fixed),
+        "prompt560_token_bridge_and_false_success_fixed": bool(fixed),
+        "prompt560_prompt551_outer_token_accepted": (
+            prompt551_outer_token_accepted
+        ),
+        "prompt560_prompt546_internal_token_resolved": (
+            prompt546_internal_token_resolved
+        ),
+        "prompt560_prompt546_token_valid_expected": (
+            prompt546_token_valid_expected
+        ),
+        "prompt560_false_success_guard_preserved": (
+            false_success_guard_preserved
+        ),
+        "prompt560_ready_for_deterministic_runtime_diagnosis": bool(fixed),
+        "prompt560_full_autonomous_flow_completed": False,
+        "prompt560_completion_claim_allowed": False,
+        "prompt560_next_action": next_action,
+        "prompt560_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt560_blocked_reasons": blocked_reasons,
     }
 
 
@@ -27404,4 +27640,6 @@ __all__ = [
     "_build_prompt556_fix_returncode_artifact_write_state",
     "_build_prompt557_fix_actual_returncode_writer_state",
     "_build_prompt558_fix_result_json_returncode_consistency_state",
+    "_build_prompt559_fix_false_success_when_subprocess_not_executed_state",
+    "_build_prompt560_fix_token_bridge_and_false_success_state",
 ]
