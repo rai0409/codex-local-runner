@@ -26822,6 +26822,120 @@ def _build_prompt570_fix_prompt569_soak_artifact_cleanup_state(
     }
 
 
+def _build_prompt571_service_artifacts_local_only_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    def _prompt571_int(value: Any) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt571_enabled") is True
+    enable_token_valid = payload.get("prompt571_enable_token_valid") is True
+    service_name = _normalize_text(
+        payload.get("prompt571_service_name"),
+        default="codex-local-runner",
+    )
+    artifact_dir = _normalize_text(payload.get("prompt571_artifact_dir"), default="")
+    service_file_written = payload.get("prompt571_service_file_written") is True
+    env_file_written = payload.get("prompt571_env_file_written") is True
+    runner_script_written = payload.get("prompt571_runner_script_written") is True
+    summary_written = payload.get("prompt571_summary_written") is True
+    installation_performed = (
+        payload.get("prompt571_installation_performed") is True
+    )
+    daemon_started = payload.get("prompt571_daemon_started") is True
+    remote_workflow_included = (
+        payload.get("prompt571_remote_workflow_included") is True
+    )
+    soak_runs = _prompt571_int(payload.get("prompt571_soak_runs"))
+    max_cycles = _prompt571_int(payload.get("prompt571_max_cycles"))
+    max_daemon_runs = _prompt571_int(payload.get("prompt571_max_daemon_runs"))
+    success = bool(
+        payload.get("prompt571_service_artifacts_local_only_success") is True
+        and enable_token_valid
+        and service_file_written
+        and env_file_written
+        and runner_script_written
+        and summary_written
+        and not installation_performed
+        and not daemon_started
+        and not remote_workflow_included
+        and soak_runs >= 2
+        and max_cycles >= 2
+        and max_daemon_runs >= 1
+    )
+    blocked_reasons = list(payload.get("prompt571_blocked_reasons") or [])
+    readiness_checks = (
+        ("prompt571_enabled", enabled),
+        ("prompt571_enable_token_valid", enable_token_valid),
+        ("prompt571_service_file_written", service_file_written),
+        ("prompt571_env_file_written", env_file_written),
+        ("prompt571_runner_script_written", runner_script_written),
+        ("prompt571_summary_written", summary_written),
+        ("prompt571_installation_performed_false", not installation_performed),
+        ("prompt571_daemon_started_false", not daemon_started),
+        (
+            "prompt571_remote_workflow_included_false",
+            not remote_workflow_included,
+        ),
+        ("prompt571_soak_runs", soak_runs >= 2),
+        ("prompt571_max_cycles", max_cycles >= 2),
+        ("prompt571_max_daemon_runs", max_daemon_runs >= 1),
+    )
+    for field, passed in readiness_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    status = (
+        "service_artifacts_ready_for_manual_review_local_only"
+        if success
+        else _normalize_text(
+            payload.get("prompt571_service_artifacts_local_only_status"),
+            default="blocked",
+        )
+    )
+    next_action = (
+        "service_artifacts_ready_for_manual_review_local_only"
+        if success
+        else "manual_review_prompt571_service_artifacts_local_only_failed"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt571",
+        "prompt571_service_artifacts_local_only_status": status,
+        "prompt571_service_artifacts_local_only_ready": bool(
+            enabled
+            and enable_token_valid
+            and soak_runs >= 2
+            and max_cycles >= 2
+            and max_daemon_runs >= 1
+        ),
+        "prompt571_service_artifacts_local_only_success": success,
+        "prompt571_enabled": enabled,
+        "prompt571_enable_token_valid": enable_token_valid,
+        "prompt571_service_name": service_name,
+        "prompt571_artifact_dir": artifact_dir,
+        "prompt571_service_file_written": service_file_written,
+        "prompt571_env_file_written": env_file_written,
+        "prompt571_runner_script_written": runner_script_written,
+        "prompt571_summary_written": summary_written,
+        "prompt571_installation_performed": False,
+        "prompt571_daemon_started": False,
+        "prompt571_remote_workflow_included": False,
+        "prompt571_soak_runs": soak_runs,
+        "prompt571_max_cycles": max_cycles,
+        "prompt571_max_daemon_runs": max_daemon_runs,
+        "prompt571_next_action": next_action,
+        "prompt571_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -28704,4 +28818,5 @@ __all__ = [
     "_build_prompt568_production_hardening_entrypoint_state",
     "_build_prompt569_soak_runner_supervisor_wrapper_state",
     "_build_prompt570_fix_prompt569_soak_artifact_cleanup_state",
+    "_build_prompt571_service_artifacts_local_only_state",
 ]

@@ -123,6 +123,9 @@ PROMPT568_PRODUCTION_HARDENING_ENTRYPOINT_ENABLE_TOKEN = (
 PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN = (
     "PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE"
 )
+PROMPT571_SERVICE_ARTIFACTS_LOCAL_ONLY_ENABLE_TOKEN = (
+    "PROMPT571_SERVICE_ARTIFACTS_LOCAL_ONLY_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -204,6 +207,9 @@ _PROMPT568_DEFAULT_ARTIFACT_DIR = Path(
 )
 _PROMPT569_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/prompt569_soak_runner_supervisor_wrapper"
+)
+_PROMPT571_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/prompt571_service_artifacts_local_only"
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -2280,6 +2286,215 @@ def run_prompt569_soak_runner_supervisor_wrapper(
     if summary["prompt569_resume_state_written"]:
         _write_json(resume_path, resume_state)
     if summary["prompt569_soak_summary_written"]:
+        _write_json(summary_path, summary)
+    return summary
+
+
+def run_prompt571_service_artifacts_local_only(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    artifact_dir: str | Path | None = None,
+    service_name: str = "codex-local-runner",
+    soak_runs: int = 2,
+    max_cycles: int = 2,
+    max_daemon_runs: int = 1,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    service_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT571_DEFAULT_ARTIFACT_DIR
+    )
+    if not service_artifact_dir.is_absolute():
+        service_artifact_dir = repo_path / service_artifact_dir
+
+    prompt571_enabled = enabled is True
+    prompt571_enable_token_valid = (
+        _normalize_text(enable_token, default="")
+        == PROMPT571_SERVICE_ARTIFACTS_LOCAL_ONLY_ENABLE_TOKEN
+    )
+    prompt571_service_name = _normalize_text(
+        service_name,
+        default="codex-local-runner",
+    )
+    if not prompt571_service_name:
+        prompt571_service_name = "codex-local-runner"
+
+    def _prompt571_int(value: Any) -> int:
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 0
+
+    requested_soak_runs = _prompt571_int(soak_runs)
+    requested_max_cycles = _prompt571_int(max_cycles)
+    requested_max_daemon_runs = _prompt571_int(max_daemon_runs)
+
+    installation_performed = False
+    daemon_started = False
+    remote_workflow_included = False
+    blocked_reasons: list[str] = []
+    if not prompt571_enabled:
+        blocked_reasons.append("prompt571_enabled_required")
+    if not prompt571_enable_token_valid:
+        blocked_reasons.append("prompt571_enable_token_invalid")
+    if requested_soak_runs < 2:
+        blocked_reasons.append("prompt571_soak_runs_below_2")
+    if requested_max_cycles < 2:
+        blocked_reasons.append("prompt571_max_cycles_below_2")
+    if requested_max_daemon_runs < 1:
+        blocked_reasons.append("prompt571_max_daemon_runs_below_1")
+
+    service_path = service_artifact_dir / "codex-local-runner.service"
+    env_path = service_artifact_dir / "codex-local-runner.env.example"
+    runner_script_path = service_artifact_dir / "run_prompt569_supervisor.sh"
+    summary_path = service_artifact_dir / "service_artifacts_summary.json"
+    service_file_written = False
+    env_file_written = False
+    runner_script_written = False
+    summary_written = False
+
+    can_write_artifacts = bool(prompt571_enabled and prompt571_enable_token_valid)
+    if can_write_artifacts:
+        service_artifact_dir.mkdir(parents=True, exist_ok=True)
+        repo_path_text = str(repo_path.resolve())
+        artifact_dir_text = str(service_artifact_dir.resolve())
+        runner_script_text = f"""#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_PATH="${{REPO_PATH:-{repo_path_text}}}"
+ARTIFACT_DIR="${{ARTIFACT_DIR:-{artifact_dir_text}/prompt569_soak_runner}}"
+SOAK_RUNS="${{SOAK_RUNS:-{requested_soak_runs}}}"
+MAX_CYCLES="${{MAX_CYCLES:-{requested_max_cycles}}}"
+MAX_DAEMON_RUNS="${{MAX_DAEMON_RUNS:-{requested_max_daemon_runs}}}"
+
+cd "$REPO_PATH"
+python - <<'PY'
+import json
+import os
+from pathlib import Path
+
+from automation.orchestration.planned_runner.runtime_output_wiring import (
+    PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN,
+    run_prompt569_soak_runner_supervisor_wrapper,
+)
+
+result = run_prompt569_soak_runner_supervisor_wrapper(
+    execution_repo_path=os.environ["REPO_PATH"],
+    enabled=True,
+    enable_token=PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN,
+    artifact_dir=Path(os.environ["ARTIFACT_DIR"]),
+    soak_runs=int(os.environ["SOAK_RUNS"]),
+    max_cycles=int(os.environ["MAX_CYCLES"]),
+    max_daemon_runs=int(os.environ["MAX_DAEMON_RUNS"]),
+)
+print(json.dumps(result, indent=2, sort_keys=True))
+PY
+"""
+        env_text = f"""# Example environment for reviewing Prompt571 local-only service artifacts.
+REPO_PATH={repo_path_text}
+ARTIFACT_DIR={artifact_dir_text}/prompt569_soak_runner
+SOAK_RUNS={requested_soak_runs}
+MAX_CYCLES={requested_max_cycles}
+MAX_DAEMON_RUNS={requested_max_daemon_runs}
+"""
+        service_text = f"""[Unit]
+Description=Prompt571 review artifact for {prompt571_service_name}
+Documentation=file://{artifact_dir_text}/service_artifacts_summary.json
+
+[Service]
+Type=oneshot
+EnvironmentFile={artifact_dir_text}/codex-local-runner.env.example
+WorkingDirectory={repo_path_text}
+ExecStart=/usr/bin/env bash {artifact_dir_text}/run_prompt569_supervisor.sh
+"""
+        runner_script_path.write_text(runner_script_text, encoding="utf-8")
+        env_path.write_text(env_text, encoding="utf-8")
+        service_path.write_text(service_text, encoding="utf-8")
+        service_file_written = service_path.is_file()
+        env_file_written = env_path.is_file()
+        runner_script_written = runner_script_path.is_file()
+
+    artifacts_written = bool(
+        service_file_written
+        and env_file_written
+        and runner_script_written
+    )
+    success = bool(
+        prompt571_enable_token_valid
+        and artifacts_written
+        and not installation_performed
+        and not daemon_started
+        and not remote_workflow_included
+        and requested_soak_runs >= 2
+        and requested_max_cycles >= 2
+        and requested_max_daemon_runs >= 1
+    )
+    if can_write_artifacts and not artifacts_written:
+        blocked_reasons.append("prompt571_artifact_write_incomplete")
+    next_action = (
+        "service_artifacts_ready_for_manual_review_local_only"
+        if success
+        else "manual_review_prompt571_service_artifacts_local_only_failed"
+    )
+    status = (
+        "service_artifacts_ready_for_manual_review_local_only"
+        if success
+        else "blocked"
+    )
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt571",
+        "prompt571_service_artifacts_local_only_status": status,
+        "prompt571_service_artifacts_local_only_ready": bool(
+            prompt571_enabled
+            and prompt571_enable_token_valid
+            and requested_soak_runs >= 2
+            and requested_max_cycles >= 2
+            and requested_max_daemon_runs >= 1
+        ),
+        "prompt571_service_artifacts_local_only_success": success,
+        "prompt571_enabled": prompt571_enabled,
+        "prompt571_enable_token_valid": prompt571_enable_token_valid,
+        "prompt571_service_name": prompt571_service_name,
+        "prompt571_artifact_dir": str(service_artifact_dir),
+        "prompt571_service_file_written": service_file_written,
+        "prompt571_env_file_written": env_file_written,
+        "prompt571_runner_script_written": runner_script_written,
+        "prompt571_summary_written": False,
+        "prompt571_installation_performed": installation_performed,
+        "prompt571_daemon_started": daemon_started,
+        "prompt571_remote_workflow_included": remote_workflow_included,
+        "prompt571_soak_runs": requested_soak_runs,
+        "prompt571_max_cycles": requested_max_cycles,
+        "prompt571_max_daemon_runs": requested_max_daemon_runs,
+        "prompt571_next_action": next_action,
+        "prompt571_blocked_reasons": blocked_reasons,
+    }
+    if can_write_artifacts:
+        _write_json(summary_path, summary)
+        summary_written = summary_path.is_file()
+        summary["prompt571_summary_written"] = summary_written
+        success = bool(success and summary_written)
+        summary["prompt571_service_artifacts_local_only_success"] = success
+        summary["prompt571_next_action"] = (
+            "service_artifacts_ready_for_manual_review_local_only"
+            if success
+            else "manual_review_prompt571_service_artifacts_local_only_failed"
+        )
+        summary["prompt571_service_artifacts_local_only_status"] = (
+            "service_artifacts_ready_for_manual_review_local_only"
+            if success
+            else "blocked"
+        )
         _write_json(summary_path, summary)
     return summary
 
