@@ -126,6 +126,9 @@ PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN = (
 PROMPT571_SERVICE_ARTIFACTS_LOCAL_ONLY_ENABLE_TOKEN = (
     "PROMPT571_SERVICE_ARTIFACTS_LOCAL_ONLY_ENABLE"
 )
+PROMPT572_LONGER_SOAK_STABILITY_GATE_ENABLE_TOKEN = (
+    "PROMPT572_LONGER_SOAK_STABILITY_GATE_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -210,6 +213,9 @@ _PROMPT569_DEFAULT_ARTIFACT_DIR = Path(
 )
 _PROMPT571_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/prompt571_service_artifacts_local_only"
+)
+_PROMPT572_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/prompt572_longer_soak_stability_gate"
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -2495,6 +2501,274 @@ ExecStart=/usr/bin/env bash {artifact_dir_text}/run_prompt569_supervisor.sh
             if success
             else "blocked"
         )
+        _write_json(summary_path, summary)
+    return summary
+
+
+def run_prompt572_longer_soak_stability_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    timeout_seconds: int = 180,
+    allowed_files: Sequence[str] | None = None,
+    soak_runs: int = 5,
+    max_cycles: int = 2,
+    max_daemon_runs: int = 1,
+    artifact_dir: str | Path | None = None,
+    resume_state_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    longer_soak_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT572_DEFAULT_ARTIFACT_DIR
+    )
+    if not longer_soak_artifact_dir.is_absolute():
+        longer_soak_artifact_dir = repo_path / longer_soak_artifact_dir
+    resume_path = (
+        Path(resume_state_path)
+        if resume_state_path is not None
+        else longer_soak_artifact_dir / "prompt569_resume_state.json"
+    )
+    if not resume_path.is_absolute():
+        resume_path = repo_path / resume_path
+
+    prompt572_enabled = enabled is True
+    prompt572_enable_token_valid = (
+        _normalize_text(enable_token, default="")
+        == PROMPT572_LONGER_SOAK_STABILITY_GATE_ENABLE_TOKEN
+    )
+
+    def _prompt572_int(value: Any) -> int:
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 0
+
+    requested_soak_runs = _prompt572_int(soak_runs)
+    requested_max_cycles = _prompt572_int(max_cycles)
+    requested_max_daemon_runs = _prompt572_int(max_daemon_runs)
+    installation_performed = False
+    daemon_started = False
+    remote_workflow_included = False
+    blocked_reasons: list[str] = []
+    if not prompt572_enabled:
+        blocked_reasons.append("prompt572_enabled_required")
+    if not prompt572_enable_token_valid:
+        blocked_reasons.append("prompt572_enable_token_invalid")
+    if requested_soak_runs < 5:
+        blocked_reasons.append("prompt572_soak_runs_below_5")
+    if requested_max_cycles != 2:
+        blocked_reasons.append("prompt572_max_cycles_must_equal_2")
+    if requested_max_daemon_runs != 1:
+        blocked_reasons.append("prompt572_max_daemon_runs_must_equal_1")
+
+    prompt569_result: dict[str, Any] = {}
+    can_execute_soak = bool(
+        prompt572_enabled
+        and prompt572_enable_token_valid
+        and requested_soak_runs >= 5
+        and requested_max_cycles == 2
+        and requested_max_daemon_runs == 1
+    )
+    if can_execute_soak:
+        prompt569_artifact_dir = longer_soak_artifact_dir / "prompt569_soak_runner"
+        prompt569_result = run_prompt569_soak_runner_supervisor_wrapper(
+            run_state_payload=payload,
+            execution_repo_path=str(repo_path),
+            enabled=True,
+            enable_token=PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN,
+            timeout_seconds=timeout_seconds,
+            allowed_files=allowed_files,
+            max_cycles=requested_max_cycles,
+            stop_on_failure=True,
+            max_daemon_runs=requested_max_daemon_runs,
+            soak_runs=requested_soak_runs,
+            artifact_dir=prompt569_artifact_dir,
+            resume_state_path=resume_path,
+        )
+
+    confirmed_soak_runs = _prompt572_int(
+        prompt569_result.get("prompt569_soak_runs_executed")
+    )
+    confirmed_prompt568_runs = confirmed_soak_runs
+    confirmed_inner_prompt565_cycles_total = (
+        confirmed_prompt568_runs * requested_max_cycles
+    )
+    failed_soak_run_index = prompt569_result.get(
+        "prompt569_failed_soak_run_index"
+    )
+    stop_reason = _normalize_text(
+        prompt569_result.get("prompt569_stop_reason"),
+        default="blocked_by_enable_token",
+    )
+    prompt569_success = (
+        prompt569_result.get("prompt569_soak_runner_supervisor_wrapper_success")
+        is True
+    )
+    prompt569_successful_soak_runs = _prompt572_int(
+        prompt569_result.get("prompt569_successful_soak_runs")
+    )
+    final_worktree_clean = (
+        prompt569_result.get("prompt569_final_worktree_clean") is True
+    )
+    no_remote_mutation_verified = (
+        prompt569_result.get("prompt569_no_remote_mutation_verified") is True
+    )
+    prompt569_remote_workflow_included = (
+        prompt569_result.get("prompt569_remote_workflow_included") is True
+    )
+
+    result_path = longer_soak_artifact_dir / "longer_soak_result.json"
+    summary_path = longer_soak_artifact_dir / "longer_soak_summary.json"
+    result_written = False
+    summary_written = False
+
+    completion_checks = (
+        ("prompt572_enabled", prompt572_enabled),
+        ("prompt572_enable_token_valid", prompt572_enable_token_valid),
+        ("prompt572_requested_soak_runs_at_least_5", requested_soak_runs >= 5),
+        ("prompt572_max_cycles_equals_2", requested_max_cycles == 2),
+        (
+            "prompt572_max_daemon_runs_equals_1",
+            requested_max_daemon_runs == 1,
+        ),
+        ("prompt572_prompt569_success", prompt569_success),
+        (
+            "prompt572_prompt569_executed_requested_soak_runs",
+            confirmed_soak_runs == requested_soak_runs,
+        ),
+        (
+            "prompt572_prompt569_successful_soak_runs",
+            prompt569_successful_soak_runs == requested_soak_runs,
+        ),
+        (
+            "prompt572_failed_soak_run_index_none",
+            failed_soak_run_index is None,
+        ),
+        (
+            "prompt572_stop_reason_completed",
+            stop_reason == "completed_requested_soak_runs",
+        ),
+        ("prompt572_final_worktree_clean", final_worktree_clean),
+        (
+            "prompt572_no_remote_mutation_verified",
+            no_remote_mutation_verified,
+        ),
+        (
+            "prompt572_remote_workflow_included_false",
+            not prompt569_remote_workflow_included
+            and not remote_workflow_included,
+        ),
+        (
+            "prompt572_installation_performed_false",
+            not installation_performed,
+        ),
+        ("prompt572_daemon_started_false", not daemon_started),
+    )
+    for field, passed in completion_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    success_without_artifacts = bool(all(passed for _, passed in completion_checks))
+    status = (
+        "longer_soak_stability_gate_completed_local_only"
+        if success_without_artifacts
+        else "blocked"
+    )
+    next_action = (
+        "longer_soak_stability_gate_completed_local_only"
+        if success_without_artifacts
+        else "manual_review_prompt572_longer_soak_stability_gate_failed"
+    )
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt572",
+        "prompt572_longer_soak_stability_gate_status": status,
+        "prompt572_longer_soak_stability_gate_ready": bool(
+            prompt572_enabled
+            and prompt572_enable_token_valid
+            and requested_soak_runs >= 5
+            and requested_max_cycles == 2
+            and requested_max_daemon_runs == 1
+        ),
+        "prompt572_longer_soak_stability_gate_success": False,
+        "prompt572_enabled": prompt572_enabled,
+        "prompt572_enable_token_valid": prompt572_enable_token_valid,
+        "prompt572_requested_soak_runs": requested_soak_runs,
+        "prompt572_max_cycles": requested_max_cycles,
+        "prompt572_max_daemon_runs": requested_max_daemon_runs,
+        "prompt572_confirmed_soak_runs": confirmed_soak_runs,
+        "prompt572_confirmed_prompt568_runs": confirmed_prompt568_runs,
+        "prompt572_confirmed_inner_prompt565_cycles_total": (
+            confirmed_inner_prompt565_cycles_total
+        ),
+        "prompt572_failed_soak_run_index": failed_soak_run_index,
+        "prompt572_stop_reason": stop_reason,
+        "prompt572_longer_soak_result_written": False,
+        "prompt572_longer_soak_summary_written": False,
+        "prompt572_final_worktree_clean": final_worktree_clean,
+        "prompt572_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt572_installation_performed": installation_performed,
+        "prompt572_daemon_started": daemon_started,
+        "prompt572_remote_workflow_included": remote_workflow_included,
+        "prompt572_longer_soak_completed": False,
+        "prompt572_completion_claim_allowed": False,
+        "prompt572_next_action": next_action,
+        "prompt572_blocked_reasons": blocked_reasons,
+        "prompt572_artifact_dir": str(longer_soak_artifact_dir),
+        "prompt572_prompt569_result": prompt569_result,
+    }
+
+    if can_execute_soak:
+        longer_soak_artifact_dir.mkdir(parents=True, exist_ok=True)
+        _write_json(result_path, prompt569_result)
+        result_written = result_path.is_file()
+        summary["prompt572_longer_soak_result_written"] = result_written
+        _write_json(summary_path, summary)
+        summary_written = summary_path.is_file()
+        summary["prompt572_longer_soak_summary_written"] = summary_written
+
+    success = bool(
+        success_without_artifacts
+        and result_written
+        and summary_written
+        and not installation_performed
+        and not daemon_started
+        and not remote_workflow_included
+    )
+    if can_execute_soak and not result_written:
+        blocked_reasons.append("missing_prompt572_longer_soak_result_written")
+    if can_execute_soak and not summary_written:
+        blocked_reasons.append("missing_prompt572_longer_soak_summary_written")
+    next_action = (
+        "longer_soak_stability_gate_completed_local_only"
+        if success
+        else "manual_review_prompt572_longer_soak_stability_gate_failed"
+    )
+    status = (
+        "longer_soak_stability_gate_completed_local_only"
+        if success
+        else "blocked"
+    )
+    summary["prompt572_longer_soak_stability_gate_status"] = status
+    summary["prompt572_longer_soak_stability_gate_success"] = success
+    summary["prompt572_longer_soak_result_written"] = result_written
+    summary["prompt572_longer_soak_summary_written"] = summary_written
+    summary["prompt572_longer_soak_completed"] = success
+    summary["prompt572_completion_claim_allowed"] = success
+    summary["prompt572_next_action"] = next_action
+    summary["prompt572_blocked_reasons"] = blocked_reasons
+    if summary_written:
         _write_json(summary_path, summary)
     return summary
 

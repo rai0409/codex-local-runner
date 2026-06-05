@@ -234,6 +234,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt569_soak_runner_supervisor_wrapper_state,
     _build_prompt570_fix_prompt569_soak_artifact_cleanup_state,
     _build_prompt571_service_artifacts_local_only_state,
+    _build_prompt572_longer_soak_stability_gate_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -464,6 +465,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt569_soak_runner_supervisor_wrapper_state": _build_prompt569_soak_runner_supervisor_wrapper_state,
     "_build_prompt570_fix_prompt569_soak_artifact_cleanup_state": _build_prompt570_fix_prompt569_soak_artifact_cleanup_state,
     "_build_prompt571_service_artifacts_local_only_state": _build_prompt571_service_artifacts_local_only_state,
+    "_build_prompt572_longer_soak_stability_gate_state": _build_prompt572_longer_soak_stability_gate_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -698,4 +700,5 @@ __all__ = [
     "_build_prompt569_soak_runner_supervisor_wrapper_state",
     "_build_prompt570_fix_prompt569_soak_artifact_cleanup_state",
     "_build_prompt571_service_artifacts_local_only_state",
+    "_build_prompt572_longer_soak_stability_gate_state",
 ]

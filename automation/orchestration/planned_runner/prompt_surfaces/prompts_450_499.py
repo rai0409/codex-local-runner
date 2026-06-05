@@ -26936,6 +26936,239 @@ def _build_prompt571_service_artifacts_local_only_state(
     }
 
 
+def _build_prompt572_longer_soak_stability_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    def _prompt572_int(value: Any) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt572_enabled") is True
+    enable_token_valid = payload.get("prompt572_enable_token_valid") is True
+    requested_soak_runs = _prompt572_int(
+        payload.get("prompt572_requested_soak_runs")
+    )
+    max_cycles = _prompt572_int(payload.get("prompt572_max_cycles") or 2)
+    max_daemon_runs = _prompt572_int(
+        payload.get("prompt572_max_daemon_runs") or 1
+    )
+    confirmed_soak_runs = _prompt572_int(
+        payload.get("prompt572_confirmed_soak_runs")
+    )
+    confirmed_prompt568_runs = _prompt572_int(
+        payload.get("prompt572_confirmed_prompt568_runs")
+    )
+    confirmed_inner_prompt565_cycles_total = _prompt572_int(
+        payload.get("prompt572_confirmed_inner_prompt565_cycles_total")
+    )
+    failed_soak_run_index = payload.get("prompt572_failed_soak_run_index")
+    stop_reason = _normalize_text(
+        payload.get("prompt572_stop_reason"),
+        default="",
+    )
+    result_written = (
+        payload.get("prompt572_longer_soak_result_written") is True
+    )
+    summary_written = (
+        payload.get("prompt572_longer_soak_summary_written") is True
+    )
+    final_worktree_clean = (
+        payload.get("prompt572_final_worktree_clean") is True
+    )
+    no_remote_mutation_verified = (
+        payload.get("prompt572_no_remote_mutation_verified") is True
+    )
+    installation_performed = (
+        payload.get("prompt572_installation_performed") is True
+    )
+    daemon_started = payload.get("prompt572_daemon_started") is True
+    remote_workflow_included = (
+        payload.get("prompt572_remote_workflow_included") is True
+    )
+    completed = payload.get("prompt572_longer_soak_completed") is True
+    completion_claim_allowed = (
+        payload.get("prompt572_completion_claim_allowed") is True
+    )
+    prompt569_result = payload.get("prompt572_prompt569_result")
+    prompt569_payload = (
+        prompt569_result if isinstance(prompt569_result, Mapping) else {}
+    )
+    prompt569_success = (
+        prompt569_payload.get("prompt569_soak_runner_supervisor_wrapper_success")
+        is True
+    )
+    prompt569_successful_soak_runs = _prompt572_int(
+        prompt569_payload.get("prompt569_successful_soak_runs")
+    )
+    prompt569_executed_soak_runs = _prompt572_int(
+        prompt569_payload.get("prompt569_soak_runs_executed")
+    )
+    prompt569_failed_soak_run_index = prompt569_payload.get(
+        "prompt569_failed_soak_run_index"
+    )
+    prompt569_stop_reason = _normalize_text(
+        prompt569_payload.get("prompt569_stop_reason"),
+        default="",
+    )
+    prompt569_final_worktree_clean = (
+        prompt569_payload.get("prompt569_final_worktree_clean") is True
+    )
+    prompt569_no_remote_mutation_verified = (
+        prompt569_payload.get("prompt569_no_remote_mutation_verified") is True
+    )
+    prompt569_remote_workflow_included = (
+        prompt569_payload.get("prompt569_remote_workflow_included") is True
+    )
+    count_semantics_valid = bool(
+        confirmed_soak_runs == prompt569_executed_soak_runs
+        and confirmed_prompt568_runs == confirmed_soak_runs
+        and confirmed_inner_prompt565_cycles_total
+        == confirmed_prompt568_runs * max_cycles
+    )
+    success = bool(
+        payload.get("prompt572_longer_soak_stability_gate_success") is True
+        and enabled
+        and enable_token_valid
+        and requested_soak_runs >= 5
+        and max_cycles == 2
+        and max_daemon_runs == 1
+        and prompt569_success
+        and prompt569_executed_soak_runs == requested_soak_runs
+        and prompt569_successful_soak_runs == requested_soak_runs
+        and confirmed_soak_runs == requested_soak_runs
+        and count_semantics_valid
+        and failed_soak_run_index is None
+        and prompt569_failed_soak_run_index is None
+        and stop_reason == "completed_requested_soak_runs"
+        and prompt569_stop_reason == "completed_requested_soak_runs"
+        and result_written
+        and summary_written
+        and final_worktree_clean
+        and prompt569_final_worktree_clean
+        and no_remote_mutation_verified
+        and prompt569_no_remote_mutation_verified
+        and not installation_performed
+        and not daemon_started
+        and not remote_workflow_included
+        and not prompt569_remote_workflow_included
+        and completed
+        and completion_claim_allowed
+    )
+    blocked_reasons = list(payload.get("prompt572_blocked_reasons") or [])
+    readiness_checks = (
+        ("prompt572_enabled", enabled),
+        ("prompt572_enable_token_valid", enable_token_valid),
+        ("prompt572_requested_soak_runs", requested_soak_runs >= 5),
+        ("prompt572_max_cycles_equals_2", max_cycles == 2),
+        ("prompt572_max_daemon_runs_equals_1", max_daemon_runs == 1),
+        ("prompt572_prompt569_success", prompt569_success),
+        (
+            "prompt572_prompt569_executed_requested_soak_runs",
+            prompt569_executed_soak_runs == requested_soak_runs,
+        ),
+        (
+            "prompt572_prompt569_successful_soak_runs",
+            prompt569_successful_soak_runs == requested_soak_runs,
+        ),
+        ("prompt572_count_semantics_valid", count_semantics_valid),
+        ("prompt572_failed_soak_run_index_none", failed_soak_run_index is None),
+        (
+            "prompt572_prompt569_failed_soak_run_index_none",
+            prompt569_failed_soak_run_index is None,
+        ),
+        (
+            "prompt572_stop_reason_completed",
+            stop_reason == "completed_requested_soak_runs",
+        ),
+        (
+            "prompt572_prompt569_stop_reason_completed",
+            prompt569_stop_reason == "completed_requested_soak_runs",
+        ),
+        ("prompt572_longer_soak_result_written", result_written),
+        ("prompt572_longer_soak_summary_written", summary_written),
+        ("prompt572_final_worktree_clean", final_worktree_clean),
+        (
+            "prompt572_prompt569_final_worktree_clean",
+            prompt569_final_worktree_clean,
+        ),
+        (
+            "prompt572_no_remote_mutation_verified",
+            no_remote_mutation_verified,
+        ),
+        (
+            "prompt572_prompt569_no_remote_mutation_verified",
+            prompt569_no_remote_mutation_verified,
+        ),
+        (
+            "prompt572_installation_performed_false",
+            not installation_performed,
+        ),
+        ("prompt572_daemon_started_false", not daemon_started),
+        (
+            "prompt572_remote_workflow_included_false",
+            not remote_workflow_included
+            and not prompt569_remote_workflow_included,
+        ),
+        ("prompt572_longer_soak_completed", completed),
+        ("prompt572_completion_claim_allowed", completion_claim_allowed),
+    )
+    for field, passed in readiness_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    status = (
+        "longer_soak_stability_gate_completed_local_only"
+        if success
+        else _normalize_text(
+            payload.get("prompt572_longer_soak_stability_gate_status"),
+            default="blocked",
+        )
+    )
+    next_action = (
+        "longer_soak_stability_gate_completed_local_only"
+        if success
+        else "manual_review_prompt572_longer_soak_stability_gate_failed"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt572",
+        "prompt572_longer_soak_stability_gate_status": status,
+        "prompt572_longer_soak_stability_gate_ready": bool(
+            enabled and enable_token_valid and requested_soak_runs >= 5
+        ),
+        "prompt572_longer_soak_stability_gate_success": success,
+        "prompt572_enabled": enabled,
+        "prompt572_enable_token_valid": enable_token_valid,
+        "prompt572_requested_soak_runs": requested_soak_runs,
+        "prompt572_max_cycles": max_cycles,
+        "prompt572_max_daemon_runs": max_daemon_runs,
+        "prompt572_confirmed_soak_runs": confirmed_soak_runs,
+        "prompt572_confirmed_prompt568_runs": confirmed_prompt568_runs,
+        "prompt572_confirmed_inner_prompt565_cycles_total": (
+            confirmed_inner_prompt565_cycles_total
+        ),
+        "prompt572_failed_soak_run_index": failed_soak_run_index,
+        "prompt572_stop_reason": stop_reason,
+        "prompt572_longer_soak_result_written": result_written,
+        "prompt572_longer_soak_summary_written": summary_written,
+        "prompt572_final_worktree_clean": final_worktree_clean,
+        "prompt572_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt572_installation_performed": False,
+        "prompt572_daemon_started": False,
+        "prompt572_remote_workflow_included": False,
+        "prompt572_longer_soak_completed": success,
+        "prompt572_completion_claim_allowed": success,
+        "prompt572_next_action": next_action,
+        "prompt572_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -28819,4 +29052,5 @@ __all__ = [
     "_build_prompt569_soak_runner_supervisor_wrapper_state",
     "_build_prompt570_fix_prompt569_soak_artifact_cleanup_state",
     "_build_prompt571_service_artifacts_local_only_state",
+    "_build_prompt572_longer_soak_stability_gate_state",
 ]
