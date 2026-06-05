@@ -26752,6 +26752,76 @@ def _build_prompt569_soak_runner_supervisor_wrapper_state(
     }
 
 
+def _build_prompt570_fix_prompt569_soak_artifact_cleanup_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    cleanup_status = _normalize_text(
+        payload.get("prompt570_fix_prompt569_soak_artifact_cleanup_status"),
+        default="blocked",
+    )
+    cleaned_before_soak = list(
+        payload.get("prompt570_known_runtime_artifacts_cleaned_before_soak")
+        or []
+    )
+    cleaned_between_soaks = list(
+        payload.get("prompt570_known_runtime_artifacts_cleaned_between_soaks")
+        or []
+    )
+    prompt569_success = (
+        payload.get("prompt569_soak_runner_supervisor_wrapper_success") is True
+    )
+    prompt569_ready = (
+        payload.get("prompt569_soak_runner_supervisor_wrapper_ready") is True
+    )
+    prompt569_postcommit_rerun_ready = (
+        payload.get("prompt570_prompt569_postcommit_rerun_ready") is True
+    )
+    arbitrary_untracked_files_still_block = (
+        payload.get("prompt570_arbitrary_untracked_files_still_block") is True
+    )
+    remote_workflow_included = (
+        payload.get("prompt570_remote_workflow_included") is True
+    )
+    success = bool(
+        cleanup_status == "prompt569_known_runtime_artifact_cleanup_applied"
+        and prompt569_ready
+        and prompt569_success
+        and prompt569_postcommit_rerun_ready
+        and arbitrary_untracked_files_still_block
+        and not remote_workflow_included
+    )
+    next_action = (
+        "production_hardening_soak_runner_completed_local_only"
+        if success
+        else "manual_review_prompt570_fix_prompt569_soak_artifact_cleanup_failed"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt570",
+        "prompt570_fix_prompt569_soak_artifact_cleanup_status": (
+            "prompt569_soak_artifact_cleanup_ready"
+            if success
+            else cleanup_status
+        ),
+        "prompt570_fix_prompt569_soak_artifact_cleanup_success": success,
+        "prompt570_known_runtime_artifacts_cleaned_before_soak": (
+            cleaned_before_soak
+        ),
+        "prompt570_known_runtime_artifacts_cleaned_between_soaks": (
+            cleaned_between_soaks
+        ),
+        "prompt570_prompt569_postcommit_rerun_ready": success,
+        "prompt570_arbitrary_untracked_files_still_block": (
+            arbitrary_untracked_files_still_block
+        ),
+        "prompt570_full_autonomous_development_completed_local_only": False,
+        "prompt570_remote_workflow_included": False,
+        "prompt570_next_action": next_action,
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -28633,4 +28703,5 @@ __all__ = [
     "_build_prompt567_final_handoff_and_hardening_plan_state",
     "_build_prompt568_production_hardening_entrypoint_state",
     "_build_prompt569_soak_runner_supervisor_wrapper_state",
+    "_build_prompt570_fix_prompt569_soak_artifact_cleanup_state",
 ]

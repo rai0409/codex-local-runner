@@ -205,6 +205,20 @@ _PROMPT568_DEFAULT_ARTIFACT_DIR = Path(
 _PROMPT569_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/prompt569_soak_runner_supervisor_wrapper"
 )
+_PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
+    Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
+    Path("artifacts/runtime_commands/prompt568_production_hardening"),
+    Path("artifacts/runtime_commands/prompt568_production_hardening_entrypoint"),
+    Path("artifacts/runtime_commands/prompt569_soak_runner_supervisor"),
+    Path("artifacts/runtime_commands/prompt569_soak_runner_supervisor_wrapper"),
+    Path("artifacts/runtime_commands/prompt546_internal_codex_stdout.txt"),
+    Path("artifacts/runtime_commands/prompt546_internal_codex_stderr.txt"),
+    Path("artifacts/runtime_commands/prompt546_internal_codex_returncode.txt"),
+    Path("artifacts/runtime_commands/prompt546_internal_codex_changed_files.txt"),
+    Path("artifacts/runtime_commands/prompt546_internal_codex_diff.patch"),
+    Path("artifacts/runtime_commands/prompt546_internal_codex_result.json"),
+    _PROMPT551_MINIMAL_PROMPT_ARTIFACT,
+)
 _PROMPT565_REQUIRED_CYCLE_TRUE_FIELDS = (
     "prompt563_prompt552_final_smoke_success",
     "prompt563_prompt552_full_autonomous_flow_completed",
@@ -1392,6 +1406,20 @@ def _prompt565_remove_existing_daemon_artifact_dir(
     return False
 
 
+def _prompt569_remove_known_generated_runtime_artifacts(repo_path: Path) -> list[str]:
+    removed_artifacts: list[str] = []
+    for artifact_path in _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS:
+        candidate = repo_path / artifact_path
+        if not candidate.exists():
+            continue
+        if candidate.is_dir():
+            shutil.rmtree(candidate)
+        else:
+            candidate.unlink()
+        removed_artifacts.append(artifact_path.as_posix())
+    return removed_artifacts
+
+
 def _prompt565_cycle_succeeded(cycle_result: Mapping[str, Any]) -> bool:
     return all(
         cycle_result.get(field) is True
@@ -1990,12 +2018,17 @@ def run_prompt569_soak_runner_supervisor_wrapper(
     soak_run_results: list[dict[str, Any]] = []
     failed_soak_run_index: int | None = None
     stop_reason = ""
+    known_runtime_artifacts_cleaned_before_soak: list[str] = []
+    known_runtime_artifacts_cleaned_between_soaks: list[dict[str, Any]] = []
     can_execute_soak = bool(
         prompt569_enabled
         and prompt569_enable_token_valid
         and requested_soak_runs >= 2
     )
     if can_execute_soak:
+        known_runtime_artifacts_cleaned_before_soak = (
+            _prompt569_remove_known_generated_runtime_artifacts(repo_path)
+        )
         for soak_run_index in range(1, requested_soak_runs + 1):
             prompt568_artifact_dir = (
                 supervisor_artifact_dir
@@ -2052,6 +2085,17 @@ def run_prompt569_soak_runner_supervisor_wrapper(
                 if stop_on_failure:
                     stop_reason = "stopped_on_failed_soak_run"
                     break
+            if soak_run_index < requested_soak_runs:
+                known_runtime_artifacts_cleaned_between_soaks.append(
+                    {
+                        "after_soak_run_index": soak_run_index,
+                        "removed_artifacts": (
+                            _prompt569_remove_known_generated_runtime_artifacts(
+                                repo_path
+                            )
+                        ),
+                    }
+                )
 
     soak_runs_executed = len(soak_run_results)
     successful_soak_runs = sum(
@@ -2167,6 +2211,26 @@ def run_prompt569_soak_runner_supervisor_wrapper(
             for soak_run_result in soak_run_results
         ],
         "prompt569_soak_run_results": soak_run_results,
+        "prompt570_fix_prompt569_soak_artifact_cleanup_status": (
+            "prompt569_known_runtime_artifact_cleanup_applied"
+            if can_execute_soak
+            else "prompt569_known_runtime_artifact_cleanup_not_executed"
+        ),
+        "prompt570_known_runtime_artifacts_cleaned_before_soak": (
+            known_runtime_artifacts_cleaned_before_soak
+        ),
+        "prompt570_known_runtime_artifacts_cleaned_between_soaks": (
+            known_runtime_artifacts_cleaned_between_soaks
+        ),
+        "prompt570_prompt569_postcommit_rerun_ready": False,
+        "prompt570_arbitrary_untracked_files_still_block": True,
+        "prompt570_full_autonomous_development_completed_local_only": False,
+        "prompt570_remote_workflow_included": False,
+        "prompt570_next_action": (
+            "production_hardening_soak_runner_completed_local_only"
+            if success_without_artifacts
+            else "manual_review_prompt569_soak_runner_supervisor_wrapper_failed"
+        ),
         "resume_state": resume_state,
     }
 
@@ -2210,6 +2274,8 @@ def run_prompt569_soak_runner_supervisor_wrapper(
     summary["prompt569_production_hardening_soak_completed"] = success
     summary["prompt569_completion_claim_allowed"] = success
     summary["prompt569_next_action"] = next_action
+    summary["prompt570_prompt569_postcommit_rerun_ready"] = success
+    summary["prompt570_next_action"] = next_action
     summary["resume_state"] = resume_state
     if summary["prompt569_resume_state_written"]:
         _write_json(resume_path, resume_state)
