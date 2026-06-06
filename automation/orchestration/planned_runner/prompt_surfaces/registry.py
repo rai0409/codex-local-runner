@@ -242,6 +242,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt578_actual_codex_dispatch_cycle_gate_state,
     _build_prompt579_actual_dispatch_result_ingestion_gate_state,
     _build_prompt580_real_dev_task_dispatch_gate_state,
+    _build_prompt581_verify_real_dev_task_changes_gate_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -480,6 +481,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt578_actual_codex_dispatch_cycle_gate_state": _build_prompt578_actual_codex_dispatch_cycle_gate_state,
     "_build_prompt579_actual_dispatch_result_ingestion_gate_state": _build_prompt579_actual_dispatch_result_ingestion_gate_state,
     "_build_prompt580_real_dev_task_dispatch_gate_state": _build_prompt580_real_dev_task_dispatch_gate_state,
+    "_build_prompt581_verify_real_dev_task_changes_gate_state": _build_prompt581_verify_real_dev_task_changes_gate_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -722,4 +724,5 @@ __all__ = [
     "_build_prompt578_actual_codex_dispatch_cycle_gate_state",
     "_build_prompt579_actual_dispatch_result_ingestion_gate_state",
     "_build_prompt580_real_dev_task_dispatch_gate_state",
+    "_build_prompt581_verify_real_dev_task_changes_gate_state",
 ]

@@ -257,6 +257,10 @@ _PROMPT580_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt580_real_dev_task_dispatch"
 )
+_PROMPT581_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt581_verify_real_dev_task_changes"
+)
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
     Path("artifacts/runtime_commands/prompt568_production_hardening"),
@@ -5863,6 +5867,503 @@ def run_prompt580_real_dev_task_dispatch_gate(
         "prompt580_blocked_reasons": blocked_reasons,
     }
     _write_json(summary_path, summary)
+    return summary
+
+
+def _prompt581_prompt580_success_ready(
+    payload: Mapping[str, Any],
+) -> tuple[bool, list[str]]:
+    required_checks = (
+        (
+            "prompt580_real_dev_task_dispatch_success",
+            payload.get("prompt580_real_dev_task_dispatch_success") is True,
+        ),
+        (
+            "prompt580_prompt579_success_ready",
+            payload.get("prompt580_prompt579_success_ready") is True,
+        ),
+        ("prompt580_enabled", payload.get("prompt580_enabled") is True),
+        (
+            "prompt580_enable_token_valid",
+            payload.get("prompt580_enable_token_valid") is True,
+        ),
+        (
+            "prompt580_real_dev_task_dispatch_ready",
+            payload.get("prompt580_real_dev_task_dispatch_ready") is True,
+        ),
+        (
+            "prompt580_real_dev_task_executed",
+            payload.get("prompt580_real_dev_task_executed") is True,
+        ),
+        (
+            "prompt580_codex_command_prepared",
+            payload.get("prompt580_codex_command_prepared") is True,
+        ),
+        (
+            "prompt580_dev_task_prompt_written",
+            payload.get("prompt580_dev_task_prompt_written") is True,
+        ),
+        (
+            "prompt580_dispatch_completed",
+            payload.get("prompt580_dispatch_completed") is True,
+        ),
+        (
+            "prompt580_dispatch_failed_false",
+            payload.get("prompt580_dispatch_failed") is False,
+        ),
+        (
+            "prompt580_dispatch_not_run_false",
+            payload.get("prompt580_dispatch_not_run") is False,
+        ),
+        (
+            "prompt580_timeout_occurred_false",
+            payload.get("prompt580_timeout_occurred") is False,
+        ),
+        ("prompt580_returncode_0", payload.get("prompt580_returncode") == 0),
+        (
+            "prompt580_returncode_classification_success",
+            payload.get("prompt580_returncode_classification") == "success",
+        ),
+        (
+            "prompt580_tracked_files_modified_by_codex",
+            payload.get("prompt580_tracked_files_modified_by_codex") is True,
+        ),
+        (
+            "prompt580_changed_tracked_files_non_empty",
+            _prompt579_string_list(payload.get("prompt580_changed_tracked_files"))
+            != [],
+        ),
+        (
+            "prompt580_commit_performed_false",
+            payload.get("prompt580_commit_performed") is False,
+        ),
+        (
+            "prompt580_installation_performed_false",
+            payload.get("prompt580_installation_performed") is False,
+        ),
+        (
+            "prompt580_systemd_used_false",
+            payload.get("prompt580_systemd_used") is False,
+        ),
+        (
+            "prompt580_service_enable_performed_false",
+            payload.get("prompt580_service_enable_performed") is False,
+        ),
+        (
+            "prompt580_service_start_performed_false",
+            payload.get("prompt580_service_start_performed") is False,
+        ),
+        (
+            "prompt580_persistent_service_started_false",
+            payload.get("prompt580_persistent_service_started") is False,
+        ),
+        (
+            "prompt580_remote_workflow_included_false",
+            payload.get("prompt580_remote_workflow_included") is False,
+        ),
+        (
+            "prompt580_no_remote_mutation_verified",
+            payload.get("prompt580_no_remote_mutation_verified") is True,
+        ),
+        (
+            "prompt580_completion_claim_allowed",
+            payload.get("prompt580_completion_claim_allowed") is True,
+        ),
+        (
+            "prompt580_result_route_verify_codex_changes",
+            payload.get("prompt580_result_route") == "verify_codex_changes",
+        ),
+        (
+            "prompt580_next_action_prepare_prompt581_verify_real_dev_task_changes",
+            payload.get("prompt580_next_action")
+            == "prepare_prompt581_verify_real_dev_task_changes",
+        ),
+        (
+            "prompt580_blocked_reasons_empty",
+            _prompt579_string_list(payload.get("prompt580_blocked_reasons"))
+            == [],
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{name}" for name, ready in required_checks if not ready
+    ]
+    return blocked_reasons == [], blocked_reasons
+
+
+def _prompt581_result_route(
+    *,
+    timeout_occurred: bool,
+    returncode: Any,
+    returncode_classification: str,
+    dispatch_completed: bool,
+    dispatch_failed: bool,
+    dispatch_not_run: bool,
+    tracked_files_modified_by_codex: bool,
+    changed_tracked_files: Sequence[str],
+) -> str:
+    if timeout_occurred:
+        return "timeout_retry_required"
+    if (
+        dispatch_failed
+        or dispatch_not_run
+        or returncode != 0
+        or returncode_classification == "failed"
+    ):
+        return "failed_retry_required"
+    if (
+        dispatch_completed
+        and returncode == 0
+        and returncode_classification == "success"
+    ):
+        if tracked_files_modified_by_codex and changed_tracked_files:
+            return "changes_review_ready"
+        return "no_changes_review_required"
+    return "manual_review_required"
+
+
+def _prompt581_next_action(result_route: str) -> str:
+    return {
+        "changes_review_ready": (
+            "prepare_prompt582_review_and_commit_real_dev_changes"
+        ),
+        "no_changes_review_required": "prepare_prompt582_no_change_review",
+        "failed_retry_required": "prepare_prompt582_retry_real_dev_task",
+        "timeout_retry_required": "prepare_prompt582_timeout_retry_real_dev_task",
+        "manual_review_required": (
+            "manual_review_prompt581_verify_real_dev_task_changes"
+        ),
+    }[result_route]
+
+
+def run_prompt581_verify_real_dev_task_changes_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    changed_files: Sequence[str] | str | None = None,
+    stdout_text: str | None = None,
+    stderr_text: str | None = None,
+    result_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    verification_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT581_DEFAULT_ARTIFACT_DIR
+    )
+    if not verification_artifact_dir.is_absolute():
+        verification_artifact_dir = repo_path / verification_artifact_dir
+
+    changed_files_path = (
+        verification_artifact_dir / "real_dev_task_changed_files.json"
+    )
+    stdout_excerpt_path = (
+        verification_artifact_dir / "real_dev_task_stdout_excerpt.txt"
+    )
+    stderr_excerpt_path = (
+        verification_artifact_dir / "real_dev_task_stderr_excerpt.txt"
+    )
+    evaluation_path = (
+        verification_artifact_dir / "real_dev_task_change_evaluation.json"
+    )
+    route_path = (
+        verification_artifact_dir / "real_dev_task_change_route.json"
+    )
+    summary_path = (
+        verification_artifact_dir
+        / "real_dev_task_change_verification_summary.json"
+    )
+
+    prompt580_success_ready, prerequisite_blocked_reasons = (
+        _prompt581_prompt580_success_ready(payload)
+    )
+    prompt580_changed_tracked_files = _prompt579_string_list(
+        payload.get("prompt580_changed_tracked_files")
+    )
+    verified_changed_files = _prompt579_string_list(changed_files)
+    if not verified_changed_files:
+        verified_changed_files = prompt580_changed_tracked_files
+    prompt580_tracked_files_modified_by_codex = (
+        payload.get("prompt580_tracked_files_modified_by_codex") is True
+        or bool(prompt580_changed_tracked_files)
+    )
+    prompt580_returncode = payload.get("prompt580_returncode")
+    prompt580_returncode_classification = _normalize_text(
+        payload.get("prompt580_returncode_classification"),
+        default="",
+    )
+    prompt580_timeout_occurred = (
+        payload.get("prompt580_timeout_occurred") is True
+    )
+    prompt580_dispatch_completed = (
+        payload.get("prompt580_dispatch_completed") is True
+    )
+    prompt580_dispatch_failed = (
+        payload.get("prompt580_dispatch_failed") is True
+    )
+    prompt580_dispatch_not_run = (
+        payload.get("prompt580_dispatch_not_run") is True
+    )
+    prompt580_real_dev_task_executed = (
+        payload.get("prompt580_real_dev_task_executed") is True
+    )
+
+    ingested_result_payload = (
+        dict(result_payload)
+        if isinstance(result_payload, Mapping)
+        else _prompt579_read_json_if_exists(
+            _normalize_text(payload.get("prompt580_result_path"), default=""),
+            repo_path,
+        )
+    )
+    stdout_ingested = (
+        stdout_text
+        if stdout_text is not None
+        else _prompt579_read_text_if_exists(
+            _normalize_text(payload.get("prompt580_stdout_path"), default=""),
+            repo_path,
+        )
+    )
+    stderr_ingested = (
+        stderr_text
+        if stderr_text is not None
+        else _prompt579_read_text_if_exists(
+            _normalize_text(payload.get("prompt580_stderr_path"), default=""),
+            repo_path,
+        )
+    )
+
+    result_route = _prompt581_result_route(
+        timeout_occurred=prompt580_timeout_occurred,
+        returncode=prompt580_returncode,
+        returncode_classification=prompt580_returncode_classification,
+        dispatch_completed=prompt580_dispatch_completed,
+        dispatch_failed=prompt580_dispatch_failed,
+        dispatch_not_run=prompt580_dispatch_not_run,
+        tracked_files_modified_by_codex=(
+            prompt580_tracked_files_modified_by_codex
+        ),
+        changed_tracked_files=verified_changed_files,
+    )
+    retry_required = result_route in {
+        "failed_retry_required",
+        "timeout_retry_required",
+    }
+    manual_review_required = result_route == "manual_review_required"
+    changes_review_ready = result_route == "changes_review_ready"
+    no_changes_review_required = result_route == "no_changes_review_required"
+
+    verification_artifact_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(
+        changed_files_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt581",
+            "prompt580_changed_tracked_files": prompt580_changed_tracked_files,
+            "changed_files": verified_changed_files,
+        },
+    )
+    stdout_excerpt_path.write_text(
+        _prompt579_text_excerpt(stdout_ingested),
+        encoding="utf-8",
+    )
+    stderr_excerpt_path.write_text(
+        _prompt579_text_excerpt(stderr_ingested),
+        encoding="utf-8",
+    )
+    evaluation = {
+        "local_only": True,
+        "source_prompt": "prompt581",
+        "prompt580_prerequisite_ready": prompt580_success_ready,
+        "prompt580_prerequisite_blocked_reasons": (
+            prerequisite_blocked_reasons
+        ),
+        "prompt580_result_metadata": ingested_result_payload,
+        "prompt580_real_dev_task_executed": prompt580_real_dev_task_executed,
+        "prompt580_returncode": prompt580_returncode,
+        "prompt580_returncode_classification": (
+            prompt580_returncode_classification
+        ),
+        "prompt580_timeout_occurred": prompt580_timeout_occurred,
+        "prompt580_dispatch_completed": prompt580_dispatch_completed,
+        "prompt580_dispatch_failed": prompt580_dispatch_failed,
+        "prompt580_dispatch_not_run": prompt580_dispatch_not_run,
+        "prompt580_tracked_files_modified_by_codex": (
+            prompt580_tracked_files_modified_by_codex
+        ),
+        "prompt580_changed_tracked_files": prompt580_changed_tracked_files,
+        "changed_files": verified_changed_files,
+        "result_route": result_route,
+    }
+    _write_json(evaluation_path, evaluation)
+    _write_json(
+        route_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt581",
+            "prompt581_result_route": result_route,
+            "prompt581_next_action": _prompt581_next_action(result_route),
+            "prompt581_retry_required": retry_required,
+            "prompt581_manual_review_required": manual_review_required,
+        },
+    )
+
+    changed_files_written = changed_files_path.is_file()
+    stdout_excerpt_written = stdout_excerpt_path.is_file()
+    stderr_excerpt_written = stderr_excerpt_path.is_file()
+    evaluation_written = evaluation_path.is_file()
+    route_written = route_path.is_file()
+    all_artifacts_except_summary_written = all(
+        (
+            changed_files_written,
+            stdout_excerpt_written,
+            stderr_excerpt_written,
+            evaluation_written,
+            route_written,
+        )
+    )
+
+    blocked_reasons = list(prerequisite_blocked_reasons)
+    if prompt580_success_ready and not all_artifacts_except_summary_written:
+        blocked_reasons.append("prompt581_required_artifact_write_failed")
+
+    if not prompt580_success_ready:
+        status = (
+            "blocked_real_dev_task_changes_verification_missing_prerequisite"
+        )
+        next_action = (
+            "manual_review_prompt581_verify_real_dev_task_changes"
+        )
+        success = False
+    elif not all_artifacts_except_summary_written:
+        status = "blocked_real_dev_task_changes_verification_failed"
+        next_action = (
+            "manual_review_prompt581_verify_real_dev_task_changes"
+        )
+        success = False
+    else:
+        status = (
+            "real_dev_task_changes_verification_completed_local_only"
+        )
+        next_action = _prompt581_next_action(result_route)
+        success = True
+
+    codex_executed_during_runtime = False
+    tracked_files_modified_during_runtime = False
+    commit_performed = False
+    installation_performed = False
+    systemd_used = False
+    service_enable_performed = False
+    service_start_performed = False
+    persistent_service_started = False
+    remote_workflow_included = False
+    no_remote_mutation_verified = True
+    final_worktree_clean = not tracked_files_modified_during_runtime
+    summary_written = False
+
+    completion_claim_allowed = bool(
+        success
+        and prompt580_success_ready
+        and prompt580_real_dev_task_executed
+        and prompt580_returncode == 0
+        and prompt580_returncode_classification == "success"
+        and not prompt580_timeout_occurred
+        and prompt580_dispatch_completed
+        and not prompt580_dispatch_failed
+        and not prompt580_dispatch_not_run
+        and prompt580_tracked_files_modified_by_codex
+        and verified_changed_files
+        and all_artifacts_except_summary_written
+        and result_route == "changes_review_ready"
+        and not retry_required
+        and not manual_review_required
+        and changes_review_ready
+        and not no_changes_review_required
+        and not codex_executed_during_runtime
+        and not tracked_files_modified_during_runtime
+        and not commit_performed
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and final_worktree_clean
+        and blocked_reasons == []
+    )
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt581",
+        "prompt581_real_dev_task_changes_verification_status": status,
+        "prompt581_real_dev_task_changes_verification_ready": (
+            prompt580_success_ready
+        ),
+        "prompt581_real_dev_task_changes_verification_success": success,
+        "prompt581_prompt580_success_ready": prompt580_success_ready,
+        "prompt581_prompt580_real_dev_task_executed": (
+            prompt580_real_dev_task_executed
+        ),
+        "prompt581_prompt580_returncode": prompt580_returncode,
+        "prompt581_prompt580_returncode_classification": (
+            prompt580_returncode_classification
+        ),
+        "prompt581_prompt580_timeout_occurred": (
+            prompt580_timeout_occurred
+        ),
+        "prompt581_prompt580_dispatch_completed": (
+            prompt580_dispatch_completed
+        ),
+        "prompt581_prompt580_dispatch_failed": prompt580_dispatch_failed,
+        "prompt581_prompt580_dispatch_not_run": prompt580_dispatch_not_run,
+        "prompt581_prompt580_tracked_files_modified_by_codex": (
+            prompt580_tracked_files_modified_by_codex
+        ),
+        "prompt581_prompt580_changed_tracked_files": verified_changed_files,
+        "prompt581_changed_files_written": changed_files_written,
+        "prompt581_stdout_excerpt_written": stdout_excerpt_written,
+        "prompt581_stderr_excerpt_written": stderr_excerpt_written,
+        "prompt581_evaluation_written": evaluation_written,
+        "prompt581_route_written": route_written,
+        "prompt581_summary_written": summary_written,
+        "prompt581_result_route": result_route,
+        "prompt581_retry_required": retry_required,
+        "prompt581_manual_review_required": manual_review_required,
+        "prompt581_changes_review_ready": changes_review_ready,
+        "prompt581_no_changes_review_required": no_changes_review_required,
+        "prompt581_codex_executed_during_runtime": (
+            codex_executed_during_runtime
+        ),
+        "prompt581_tracked_files_modified_during_runtime": (
+            tracked_files_modified_during_runtime
+        ),
+        "prompt581_commit_performed": commit_performed,
+        "prompt581_installation_performed": installation_performed,
+        "prompt581_systemd_used": systemd_used,
+        "prompt581_service_enable_performed": service_enable_performed,
+        "prompt581_service_start_performed": service_start_performed,
+        "prompt581_persistent_service_started": persistent_service_started,
+        "prompt581_remote_workflow_included": remote_workflow_included,
+        "prompt581_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt581_final_worktree_clean": final_worktree_clean,
+        "prompt581_completion_claim_allowed": completion_claim_allowed,
+        "prompt581_next_action": next_action,
+        "prompt581_blocked_reasons": blocked_reasons,
+    }
+    _write_json(summary_path, summary)
+    summary_written = summary_path.is_file()
+    summary["prompt581_summary_written"] = summary_written
+    summary["prompt581_completion_claim_allowed"] = bool(
+        completion_claim_allowed and summary_written
+    )
+    if summary_written:
+        _write_json(summary_path, summary)
     return summary
 
 
