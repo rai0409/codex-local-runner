@@ -137,6 +137,9 @@ PROMPT574_OBSERVED_DAEMON_RUN_GATE_ENABLE_TOKEN = (
 PROMPT575_MANUAL_SERVICE_INSTALL_GATE_ENABLE_TOKEN = (
     "PROMPT575_MANUAL_SERVICE_INSTALL_GATE_ENABLE"
 )
+PROMPT578_ACTUAL_CODEX_DISPATCH_ENABLE_TOKEN = (
+    "PROMPT578_ACTUAL_CODEX_DISPATCH_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -238,6 +241,10 @@ _PROMPT576_DEFAULT_ARTIFACT_DIR = Path(
 _PROMPT577_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt577_actual_autonomous_development_cycle_bridge"
+)
+_PROMPT578_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt578_actual_codex_dispatch_cycle"
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -4438,6 +4445,364 @@ def run_prompt577_actual_autonomous_development_cycle_bridge(
     summary["prompt577_blocked_reasons"] = blocked_reasons
     if bridge_summary_written:
         _write_json(bridge_summary_path, summary)
+    return summary
+
+
+def _prompt578_prompt577_success_ready(payload: Mapping[str, Any]) -> bool:
+    return bool(
+        payload.get(
+            "prompt577_actual_autonomous_development_cycle_bridge_success"
+        )
+        is True
+        and payload.get("prompt577_prompt576_success_ready") is True
+        and payload.get("prompt577_direction_written") is True
+        and payload.get("prompt577_codex_prompt_written") is True
+        and payload.get("prompt577_verification_command_written") is True
+        and payload.get("prompt577_evaluation_rubric_written") is True
+        and payload.get("prompt577_retry_fix_route_written") is True
+        and payload.get("prompt577_bridge_summary_written") is True
+        and payload.get("prompt577_target_next_prompt") == "prompt578"
+        and payload.get("prompt577_cycle_type")
+        == "actual_codex_development_cycle"
+        and payload.get("prompt577_actual_codex_dispatch_ready") is True
+        and payload.get("prompt577_actual_codex_executed") is False
+        and payload.get("prompt577_tracked_files_modified_during_runtime")
+        is False
+        and payload.get("prompt577_commit_performed") is False
+        and payload.get("prompt577_installation_performed") is False
+        and payload.get("prompt577_systemd_used") is False
+        and payload.get("prompt577_service_enable_performed") is False
+        and payload.get("prompt577_service_start_performed") is False
+        and payload.get("prompt577_persistent_service_started") is False
+        and payload.get("prompt577_remote_workflow_included") is False
+        and payload.get("prompt577_no_remote_mutation_verified") is True
+        and payload.get("prompt577_final_worktree_clean") is True
+        and payload.get("prompt577_completion_claim_allowed") is True
+        and payload.get("prompt577_next_action")
+        == "prepare_prompt578_actual_codex_dispatch_cycle"
+    )
+
+
+def _prompt578_timeout_seconds(value: Any, *, default: int = 120) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, parsed)
+
+
+def _prompt578_changed_tracked_files(repo_path: Path) -> list[str]:
+    completed = subprocess.run(
+        ["git", "diff", "--name-only", "--"],
+        cwd=str(repo_path),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return []
+    return sorted(
+        {
+            line.strip()
+            for line in completed.stdout.splitlines()
+            if line.strip()
+        }
+    )
+
+
+def _prompt578_default_codex_prompt_text() -> str:
+    return """Mode: Scout
+Goal:
+Inspect the Prompt578 local dispatch environment and report readiness only.
+
+Allowed files:
+- automation/orchestration/planned_runner/runtime_output_wiring.py
+- automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py
+- automation/orchestration/planned_runner/prompt_surfaces/registry.py
+
+Forbidden files:
+- all files not listed above
+
+Expected artifact/output:
+- A concise local-only readiness observation in stdout.
+
+Allowed validation commands:
+- python -m py_compile automation/orchestration/planned_runner/runtime_output_wiring.py automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py automation/orchestration/planned_runner/prompt_surfaces/registry.py
+
+Explicitly out-of-scope items:
+- code edits
+- commits or tags
+- installs
+- systemd, systemctl, sudo, or service operations
+- remote operations
+- persistent services
+"""
+
+
+def _prompt578_prompt_text_from_payload(
+    *,
+    payload: Mapping[str, Any],
+    repo_path: Path,
+    codex_prompt_text: str | None,
+) -> str:
+    if codex_prompt_text is not None:
+        return codex_prompt_text
+    prompt_path_text = _normalize_text(
+        payload.get("prompt577_codex_prompt_path"),
+        default="",
+    )
+    if prompt_path_text:
+        prompt_path = Path(prompt_path_text)
+        if not prompt_path.is_absolute():
+            prompt_path = repo_path / prompt_path
+        try:
+            return prompt_path.read_text(encoding="utf-8")
+        except OSError:
+            pass
+    return _prompt578_default_codex_prompt_text()
+
+
+def run_prompt578_actual_codex_dispatch_cycle_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool = False,
+    enable_token: str = "",
+    codex_prompt_text: str | None = None,
+    timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    dispatch_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT578_DEFAULT_ARTIFACT_DIR
+    )
+    if not dispatch_artifact_dir.is_absolute():
+        dispatch_artifact_dir = repo_path / dispatch_artifact_dir
+
+    timeout = _prompt578_timeout_seconds(
+        timeout_seconds
+        if timeout_seconds is not None
+        else payload.get("prompt578_timeout_seconds", 120),
+        default=120,
+    )
+    prompt577_success_ready = _prompt578_prompt577_success_ready(payload)
+    prompt578_enabled = enabled is True
+    enable_token_valid = (
+        enable_token == PROMPT578_ACTUAL_CODEX_DISPATCH_ENABLE_TOKEN
+    )
+
+    prompt_path = dispatch_artifact_dir / "actual_codex_dispatch_prompt.txt"
+    stdout_path = dispatch_artifact_dir / "actual_codex_dispatch_stdout.txt"
+    stderr_path = dispatch_artifact_dir / "actual_codex_dispatch_stderr.txt"
+    result_path = dispatch_artifact_dir / "actual_codex_dispatch_result.json"
+    summary_path = dispatch_artifact_dir / "actual_codex_dispatch_summary.json"
+
+    command = ["codex", "exec", "-"]
+    codex_command_prepared = prompt577_success_ready
+    codex_prompt_written = False
+    actual_codex_executed = False
+    timeout_occurred = False
+    returncode: int | None = None
+    stdout_text = ""
+    stderr_text = ""
+    dispatch_completed = False
+    dispatch_failed = False
+    dispatch_not_run = False
+    blocked_reasons: list[str] = []
+
+    if not prompt577_success_ready:
+        blocked_reasons.append(
+            "prompt578_prompt577_success_evidence_missing"
+        )
+
+    dispatch_artifact_dir.mkdir(parents=True, exist_ok=True)
+    prompt_text = _prompt578_prompt_text_from_payload(
+        payload=payload,
+        repo_path=repo_path,
+        codex_prompt_text=codex_prompt_text,
+    )
+    prompt_path.write_text(prompt_text, encoding="utf-8")
+    codex_prompt_written = prompt_path.is_file()
+
+    if prompt577_success_ready:
+        if prompt578_enabled and enable_token_valid:
+            try:
+                completed = subprocess.run(
+                    command,
+                    cwd=str(repo_path),
+                    input=prompt_text,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+                actual_codex_executed = True
+                stdout_text = completed.stdout
+                stderr_text = completed.stderr
+                returncode = completed.returncode
+            except subprocess.TimeoutExpired as exc:
+                actual_codex_executed = True
+                timeout_occurred = True
+                returncode = -1
+                stdout_text = _coerce_output_text(exc.stdout)
+                stderr_text = _coerce_output_text(exc.stderr)
+            except Exception as exc:
+                actual_codex_executed = True
+                returncode = -1
+                stderr_text = str(exc)
+        else:
+            dispatch_not_run = True
+
+    if actual_codex_executed and returncode == 0 and not timeout_occurred:
+        returncode_classification = "success"
+        dispatch_completed = True
+    elif actual_codex_executed:
+        returncode_classification = "failed"
+        dispatch_failed = True
+    else:
+        returncode_classification = "not_run"
+        dispatch_not_run = True
+
+    changed_tracked_files = _prompt578_changed_tracked_files(repo_path)
+    tracked_files_modified_by_codex = bool(
+        actual_codex_executed and changed_tracked_files
+    )
+    final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
+        repo_path=repo_path,
+        daemon_artifact_dir=dispatch_artifact_dir,
+    )
+
+    commit_performed = False
+    installation_performed = False
+    systemd_used = False
+    service_enable_performed = False
+    service_start_performed = False
+    persistent_service_started = False
+    remote_workflow_included = False
+    no_remote_mutation_verified = True
+
+    if prompt577_success_ready and not codex_prompt_written:
+        blocked_reasons.append("missing_prompt578_codex_prompt_written")
+    if dispatch_failed:
+        blocked_reasons.append("prompt578_actual_codex_dispatch_failed")
+
+    completion_claim_allowed = bool(
+        prompt577_success_ready
+        and prompt578_enabled
+        and enable_token_valid
+        and actual_codex_executed
+        and codex_command_prepared
+        and codex_prompt_written
+        and dispatch_completed
+        and not dispatch_not_run
+        and not timeout_occurred
+        and returncode == 0
+        and returncode_classification == "success"
+        and not commit_performed
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and not blocked_reasons
+    )
+
+    if not prompt577_success_ready:
+        status = "blocked_actual_codex_dispatch_cycle_missing_prerequisite"
+        next_action = (
+            "manual_review_prompt578_actual_codex_dispatch_cycle_prerequisite"
+        )
+    elif dispatch_completed:
+        status = "actual_codex_dispatch_cycle_executed_local_only"
+        next_action = "verify_actual_codex_dispatch_result"
+    elif dispatch_not_run and not dispatch_failed:
+        status = "actual_codex_dispatch_cycle_ready_not_run_local_only"
+        next_action = "provide_explicit_enable_token_for_actual_codex_dispatch"
+    else:
+        status = "blocked_actual_codex_dispatch_cycle_failed"
+        next_action = "manual_review_prompt578_actual_codex_dispatch_cycle_failed"
+
+    success = bool(completion_claim_allowed)
+    actual_codex_dispatch_ready = bool(
+        prompt577_success_ready and codex_command_prepared and codex_prompt_written
+    )
+    if prompt577_success_ready:
+        stdout_path.write_text(stdout_text, encoding="utf-8")
+        stderr_path.write_text(stderr_text, encoding="utf-8")
+    else:
+        stdout_path.write_text(stdout_text, encoding="utf-8")
+        stderr_path.write_text(stderr_text, encoding="utf-8")
+
+    result_payload: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt578",
+        "command": command,
+        "shell": False,
+        "timeout_seconds": timeout,
+        "timeout_occurred": timeout_occurred,
+        "returncode": returncode,
+        "returncode_classification": returncode_classification,
+        "actual_codex_executed": actual_codex_executed,
+        "dispatch_completed": dispatch_completed,
+        "dispatch_failed": dispatch_failed,
+        "dispatch_not_run": dispatch_not_run,
+        "no_remote_mutation_verified": no_remote_mutation_verified,
+    }
+    _write_json(result_path, result_payload)
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt578",
+        "prompt578_actual_codex_dispatch_cycle_status": status,
+        "prompt578_actual_codex_dispatch_cycle_ready": (
+            actual_codex_dispatch_ready
+        ),
+        "prompt578_actual_codex_dispatch_cycle_success": success,
+        "prompt578_prompt577_success_ready": prompt577_success_ready,
+        "prompt578_enabled": prompt578_enabled,
+        "prompt578_enable_token_valid": enable_token_valid,
+        "prompt578_actual_codex_dispatch_ready": actual_codex_dispatch_ready,
+        "prompt578_actual_codex_executed": actual_codex_executed,
+        "prompt578_codex_command_prepared": codex_command_prepared,
+        "prompt578_codex_prompt_written": codex_prompt_written,
+        "prompt578_stdout_path": str(stdout_path),
+        "prompt578_stderr_path": str(stderr_path),
+        "prompt578_result_path": str(result_path),
+        "prompt578_summary_path": str(summary_path),
+        "prompt578_timeout_seconds": timeout,
+        "prompt578_timeout_occurred": timeout_occurred,
+        "prompt578_returncode": returncode,
+        "prompt578_returncode_classification": returncode_classification,
+        "prompt578_dispatch_completed": dispatch_completed,
+        "prompt578_dispatch_failed": dispatch_failed,
+        "prompt578_dispatch_not_run": dispatch_not_run,
+        "prompt578_tracked_files_modified_by_codex": (
+            tracked_files_modified_by_codex
+        ),
+        "prompt578_changed_tracked_files": changed_tracked_files,
+        "prompt578_commit_performed": commit_performed,
+        "prompt578_installation_performed": installation_performed,
+        "prompt578_systemd_used": systemd_used,
+        "prompt578_service_enable_performed": service_enable_performed,
+        "prompt578_service_start_performed": service_start_performed,
+        "prompt578_persistent_service_started": persistent_service_started,
+        "prompt578_remote_workflow_included": remote_workflow_included,
+        "prompt578_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt578_final_worktree_clean": final_worktree_clean,
+        "prompt578_completion_claim_allowed": completion_claim_allowed,
+        "prompt578_next_action": next_action,
+        "prompt578_blocked_reasons": blocked_reasons,
+    }
+    _write_json(summary_path, summary)
     return summary
 
 
