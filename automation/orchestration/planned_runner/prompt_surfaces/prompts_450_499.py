@@ -27688,6 +27688,240 @@ def _build_prompt576_bounded_multi_cycle_daemon_runner_state(
     }
 
 
+def _build_prompt577_actual_autonomous_development_cycle_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    def _prompt577_int(value: Any, *, default: int = 0) -> int:
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return default
+
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt576_success_ready = bool(
+        payload.get("prompt576_bounded_multi_cycle_daemon_runner_success")
+        is True
+        and payload.get("prompt576_prompt575_success_ready") is True
+        and _prompt577_int(payload.get("prompt576_requested_cycles")) == 3
+        and _prompt577_int(payload.get("prompt576_completed_cycles")) == 3
+        and _prompt577_int(payload.get("prompt576_failed_cycles")) == 0
+        and _prompt577_int(payload.get("prompt576_cycle_summaries_written")) == 3
+        and payload.get("prompt576_heartbeat_written") is True
+        and payload.get("prompt576_resume_state_written") is True
+        and payload.get("prompt576_aggregate_summary_written") is True
+        and payload.get("prompt576_stop_reason") == "max_cycles_reached"
+        and payload.get("prompt576_max_cycles_reached") is True
+        and payload.get("prompt576_daemon_started") is True
+        and payload.get("prompt576_daemon_stopped") is True
+        and payload.get("prompt576_installation_performed") is False
+        and payload.get("prompt576_systemd_used") is False
+        and payload.get("prompt576_service_enable_performed") is False
+        and payload.get("prompt576_service_start_performed") is False
+        and payload.get("prompt576_persistent_service_started") is False
+        and payload.get("prompt576_remote_workflow_included") is False
+        and payload.get("prompt576_no_remote_mutation_verified") is True
+        and payload.get("prompt576_final_worktree_clean") is True
+        and payload.get("prompt576_completion_claim_allowed") is True
+    )
+    direction_written = payload.get("prompt577_direction_written") is True
+    codex_prompt_written = (
+        payload.get("prompt577_codex_prompt_written") is True
+    )
+    verification_command_written = (
+        payload.get("prompt577_verification_command_written") is True
+    )
+    evaluation_rubric_written = (
+        payload.get("prompt577_evaluation_rubric_written") is True
+    )
+    retry_fix_route_written = (
+        payload.get("prompt577_retry_fix_route_written") is True
+    )
+    bridge_summary_written = (
+        payload.get("prompt577_bridge_summary_written") is True
+    )
+    target_next_prompt = _normalize_text(
+        payload.get("prompt577_target_next_prompt"),
+        default="prompt578",
+    )
+    cycle_type = _normalize_text(
+        payload.get("prompt577_cycle_type"),
+        default="actual_codex_development_cycle",
+    )
+    actual_codex_dispatch_ready = (
+        payload.get("prompt577_actual_codex_dispatch_ready") is True
+    )
+    actual_codex_executed = (
+        payload.get("prompt577_actual_codex_executed") is True
+    )
+    tracked_files_modified_during_runtime = (
+        payload.get("prompt577_tracked_files_modified_during_runtime") is True
+    )
+    commit_performed = payload.get("prompt577_commit_performed") is True
+    installation_performed = (
+        payload.get("prompt577_installation_performed") is True
+    )
+    systemd_used = payload.get("prompt577_systemd_used") is True
+    service_enable_performed = (
+        payload.get("prompt577_service_enable_performed") is True
+    )
+    service_start_performed = (
+        payload.get("prompt577_service_start_performed") is True
+    )
+    persistent_service_started = (
+        payload.get("prompt577_persistent_service_started") is True
+    )
+    remote_workflow_included = (
+        payload.get("prompt577_remote_workflow_included") is True
+    )
+    no_remote_mutation_verified = (
+        payload.get("prompt577_no_remote_mutation_verified") is True
+    )
+    final_worktree_clean = (
+        payload.get("prompt577_final_worktree_clean") is True
+    )
+    blocked_reasons = list(payload.get("prompt577_blocked_reasons") or [])
+
+    readiness_checks = (
+        ("prompt577_prompt576_success_ready", prompt576_success_ready),
+        ("prompt577_direction_written", direction_written),
+        ("prompt577_codex_prompt_written", codex_prompt_written),
+        (
+            "prompt577_verification_command_written",
+            verification_command_written,
+        ),
+        ("prompt577_evaluation_rubric_written", evaluation_rubric_written),
+        ("prompt577_retry_fix_route_written", retry_fix_route_written),
+        ("prompt577_bridge_summary_written", bridge_summary_written),
+        (
+            "prompt577_target_next_prompt_prompt578",
+            target_next_prompt == "prompt578",
+        ),
+        (
+            "prompt577_cycle_type_actual_codex_development_cycle",
+            cycle_type == "actual_codex_development_cycle",
+        ),
+        (
+            "prompt577_actual_codex_dispatch_ready",
+            actual_codex_dispatch_ready,
+        ),
+        ("prompt577_actual_codex_executed_false", not actual_codex_executed),
+        (
+            "prompt577_tracked_files_modified_during_runtime_false",
+            not tracked_files_modified_during_runtime,
+        ),
+        ("prompt577_commit_performed_false", not commit_performed),
+        (
+            "prompt577_installation_performed_false",
+            not installation_performed,
+        ),
+        ("prompt577_systemd_used_false", not systemd_used),
+        (
+            "prompt577_service_enable_performed_false",
+            not service_enable_performed,
+        ),
+        (
+            "prompt577_service_start_performed_false",
+            not service_start_performed,
+        ),
+        (
+            "prompt577_persistent_service_started_false",
+            not persistent_service_started,
+        ),
+        (
+            "prompt577_remote_workflow_included_false",
+            not remote_workflow_included,
+        ),
+        (
+            "prompt577_no_remote_mutation_verified",
+            no_remote_mutation_verified,
+        ),
+        ("prompt577_final_worktree_clean", final_worktree_clean),
+    )
+    for field, passed in readiness_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    success = bool(
+        payload.get(
+            "prompt577_actual_autonomous_development_cycle_bridge_success"
+        )
+        is True
+        and all(passed for _, passed in readiness_checks)
+        and not blocked_reasons
+    )
+    if success:
+        status = (
+            "actual_autonomous_development_cycle_bridge_ready_local_only"
+        )
+    elif not prompt576_success_ready:
+        status = (
+            "blocked_actual_autonomous_development_cycle_bridge_missing_prerequisite"
+        )
+    else:
+        status = _normalize_text(
+            payload.get(
+                "prompt577_actual_autonomous_development_cycle_bridge_status"
+            ),
+            default="blocked_actual_autonomous_development_cycle_bridge_failed",
+        )
+    next_action = (
+        _normalize_text(
+            payload.get("prompt577_next_action"),
+            default="prepare_prompt578_actual_codex_dispatch_cycle",
+        )
+        if success
+        else (
+            "manual_review_prompt577_actual_autonomous_development_cycle_bridge_failed"
+        )
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt577",
+        "prompt577_actual_autonomous_development_cycle_bridge_status": status,
+        "prompt577_actual_autonomous_development_cycle_bridge_ready": (
+            prompt576_success_ready
+        ),
+        "prompt577_actual_autonomous_development_cycle_bridge_success": success,
+        "prompt577_prompt576_success_ready": prompt576_success_ready,
+        "prompt577_direction_written": direction_written,
+        "prompt577_codex_prompt_written": codex_prompt_written,
+        "prompt577_verification_command_written": verification_command_written,
+        "prompt577_evaluation_rubric_written": evaluation_rubric_written,
+        "prompt577_retry_fix_route_written": retry_fix_route_written,
+        "prompt577_bridge_summary_written": bridge_summary_written,
+        "prompt577_target_next_prompt": target_next_prompt,
+        "prompt577_cycle_type": cycle_type,
+        "prompt577_actual_codex_dispatch_ready": actual_codex_dispatch_ready,
+        "prompt577_actual_codex_executed": actual_codex_executed,
+        "prompt577_tracked_files_modified_during_runtime": (
+            tracked_files_modified_during_runtime
+        ),
+        "prompt577_commit_performed": commit_performed,
+        "prompt577_installation_performed": installation_performed,
+        "prompt577_systemd_used": systemd_used,
+        "prompt577_service_enable_performed": service_enable_performed,
+        "prompt577_service_start_performed": service_start_performed,
+        "prompt577_persistent_service_started": persistent_service_started,
+        "prompt577_remote_workflow_included": remote_workflow_included,
+        "prompt577_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt577_final_worktree_clean": final_worktree_clean,
+        "prompt577_completion_claim_allowed": success,
+        "prompt577_next_action": next_action,
+        "prompt577_blocked_reasons": blocked_reasons,
+        "prompt577_prompt_surface": (
+            "Actual autonomous development cycle bridge only; prepares "
+            "direction, Codex prompt, verification command, evaluation rubric, "
+            "retry route, and summary artifacts for Prompt578, does not invoke "
+            "Codex, does not modify tracked files during runtime, does not "
+            "commit or tag, and excludes install, systemd, systemctl, sudo, "
+            "persistent service start, and remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -29575,4 +29809,5 @@ __all__ = [
     "_build_prompt574_observed_daemon_run_gate_state",
     "_build_prompt575_manual_service_install_gate_state",
     "_build_prompt576_bounded_multi_cycle_daemon_runner_state",
+    "_build_prompt577_actual_autonomous_development_cycle_bridge_state",
 ]

@@ -238,6 +238,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt574_observed_daemon_run_gate_state,
     _build_prompt575_manual_service_install_gate_state,
     _build_prompt576_bounded_multi_cycle_daemon_runner_state,
+    _build_prompt577_actual_autonomous_development_cycle_bridge_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -472,6 +473,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt574_observed_daemon_run_gate_state": _build_prompt574_observed_daemon_run_gate_state,
     "_build_prompt575_manual_service_install_gate_state": _build_prompt575_manual_service_install_gate_state,
     "_build_prompt576_bounded_multi_cycle_daemon_runner_state": _build_prompt576_bounded_multi_cycle_daemon_runner_state,
+    "_build_prompt577_actual_autonomous_development_cycle_bridge_state": _build_prompt577_actual_autonomous_development_cycle_bridge_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -710,4 +712,5 @@ __all__ = [
     "_build_prompt574_observed_daemon_run_gate_state",
     "_build_prompt575_manual_service_install_gate_state",
     "_build_prompt576_bounded_multi_cycle_daemon_runner_state",
+    "_build_prompt577_actual_autonomous_development_cycle_bridge_state",
 ]
