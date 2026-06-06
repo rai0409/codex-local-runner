@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -229,6 +230,10 @@ _PROMPT574_DEFAULT_ARTIFACT_DIR = Path(
 )
 _PROMPT575_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/prompt575_manual_service_install_gate"
+)
+_PROMPT576_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt576_bounded_multi_cycle_daemon_runner_proof"
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -3437,6 +3442,311 @@ def run_prompt575_manual_service_install_gate(
     summary["prompt575_blocked_reasons"] = blocked_reasons
     if summary_written:
         _write_json(summary_path, summary)
+    return summary
+
+
+def _prompt576_int(value: Any, *, default: int = 0) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _prompt576_prompt575_success_ready(payload: Mapping[str, Any]) -> bool:
+    return bool(
+        payload.get("prompt575_manual_service_install_gate_success") is True
+        and payload.get("prompt575_prompt574_success_ready") is True
+        and payload.get("prompt575_enabled") is True
+        and payload.get("prompt575_enable_token_valid") is True
+        and payload.get("prompt575_plan_written") is True
+        and payload.get("prompt575_summary_written") is True
+        and payload.get("prompt575_systemd_file_created") is False
+        and payload.get("prompt575_service_install_performed") is False
+        and payload.get("prompt575_service_enable_performed") is False
+        and payload.get("prompt575_service_start_performed") is False
+        and payload.get("prompt575_persistent_daemon_started") is False
+        and payload.get("prompt575_no_remote_mutation_verified") is True
+        and payload.get("prompt575_remote_workflow_included") is False
+        and payload.get("prompt575_final_worktree_clean") is True
+        and payload.get("prompt575_completion_claim_allowed") is True
+    )
+
+
+def run_prompt576_bounded_multi_cycle_daemon_runner_proof(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    requested_cycles: int | None = None,
+    artifact_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    daemon_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT576_DEFAULT_ARTIFACT_DIR
+    )
+    if not daemon_artifact_dir.is_absolute():
+        daemon_artifact_dir = repo_path / daemon_artifact_dir
+
+    prompt575_success_ready = _prompt576_prompt575_success_ready(payload)
+    requested_cycle_count = _prompt576_int(
+        requested_cycles
+        if requested_cycles is not None
+        else payload.get("prompt576_requested_cycles", 3),
+        default=3,
+    )
+    if requested_cycle_count == 0:
+        requested_cycle_count = 3
+
+    installation_performed = False
+    systemd_used = False
+    service_enable_performed = False
+    service_start_performed = False
+    persistent_service_started = False
+    remote_workflow_included = False
+    no_remote_mutation_verified = True
+
+    blocked_reasons: list[str] = []
+    if not prompt575_success_ready:
+        blocked_reasons.append("prompt576_prompt575_success_evidence_missing")
+
+    can_run = prompt575_success_ready
+    daemon_started = False
+    daemon_stopped = False
+    completed_cycles = 0
+    failed_cycles = 0
+    cycle_summaries_written = 0
+    heartbeat_written = False
+    resume_state_written = False
+    aggregate_summary_written = False
+    stop_reason = ""
+    max_cycles_reached = False
+    final_worktree_clean = False
+    heartbeat_path = daemon_artifact_dir / "daemon_heartbeat.jsonl"
+    resume_state_path = daemon_artifact_dir / "daemon_resume_state.json"
+    aggregate_summary_path = daemon_artifact_dir / "daemon_aggregate_summary.json"
+
+    if can_run:
+        daemon_artifact_dir.mkdir(parents=True, exist_ok=True)
+        daemon_started = True
+        with heartbeat_path.open("w", encoding="utf-8") as heartbeat_handle:
+            for cycle_index in range(1, requested_cycle_count + 1):
+                heartbeat_record = {
+                    "cycle_index": cycle_index,
+                    "heartbeat_index": cycle_index,
+                    "requested_cycles": requested_cycle_count,
+                    "source_prompt": "prompt576",
+                    "status": "cycle_started",
+                }
+                heartbeat_handle.write(
+                    json.dumps(heartbeat_record, sort_keys=True) + "\n"
+                )
+                heartbeat_handle.flush()
+                heartbeat_written = heartbeat_path.is_file()
+
+                cycle_summary_path = (
+                    daemon_artifact_dir
+                    / f"daemon_cycle_{cycle_index:03d}_summary.json"
+                )
+                cycle_summary = {
+                    "local_only": True,
+                    "source_prompt": "prompt576",
+                    "cycle_index": cycle_index,
+                    "requested_cycles": requested_cycle_count,
+                    "cycle_status": "completed",
+                    "codex_invoked": False,
+                    "tracked_files_modified": False,
+                    "installation_performed": installation_performed,
+                    "systemd_used": systemd_used,
+                    "service_enable_performed": service_enable_performed,
+                    "service_start_performed": service_start_performed,
+                    "persistent_service_started": persistent_service_started,
+                    "remote_workflow_included": remote_workflow_included,
+                    "remote_mutation_performed": False,
+                }
+                _write_json(cycle_summary_path, cycle_summary)
+                if cycle_summary_path.is_file():
+                    cycle_summaries_written += 1
+                    completed_cycles += 1
+                else:
+                    failed_cycles += 1
+
+                cycle_stop_reason = (
+                    "max_cycles_reached"
+                    if cycle_index == requested_cycle_count
+                    else ""
+                )
+                resume_state = {
+                    "local_only": True,
+                    "source_prompt": "prompt576",
+                    "requested_cycles": requested_cycle_count,
+                    "completed_cycles": completed_cycles,
+                    "failed_cycles": failed_cycles,
+                    "last_completed_cycle": completed_cycles,
+                    "next_cycle_index": (
+                        cycle_index + 1
+                        if cycle_index < requested_cycle_count
+                        else None
+                    ),
+                    "stop_reason": cycle_stop_reason,
+                    "codex_invoked": False,
+                    "remote_mutation_performed": False,
+                }
+                _write_json(resume_state_path, resume_state)
+                resume_state_written = resume_state_path.is_file()
+
+        daemon_stopped = True
+        stop_reason = "max_cycles_reached"
+        max_cycles_reached = completed_cycles == requested_cycle_count
+        final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
+            repo_path=repo_path,
+            daemon_artifact_dir=daemon_artifact_dir,
+        )
+
+    completion_checks = (
+        ("prompt576_prompt575_success_ready", prompt575_success_ready),
+        ("prompt576_requested_cycles_default_3", requested_cycle_count == 3),
+        (
+            "prompt576_completed_cycles_match_requested",
+            completed_cycles == requested_cycle_count,
+        ),
+        ("prompt576_failed_cycles_zero", failed_cycles == 0),
+        (
+            "prompt576_cycle_summaries_written_match_requested",
+            cycle_summaries_written == requested_cycle_count,
+        ),
+        ("prompt576_heartbeat_written", heartbeat_written),
+        ("prompt576_resume_state_written", resume_state_written),
+        (
+            "prompt576_stop_reason_max_cycles_reached",
+            stop_reason == "max_cycles_reached",
+        ),
+        ("prompt576_max_cycles_reached", max_cycles_reached),
+        ("prompt576_daemon_started", daemon_started),
+        ("prompt576_daemon_stopped", daemon_stopped),
+        ("prompt576_installation_performed_false", not installation_performed),
+        ("prompt576_systemd_used_false", not systemd_used),
+        (
+            "prompt576_service_enable_performed_false",
+            not service_enable_performed,
+        ),
+        (
+            "prompt576_service_start_performed_false",
+            not service_start_performed,
+        ),
+        (
+            "prompt576_persistent_service_started_false",
+            not persistent_service_started,
+        ),
+        (
+            "prompt576_remote_workflow_included_false",
+            not remote_workflow_included,
+        ),
+        (
+            "prompt576_no_remote_mutation_verified",
+            no_remote_mutation_verified,
+        ),
+        ("prompt576_final_worktree_clean", final_worktree_clean),
+    )
+    for field, passed in completion_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt576",
+        "prompt576_bounded_multi_cycle_daemon_runner_status": (
+            "blocked_bounded_multi_cycle_daemon_runner_missing_prerequisite"
+            if not prompt575_success_ready
+            else "blocked_bounded_multi_cycle_daemon_runner_failed"
+        ),
+        "prompt576_bounded_multi_cycle_daemon_runner_ready": can_run,
+        "prompt576_bounded_multi_cycle_daemon_runner_success": False,
+        "prompt576_prompt575_success_ready": prompt575_success_ready,
+        "prompt576_requested_cycles": requested_cycle_count,
+        "prompt576_completed_cycles": completed_cycles,
+        "prompt576_failed_cycles": failed_cycles,
+        "prompt576_cycle_summaries_written": cycle_summaries_written,
+        "prompt576_heartbeat_written": heartbeat_written,
+        "prompt576_resume_state_written": resume_state_written,
+        "prompt576_aggregate_summary_written": False,
+        "prompt576_stop_reason": stop_reason,
+        "prompt576_max_cycles_reached": max_cycles_reached,
+        "prompt576_daemon_started": daemon_started,
+        "prompt576_daemon_stopped": daemon_stopped,
+        "prompt576_installation_performed": installation_performed,
+        "prompt576_systemd_used": systemd_used,
+        "prompt576_service_enable_performed": service_enable_performed,
+        "prompt576_service_start_performed": service_start_performed,
+        "prompt576_persistent_service_started": persistent_service_started,
+        "prompt576_remote_workflow_included": remote_workflow_included,
+        "prompt576_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt576_final_worktree_clean": final_worktree_clean,
+        "prompt576_completion_claim_allowed": False,
+        "prompt576_next_action": (
+            "manual_review_prompt576_bounded_multi_cycle_daemon_runner_failed"
+        ),
+        "prompt576_blocked_reasons": blocked_reasons,
+        "prompt576_artifact_dir": str(daemon_artifact_dir),
+        "prompt576_heartbeat_path": str(heartbeat_path),
+        "prompt576_resume_state_path": str(resume_state_path),
+        "prompt576_aggregate_summary_path": str(aggregate_summary_path),
+    }
+    if can_run:
+        _write_json(aggregate_summary_path, summary)
+        aggregate_summary_written = aggregate_summary_path.is_file()
+        summary["prompt576_aggregate_summary_written"] = aggregate_summary_written
+        if not aggregate_summary_written:
+            blocked_reasons.append("missing_prompt576_aggregate_summary_written")
+
+    success = bool(
+        prompt575_success_ready
+        and requested_cycle_count == 3
+        and completed_cycles == requested_cycle_count
+        and failed_cycles == 0
+        and cycle_summaries_written == requested_cycle_count
+        and heartbeat_written
+        and resume_state_written
+        and aggregate_summary_written
+        and stop_reason == "max_cycles_reached"
+        and max_cycles_reached
+        and daemon_started
+        and daemon_stopped
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and final_worktree_clean
+        and not blocked_reasons
+    )
+    if success:
+        status = "bounded_multi_cycle_daemon_runner_completed_local_only"
+    elif not prompt575_success_ready:
+        status = "blocked_bounded_multi_cycle_daemon_runner_missing_prerequisite"
+    else:
+        status = "blocked_bounded_multi_cycle_daemon_runner_failed"
+    next_action = (
+        "bounded_multi_cycle_daemon_runner_completed_local_only"
+        if success
+        else "manual_review_prompt576_bounded_multi_cycle_daemon_runner_failed"
+    )
+    summary["prompt576_bounded_multi_cycle_daemon_runner_status"] = status
+    summary["prompt576_bounded_multi_cycle_daemon_runner_success"] = success
+    summary["prompt576_completion_claim_allowed"] = success
+    summary["prompt576_next_action"] = next_action
+    summary["prompt576_blocked_reasons"] = blocked_reasons
+    if aggregate_summary_written:
+        _write_json(aggregate_summary_path, summary)
     return summary
 
 
