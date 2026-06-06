@@ -2852,47 +2852,75 @@ def _prompt574_run_noop_daemon_simulator(
     timeout_seconds: int,
 ) -> dict[str, Any]:
     heartbeat_path = artifact_dir / "observed_daemon_heartbeats.jsonl"
-    script = (
-        "import json, pathlib, sys, time\n"
-        "path = pathlib.Path(sys.argv[1])\n"
-        "count = int(sys.argv[2])\n"
-        "interval = float(sys.argv[3])\n"
-        "with path.open('w', encoding='utf-8') as handle:\n"
-        "    for index in range(1, count + 1):\n"
-        "        handle.write(json.dumps({"
-        "'heartbeat_index': index, "
-        "'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())"
-        "}, sort_keys=True) + '\\n')\n"
-        "        handle.flush()\n"
-        "        time.sleep(interval)\n"
+    child_script_path = artifact_dir / "observed_daemon_child.py"
+    stdout_path = artifact_dir / "observed_daemon_stdout.txt"
+    stderr_path = artifact_dir / "observed_daemon_stderr.txt"
+    child_script = (
+        "from __future__ import annotations\n"
+        "\n"
+        "import json\n"
+        "from pathlib import Path\n"
+        "import sys\n"
+        "\n"
+        "\n"
+        "def main() -> int:\n"
+        "    heartbeat_path = Path(sys.argv[1])\n"
+        "    heartbeat_count = max(1, int(sys.argv[2]))\n"
+        "    heartbeat_path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "    with heartbeat_path.open('w', encoding='utf-8') as handle:\n"
+        "        for index in range(1, heartbeat_count + 1):\n"
+        "            record = {\n"
+        "                'heartbeat_index': index,\n"
+        "                'heartbeat_total': heartbeat_count,\n"
+        "                'source_prompt': 'prompt574',\n"
+        "            }\n"
+        "            handle.write(json.dumps(record, sort_keys=True) + '\\n')\n"
+        "            handle.flush()\n"
+        "    print(\n"
+        "        json.dumps(\n"
+        "            {\n"
+        "                'heartbeat_count': heartbeat_count,\n"
+        "                'heartbeat_path': str(heartbeat_path),\n"
+        "                'source_prompt': 'prompt574',\n"
+        "            },\n"
+        "            sort_keys=True,\n"
+        "        )\n"
+        "    )\n"
+        "    return 0\n"
+        "\n"
+        "\n"
+        "if __name__ == '__main__':\n"
+        "    raise SystemExit(main())\n"
     )
+    child_script_path.write_text(child_script, encoding="utf-8")
+    command = [
+        sys.executable,
+        str(child_script_path.resolve()),
+        str(heartbeat_path.resolve()),
+        str(max(1, int(heartbeat_count))),
+    ]
     start_timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    process = subprocess.Popen(
-        [
-            sys.executable,
-            "-c",
-            script,
-            str(heartbeat_path),
-            str(heartbeat_count),
-            str(interval_seconds),
-        ],
-        cwd=str(artifact_dir),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
-    returncode: int | None
-    timed_out = False
-    try:
-        returncode = process.wait(timeout=max(1, int(timeout_seconds)))
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        process.terminate()
-        try:
-            returncode = process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            returncode = process.wait(timeout=5)
+    with stdout_path.open("w", encoding="utf-8") as stdout_handle:
+        with stderr_path.open("w", encoding="utf-8") as stderr_handle:
+            process = subprocess.Popen(
+                command,
+                cwd=str(artifact_dir),
+                stdout=stdout_handle,
+                stderr=stderr_handle,
+                text=True,
+            )
+            returncode: int | None
+            timed_out = False
+            try:
+                returncode = process.wait(timeout=max(1, int(timeout_seconds)))
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                process.terminate()
+                try:
+                    returncode = process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    returncode = process.wait(timeout=5)
     stop_timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     observed_heartbeats = 0
     try:
@@ -2903,12 +2931,27 @@ def _prompt574_run_noop_daemon_simulator(
         )
     except OSError:
         observed_heartbeats = 0
+    try:
+        stdout_snippet = stdout_path.read_text(encoding="utf-8")[:1000]
+    except OSError:
+        stdout_snippet = ""
+    try:
+        stderr_snippet = stderr_path.read_text(encoding="utf-8")[:1000]
+    except OSError:
+        stderr_snippet = ""
     return {
         "pid": process.pid,
         "returncode": returncode,
         "timed_out": timed_out,
+        "command": command,
+        "child_script_path": str(child_script_path),
         "heartbeat_path": str(heartbeat_path),
         "observed_heartbeats": observed_heartbeats,
+        "stdout_path": str(stdout_path),
+        "stderr_path": str(stderr_path),
+        "stdout_snippet": stdout_snippet,
+        "stderr_snippet": stderr_snippet,
+        "interval_seconds": interval_seconds,
         "start_timestamp": start_timestamp,
         "stop_timestamp": stop_timestamp,
     }
