@@ -2579,21 +2579,44 @@ def run_prompt572_longer_soak_stability_gate(
         and requested_max_daemon_runs == 1
     )
     if can_execute_soak:
-        prompt569_artifact_dir = longer_soak_artifact_dir / "prompt569_soak_runner"
-        prompt569_result = run_prompt569_soak_runner_supervisor_wrapper(
-            run_state_payload=payload,
-            execution_repo_path=str(repo_path),
-            enabled=True,
-            enable_token=PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN,
-            timeout_seconds=timeout_seconds,
-            allowed_files=allowed_files,
-            max_cycles=requested_max_cycles,
-            stop_on_failure=True,
-            max_daemon_runs=requested_max_daemon_runs,
-            soak_runs=requested_soak_runs,
-            artifact_dir=prompt569_artifact_dir,
-            resume_state_path=resume_path,
+        longer_soak_artifact_dir_inside_repo = (
+            longer_soak_artifact_dir.resolve().is_relative_to(
+                repo_path.resolve()
+            )
         )
+        prompt569_temp_dir = (
+            __import__("tempfile").TemporaryDirectory()
+            if longer_soak_artifact_dir_inside_repo
+            else __import__("contextlib").nullcontext(None)
+        )
+        with prompt569_temp_dir as prompt569_temp_dir_text:
+            if prompt569_temp_dir_text is None:
+                prompt569_artifact_dir = (
+                    longer_soak_artifact_dir / "prompt569_soak_runner"
+                )
+                prompt569_resume_state_path = resume_path
+            else:
+                prompt569_temp_path = Path(prompt569_temp_dir_text)
+                prompt569_artifact_dir = (
+                    prompt569_temp_path / "prompt569_soak_runner"
+                )
+                prompt569_resume_state_path = (
+                    prompt569_temp_path / "prompt569_resume_state.json"
+                )
+            prompt569_result = run_prompt569_soak_runner_supervisor_wrapper(
+                run_state_payload=payload,
+                execution_repo_path=str(repo_path),
+                enabled=True,
+                enable_token=PROMPT569_SOAK_RUNNER_SUPERVISOR_WRAPPER_ENABLE_TOKEN,
+                timeout_seconds=timeout_seconds,
+                allowed_files=allowed_files,
+                max_cycles=requested_max_cycles,
+                stop_on_failure=True,
+                max_daemon_runs=requested_max_daemon_runs,
+                soak_runs=requested_soak_runs,
+                artifact_dir=prompt569_artifact_dir,
+                resume_state_path=prompt569_resume_state_path,
+            )
 
     confirmed_soak_runs = _prompt572_int(
         prompt569_result.get("prompt569_soak_runs_executed")
