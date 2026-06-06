@@ -246,6 +246,10 @@ _PROMPT578_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt578_actual_codex_dispatch_cycle"
 )
+_PROMPT579_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt579_actual_dispatch_result_ingestion"
+)
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
     Path("artifacts/runtime_commands/prompt568_production_hardening"),
@@ -4803,6 +4807,532 @@ def run_prompt578_actual_codex_dispatch_cycle_gate(
         "prompt578_blocked_reasons": blocked_reasons,
     }
     _write_json(summary_path, summary)
+    return summary
+
+
+def _prompt579_string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, Iterable):
+        values = [item for item in value]
+    else:
+        return []
+    return sorted(
+        {
+            text
+            for item in values
+            if (text := _normalize_text(item, default=""))
+        }
+    )
+
+
+def _prompt579_prompt578_success_ready(
+    payload: Mapping[str, Any],
+) -> tuple[bool, list[str]]:
+    required_checks = (
+        (
+            "prompt578_actual_codex_dispatch_cycle_success",
+            payload.get("prompt578_actual_codex_dispatch_cycle_success") is True,
+        ),
+        (
+            "prompt578_prompt577_success_ready",
+            payload.get("prompt578_prompt577_success_ready") is True,
+        ),
+        ("prompt578_enabled", payload.get("prompt578_enabled") is True),
+        (
+            "prompt578_enable_token_valid",
+            payload.get("prompt578_enable_token_valid") is True,
+        ),
+        (
+            "prompt578_actual_codex_dispatch_ready",
+            payload.get("prompt578_actual_codex_dispatch_ready") is True,
+        ),
+        (
+            "prompt578_actual_codex_executed",
+            payload.get("prompt578_actual_codex_executed") is True,
+        ),
+        (
+            "prompt578_codex_command_prepared",
+            payload.get("prompt578_codex_command_prepared") is True,
+        ),
+        (
+            "prompt578_codex_prompt_written",
+            payload.get("prompt578_codex_prompt_written") is True,
+        ),
+        (
+            "prompt578_dispatch_completed",
+            payload.get("prompt578_dispatch_completed") is True,
+        ),
+        (
+            "prompt578_dispatch_not_run_false",
+            payload.get("prompt578_dispatch_not_run") is False,
+        ),
+        (
+            "prompt578_timeout_occurred_false",
+            payload.get("prompt578_timeout_occurred") is False,
+        ),
+        ("prompt578_returncode_0", payload.get("prompt578_returncode") == 0),
+        (
+            "prompt578_returncode_classification_success",
+            payload.get("prompt578_returncode_classification") == "success",
+        ),
+        (
+            "prompt578_commit_performed_false",
+            payload.get("prompt578_commit_performed") is False,
+        ),
+        (
+            "prompt578_installation_performed_false",
+            payload.get("prompt578_installation_performed") is False,
+        ),
+        (
+            "prompt578_systemd_used_false",
+            payload.get("prompt578_systemd_used") is False,
+        ),
+        (
+            "prompt578_service_enable_performed_false",
+            payload.get("prompt578_service_enable_performed") is False,
+        ),
+        (
+            "prompt578_service_start_performed_false",
+            payload.get("prompt578_service_start_performed") is False,
+        ),
+        (
+            "prompt578_persistent_service_started_false",
+            payload.get("prompt578_persistent_service_started") is False,
+        ),
+        (
+            "prompt578_remote_workflow_included_false",
+            payload.get("prompt578_remote_workflow_included") is False,
+        ),
+        (
+            "prompt578_no_remote_mutation_verified",
+            payload.get("prompt578_no_remote_mutation_verified") is True,
+        ),
+        (
+            "prompt578_completion_claim_allowed",
+            payload.get("prompt578_completion_claim_allowed") is True,
+        ),
+        (
+            "prompt578_next_action_verify_actual_codex_dispatch_result",
+            payload.get("prompt578_next_action")
+            == "verify_actual_codex_dispatch_result",
+        ),
+        (
+            "prompt578_blocked_reasons_empty",
+            _prompt579_string_list(payload.get("prompt578_blocked_reasons"))
+            == [],
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{name}" for name, ready in required_checks if not ready
+    ]
+    return blocked_reasons == [], blocked_reasons
+
+
+def _prompt579_result_route(
+    *,
+    timeout_occurred: bool,
+    returncode: Any,
+    returncode_classification: str,
+    dispatch_completed: bool,
+    dispatch_failed: bool,
+    dispatch_not_run: bool,
+    tracked_files_modified_by_codex: bool,
+    changed_tracked_files: Sequence[str],
+) -> str:
+    if timeout_occurred:
+        return "timeout_retry_required"
+    if (
+        dispatch_failed
+        or dispatch_not_run
+        or returncode != 0
+        or returncode_classification == "failed"
+    ):
+        return "failed_retry_required"
+    if (
+        dispatch_completed
+        and returncode == 0
+        and returncode_classification == "success"
+    ):
+        if tracked_files_modified_by_codex or changed_tracked_files:
+            return "success_with_tracked_changes"
+        return "success_no_changes"
+    return "manual_review_required"
+
+
+def _prompt579_next_action(result_route: str) -> str:
+    return {
+        "success_no_changes": "prepare_prompt580_real_dev_task_dispatch",
+        "success_with_tracked_changes": (
+            "prepare_prompt580_verify_and_review_codex_changes"
+        ),
+        "failed_retry_required": "prepare_prompt580_retry_fix_dispatch",
+        "timeout_retry_required": "prepare_prompt580_timeout_retry_dispatch",
+        "manual_review_required": (
+            "manual_review_prompt579_actual_dispatch_result_ingestion"
+        ),
+    }[result_route]
+
+
+def _prompt579_text_excerpt(text: str, *, limit: int = 4000) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit]
+
+
+def _prompt579_read_text_if_exists(path_text: str, repo_path: Path) -> str:
+    if not path_text:
+        return ""
+    path = Path(path_text)
+    if not path.is_absolute():
+        path = repo_path / path
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _prompt579_read_json_if_exists(
+    path_text: str,
+    repo_path: Path,
+) -> dict[str, Any]:
+    if not path_text:
+        return {}
+    path = Path(path_text)
+    if not path.is_absolute():
+        path = repo_path / path
+    try:
+        payload = _read_json_object_if_exists(path)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def run_prompt579_actual_dispatch_result_ingestion_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    dispatch_result_payload: Mapping[str, Any] | None = None,
+    stdout_text: str | None = None,
+    stderr_text: str | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    ingestion_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT579_DEFAULT_ARTIFACT_DIR
+    )
+    if not ingestion_artifact_dir.is_absolute():
+        ingestion_artifact_dir = repo_path / ingestion_artifact_dir
+
+    ingested_result_path = (
+        ingestion_artifact_dir / "actual_dispatch_ingested_result.json"
+    )
+    stdout_excerpt_path = (
+        ingestion_artifact_dir / "actual_dispatch_stdout_excerpt.txt"
+    )
+    stderr_excerpt_path = (
+        ingestion_artifact_dir / "actual_dispatch_stderr_excerpt.txt"
+    )
+    evaluation_path = (
+        ingestion_artifact_dir / "actual_dispatch_evaluation.json"
+    )
+    route_path = ingestion_artifact_dir / "actual_dispatch_route.json"
+    summary_path = (
+        ingestion_artifact_dir / "actual_dispatch_ingestion_summary.json"
+    )
+
+    prompt578_success_ready, prerequisite_blocked_reasons = (
+        _prompt579_prompt578_success_ready(payload)
+    )
+    prompt578_actual_codex_executed = (
+        payload.get("prompt578_actual_codex_executed") is True
+    )
+    prompt578_returncode = payload.get("prompt578_returncode")
+    prompt578_returncode_classification = _normalize_text(
+        payload.get("prompt578_returncode_classification"),
+        default="",
+    )
+    prompt578_timeout_occurred = (
+        payload.get("prompt578_timeout_occurred") is True
+    )
+    prompt578_dispatch_completed = (
+        payload.get("prompt578_dispatch_completed") is True
+    )
+    prompt578_dispatch_failed = (
+        payload.get("prompt578_dispatch_failed") is True
+    )
+    prompt578_dispatch_not_run = (
+        payload.get("prompt578_dispatch_not_run") is True
+    )
+    prompt578_changed_tracked_files = _prompt579_string_list(
+        payload.get("prompt578_changed_tracked_files")
+    )
+    prompt578_tracked_files_modified_by_codex = (
+        payload.get("prompt578_tracked_files_modified_by_codex") is True
+        or bool(prompt578_changed_tracked_files)
+    )
+
+    result_payload = (
+        dict(dispatch_result_payload)
+        if isinstance(dispatch_result_payload, Mapping)
+        else _prompt579_read_json_if_exists(
+            _normalize_text(payload.get("prompt578_result_path"), default=""),
+            repo_path,
+        )
+    )
+    stdout_ingested = (
+        stdout_text
+        if stdout_text is not None
+        else _prompt579_read_text_if_exists(
+            _normalize_text(payload.get("prompt578_stdout_path"), default=""),
+            repo_path,
+        )
+    )
+    stderr_ingested = (
+        stderr_text
+        if stderr_text is not None
+        else _prompt579_read_text_if_exists(
+            _normalize_text(payload.get("prompt578_stderr_path"), default=""),
+            repo_path,
+        )
+    )
+
+    result_route = _prompt579_result_route(
+        timeout_occurred=prompt578_timeout_occurred,
+        returncode=prompt578_returncode,
+        returncode_classification=prompt578_returncode_classification,
+        dispatch_completed=prompt578_dispatch_completed,
+        dispatch_failed=prompt578_dispatch_failed,
+        dispatch_not_run=prompt578_dispatch_not_run,
+        tracked_files_modified_by_codex=(
+            prompt578_tracked_files_modified_by_codex
+        ),
+        changed_tracked_files=prompt578_changed_tracked_files,
+    )
+    retry_required = result_route in {
+        "failed_retry_required",
+        "timeout_retry_required",
+    }
+    manual_review_required = result_route == "manual_review_required"
+    success_no_changes = result_route == "success_no_changes"
+    success_with_tracked_changes = result_route == "success_with_tracked_changes"
+
+    ingestion_artifact_dir.mkdir(parents=True, exist_ok=True)
+    ingested_result = {
+        "local_only": True,
+        "source_prompt": "prompt579",
+        "prompt578_result_metadata": result_payload,
+        "prompt578_result_path": _normalize_text(
+            payload.get("prompt578_result_path"),
+            default="",
+        ),
+        "prompt578_stdout_path": _normalize_text(
+            payload.get("prompt578_stdout_path"),
+            default="",
+        ),
+        "prompt578_stderr_path": _normalize_text(
+            payload.get("prompt578_stderr_path"),
+            default="",
+        ),
+    }
+    _write_json(ingested_result_path, ingested_result)
+    stdout_excerpt_path.write_text(
+        _prompt579_text_excerpt(stdout_ingested),
+        encoding="utf-8",
+    )
+    stderr_excerpt_path.write_text(
+        _prompt579_text_excerpt(stderr_ingested),
+        encoding="utf-8",
+    )
+
+    evaluation = {
+        "local_only": True,
+        "source_prompt": "prompt579",
+        "prompt578_prerequisite_ready": prompt578_success_ready,
+        "prompt578_prerequisite_blocked_reasons": (
+            prerequisite_blocked_reasons
+        ),
+        "prompt578_actual_codex_executed": prompt578_actual_codex_executed,
+        "prompt578_returncode": prompt578_returncode,
+        "prompt578_returncode_classification": (
+            prompt578_returncode_classification
+        ),
+        "prompt578_timeout_occurred": prompt578_timeout_occurred,
+        "prompt578_dispatch_completed": prompt578_dispatch_completed,
+        "prompt578_dispatch_failed": prompt578_dispatch_failed,
+        "prompt578_dispatch_not_run": prompt578_dispatch_not_run,
+        "prompt578_tracked_files_modified_by_codex": (
+            prompt578_tracked_files_modified_by_codex
+        ),
+        "prompt578_changed_tracked_files": prompt578_changed_tracked_files,
+        "result_route": result_route,
+    }
+    _write_json(evaluation_path, evaluation)
+
+    route_payload = {
+        "local_only": True,
+        "source_prompt": "prompt579",
+        "prompt579_result_route": result_route,
+        "prompt579_next_action": _prompt579_next_action(result_route),
+        "prompt579_retry_required": retry_required,
+        "prompt579_manual_review_required": manual_review_required,
+    }
+    _write_json(route_path, route_payload)
+
+    ingested_result_written = ingested_result_path.is_file()
+    stdout_excerpt_written = stdout_excerpt_path.is_file()
+    stderr_excerpt_written = stderr_excerpt_path.is_file()
+    evaluation_written = evaluation_path.is_file()
+    route_written = route_path.is_file()
+    all_artifacts_except_summary_written = all(
+        (
+            ingested_result_written,
+            stdout_excerpt_written,
+            stderr_excerpt_written,
+            evaluation_written,
+            route_written,
+        )
+    )
+
+    blocked_reasons = list(prerequisite_blocked_reasons)
+    if not all_artifacts_except_summary_written:
+        blocked_reasons.append("prompt579_required_artifact_write_failed")
+
+    summary_written = False
+    next_action = _prompt579_next_action(result_route)
+    if not prompt578_success_ready:
+        status = (
+            "blocked_actual_dispatch_result_ingestion_missing_prerequisite"
+        )
+        next_action = (
+            "manual_review_prompt579_actual_dispatch_result_ingestion"
+        )
+        success = False
+    elif not all_artifacts_except_summary_written:
+        status = "blocked_actual_dispatch_result_ingestion_failed"
+        next_action = (
+            "manual_review_prompt579_actual_dispatch_result_ingestion"
+        )
+        success = False
+    else:
+        status = "actual_dispatch_result_ingestion_completed_local_only"
+        success = True
+
+    actual_dispatch_result_ingestion_ready = prompt578_success_ready
+    codex_executed_during_runtime = False
+    tracked_files_modified_during_runtime = False
+    commit_performed = False
+    installation_performed = False
+    systemd_used = False
+    service_enable_performed = False
+    service_start_performed = False
+    persistent_service_started = False
+    remote_workflow_included = False
+    no_remote_mutation_verified = True
+    final_worktree_clean = bool(
+        payload.get("prompt578_final_worktree_clean", True) is True
+        and not tracked_files_modified_during_runtime
+    )
+
+    completion_claim_allowed = bool(
+        success
+        and prompt578_success_ready
+        and prompt578_actual_codex_executed
+        and all_artifacts_except_summary_written
+        and result_route
+        in {"success_no_changes", "success_with_tracked_changes"}
+        and not retry_required
+        and not manual_review_required
+        and not codex_executed_during_runtime
+        and not tracked_files_modified_during_runtime
+        and not commit_performed
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and final_worktree_clean
+        and blocked_reasons == []
+    )
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt579",
+        "prompt579_actual_dispatch_result_ingestion_status": status,
+        "prompt579_actual_dispatch_result_ingestion_ready": (
+            actual_dispatch_result_ingestion_ready
+        ),
+        "prompt579_actual_dispatch_result_ingestion_success": success,
+        "prompt579_prompt578_success_ready": prompt578_success_ready,
+        "prompt579_prompt578_actual_codex_executed": (
+            prompt578_actual_codex_executed
+        ),
+        "prompt579_prompt578_returncode": prompt578_returncode,
+        "prompt579_prompt578_returncode_classification": (
+            prompt578_returncode_classification
+        ),
+        "prompt579_prompt578_timeout_occurred": prompt578_timeout_occurred,
+        "prompt579_prompt578_dispatch_completed": (
+            prompt578_dispatch_completed
+        ),
+        "prompt579_prompt578_dispatch_failed": prompt578_dispatch_failed,
+        "prompt579_prompt578_dispatch_not_run": prompt578_dispatch_not_run,
+        "prompt579_prompt578_tracked_files_modified_by_codex": (
+            prompt578_tracked_files_modified_by_codex
+        ),
+        "prompt579_prompt578_changed_tracked_files": (
+            prompt578_changed_tracked_files
+        ),
+        "prompt579_ingested_result_written": ingested_result_written,
+        "prompt579_stdout_excerpt_written": stdout_excerpt_written,
+        "prompt579_stderr_excerpt_written": stderr_excerpt_written,
+        "prompt579_evaluation_written": evaluation_written,
+        "prompt579_route_written": route_written,
+        "prompt579_summary_written": summary_written,
+        "prompt579_result_route": result_route,
+        "prompt579_retry_required": retry_required,
+        "prompt579_manual_review_required": manual_review_required,
+        "prompt579_success_no_changes": success_no_changes,
+        "prompt579_success_with_tracked_changes": success_with_tracked_changes,
+        "prompt579_actual_codex_executed": prompt578_actual_codex_executed,
+        "prompt579_codex_executed_during_runtime": (
+            codex_executed_during_runtime
+        ),
+        "prompt579_tracked_files_modified_during_runtime": (
+            tracked_files_modified_during_runtime
+        ),
+        "prompt579_commit_performed": commit_performed,
+        "prompt579_installation_performed": installation_performed,
+        "prompt579_systemd_used": systemd_used,
+        "prompt579_service_enable_performed": service_enable_performed,
+        "prompt579_service_start_performed": service_start_performed,
+        "prompt579_persistent_service_started": persistent_service_started,
+        "prompt579_remote_workflow_included": remote_workflow_included,
+        "prompt579_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt579_final_worktree_clean": final_worktree_clean,
+        "prompt579_completion_claim_allowed": completion_claim_allowed,
+        "prompt579_next_action": next_action,
+        "prompt579_blocked_reasons": blocked_reasons,
+    }
+    _write_json(summary_path, summary)
+    summary_written = summary_path.is_file()
+    summary["prompt579_summary_written"] = summary_written
+    summary["prompt579_completion_claim_allowed"] = bool(
+        completion_claim_allowed and summary_written
+    )
+    if summary_written:
+        _write_json(summary_path, summary)
     return summary
 
 
