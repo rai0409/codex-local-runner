@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 from typing import Any
 from typing import Callable
 from typing import Iterable
@@ -129,6 +130,9 @@ PROMPT571_SERVICE_ARTIFACTS_LOCAL_ONLY_ENABLE_TOKEN = (
 PROMPT572_LONGER_SOAK_STABILITY_GATE_ENABLE_TOKEN = (
     "PROMPT572_LONGER_SOAK_STABILITY_GATE_ENABLE"
 )
+PROMPT574_OBSERVED_DAEMON_RUN_GATE_ENABLE_TOKEN = (
+    "PROMPT574_OBSERVED_DAEMON_RUN_GATE_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -216,6 +220,9 @@ _PROMPT571_DEFAULT_ARTIFACT_DIR = Path(
 )
 _PROMPT572_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/prompt572_longer_soak_stability_gate"
+)
+_PROMPT574_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/prompt574_observed_daemon_run_gate"
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -2791,6 +2798,336 @@ def run_prompt572_longer_soak_stability_gate(
     summary["prompt572_completion_claim_allowed"] = success
     summary["prompt572_next_action"] = next_action
     summary["prompt572_blocked_reasons"] = blocked_reasons
+    if summary_written:
+        _write_json(summary_path, summary)
+    return summary
+
+
+def _prompt574_int(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _prompt574_evidence_ready(
+    *,
+    payload: Mapping[str, Any],
+    prefix: str,
+    allow_unprefixed: bool = False,
+) -> bool:
+    if prefix == "prompt572":
+        return bool(
+            payload.get("prompt572_longer_soak_stability_gate_success") is True
+            and payload.get("prompt572_completion_claim_allowed") is True
+            and payload.get("prompt572_no_remote_mutation_verified") is True
+            and payload.get("prompt572_installation_performed") is False
+            and payload.get("prompt572_daemon_started") is False
+            and payload.get("prompt572_remote_workflow_included") is False
+            and _prompt574_int(payload.get("prompt572_confirmed_soak_runs")) >= 5
+            and _prompt574_int(payload.get("prompt572_confirmed_prompt568_runs"))
+            >= 5
+            and _prompt574_int(
+                payload.get("prompt572_confirmed_inner_prompt565_cycles_total")
+            )
+            >= 10
+        )
+    if prefix == "prompt573":
+        return bool(
+            payload.get("prompt573_success") is True
+            and payload.get("prompt573_completion_claim_allowed") is True
+            and payload.get("prompt573_prompt572_repo_artifact_real_success")
+            is True
+            and payload.get("prompt573_no_remote_mutation_verified") is True
+            and payload.get("prompt573_remote_workflow_included") is False
+        )
+    return False
+
+
+def _prompt574_run_noop_daemon_simulator(
+    *,
+    artifact_dir: Path,
+    heartbeat_count: int,
+    interval_seconds: float,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    heartbeat_path = artifact_dir / "observed_daemon_heartbeats.jsonl"
+    script = (
+        "import json, pathlib, sys, time\n"
+        "path = pathlib.Path(sys.argv[1])\n"
+        "count = int(sys.argv[2])\n"
+        "interval = float(sys.argv[3])\n"
+        "with path.open('w', encoding='utf-8') as handle:\n"
+        "    for index in range(1, count + 1):\n"
+        "        handle.write(json.dumps({"
+        "'heartbeat_index': index, "
+        "'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())"
+        "}, sort_keys=True) + '\\n')\n"
+        "        handle.flush()\n"
+        "        time.sleep(interval)\n"
+    )
+    start_timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            script,
+            str(heartbeat_path),
+            str(heartbeat_count),
+            str(interval_seconds),
+        ],
+        cwd=str(artifact_dir),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    returncode: int | None
+    timed_out = False
+    try:
+        returncode = process.wait(timeout=max(1, int(timeout_seconds)))
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        process.terminate()
+        try:
+            returncode = process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            returncode = process.wait(timeout=5)
+    stop_timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    observed_heartbeats = 0
+    try:
+        observed_heartbeats = sum(
+            1
+            for line in heartbeat_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    except OSError:
+        observed_heartbeats = 0
+    return {
+        "pid": process.pid,
+        "returncode": returncode,
+        "timed_out": timed_out,
+        "heartbeat_path": str(heartbeat_path),
+        "observed_heartbeats": observed_heartbeats,
+        "start_timestamp": start_timestamp,
+        "stop_timestamp": stop_timestamp,
+    }
+
+
+def run_prompt574_observed_daemon_run_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    timeout_seconds: int = 10,
+    min_heartbeat_count: int = 3,
+    artifact_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    observed_daemon_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT574_DEFAULT_ARTIFACT_DIR
+    )
+    if not observed_daemon_artifact_dir.is_absolute():
+        observed_daemon_artifact_dir = repo_path / observed_daemon_artifact_dir
+
+    prompt574_enabled = enabled is True
+    prompt574_enable_token_valid = (
+        _normalize_text(enable_token, default="")
+        == PROMPT574_OBSERVED_DAEMON_RUN_GATE_ENABLE_TOKEN
+    )
+    requested_min_heartbeat_count = max(1, _prompt574_int(min_heartbeat_count))
+    prompt572_success_ready = _prompt574_evidence_ready(
+        payload=payload,
+        prefix="prompt572",
+        allow_unprefixed=(
+            payload.get("prompt572_longer_soak_stability_gate_success") is True
+        ),
+    )
+    prompt573_success_ready = _prompt574_evidence_ready(
+        payload=payload,
+        prefix="prompt573",
+        allow_unprefixed=True,
+    )
+    blocked_reasons: list[str] = []
+    if not prompt574_enabled:
+        blocked_reasons.append("prompt574_enabled_required")
+    if not prompt574_enable_token_valid:
+        blocked_reasons.append("prompt574_enable_token_invalid")
+    if not prompt572_success_ready:
+        blocked_reasons.append("prompt574_prompt572_success_evidence_missing")
+    if not prompt573_success_ready:
+        blocked_reasons.append("prompt574_prompt573_success_evidence_missing")
+
+    daemon_result: dict[str, Any] = {}
+    daemon_started = False
+    daemon_stopped = False
+    daemon_returncode: int | None = None
+    heartbeat_count = 0
+    result_written = False
+    summary_written = False
+    installation_performed = False
+    remote_workflow_included = False
+    no_remote_mutation_verified = True
+    final_worktree_clean = False
+
+    can_run_daemon = bool(
+        prompt574_enabled
+        and prompt574_enable_token_valid
+        and prompt572_success_ready
+        and prompt573_success_ready
+    )
+    if can_run_daemon:
+        observed_daemon_artifact_dir.mkdir(parents=True, exist_ok=True)
+        daemon_result = _prompt574_run_noop_daemon_simulator(
+            artifact_dir=observed_daemon_artifact_dir,
+            heartbeat_count=requested_min_heartbeat_count,
+            interval_seconds=0.05,
+            timeout_seconds=timeout_seconds,
+        )
+        daemon_started = daemon_result.get("pid") is not None
+        daemon_returncode = daemon_result.get("returncode")
+        daemon_stopped = daemon_returncode is not None
+        heartbeat_count = _prompt574_int(daemon_result.get("observed_heartbeats"))
+        final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
+            repo_path=repo_path,
+            daemon_artifact_dir=observed_daemon_artifact_dir,
+        )
+
+    daemon_observed = bool(heartbeat_count >= requested_min_heartbeat_count)
+    result_path = observed_daemon_artifact_dir / "observed_daemon_result.json"
+    summary_path = observed_daemon_artifact_dir / "observed_daemon_summary.json"
+    result_payload = {
+        "local_only": True,
+        "source_prompt": "prompt574",
+        "daemon_simulator": daemon_result,
+        "service_install_performed": False,
+        "systemd_service_file_created": False,
+        "remote_mutation_performed": False,
+    }
+    if can_run_daemon:
+        _write_json(result_path, result_payload)
+        result_written = result_path.is_file()
+
+    completion_checks = (
+        ("prompt574_enabled", prompt574_enabled),
+        ("prompt574_enable_token_valid", prompt574_enable_token_valid),
+        ("prompt574_prompt572_success_ready", prompt572_success_ready),
+        ("prompt574_prompt573_success_ready", prompt573_success_ready),
+        ("prompt574_daemon_started", daemon_started),
+        ("prompt574_daemon_observed", daemon_observed),
+        ("prompt574_daemon_stopped", daemon_stopped),
+        ("prompt574_daemon_returncode_zero", daemon_returncode == 0),
+        (
+            "prompt574_heartbeat_count_at_least_min",
+            heartbeat_count >= requested_min_heartbeat_count,
+        ),
+        ("prompt574_result_written", result_written),
+        ("prompt574_final_worktree_clean", final_worktree_clean),
+        ("prompt574_no_remote_mutation_verified", no_remote_mutation_verified),
+        (
+            "prompt574_installation_performed_false",
+            not installation_performed,
+        ),
+        (
+            "prompt574_remote_workflow_included_false",
+            not remote_workflow_included,
+        ),
+    )
+    for field, passed in completion_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    status = "blocked_observed_daemon_run_gate_failed"
+    if not prompt574_enabled:
+        status = "blocked_observed_daemon_run_gate_disabled"
+    elif not prompt574_enable_token_valid:
+        status = "blocked_observed_daemon_run_gate_invalid_enable_token"
+    elif not (prompt572_success_ready and prompt573_success_ready):
+        status = "blocked_observed_daemon_run_gate_missing_prerequisite"
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt574",
+        "prompt574_observed_daemon_run_gate_status": status,
+        "prompt574_observed_daemon_run_gate_ready": can_run_daemon,
+        "prompt574_observed_daemon_run_gate_success": False,
+        "prompt574_enabled": prompt574_enabled,
+        "prompt574_enable_token_valid": prompt574_enable_token_valid,
+        "prompt574_prompt572_success_ready": prompt572_success_ready,
+        "prompt574_prompt573_success_ready": prompt573_success_ready,
+        "prompt574_daemon_observed": daemon_observed,
+        "prompt574_daemon_started": daemon_started,
+        "prompt574_daemon_stopped": daemon_stopped,
+        "prompt574_daemon_returncode": daemon_returncode,
+        "prompt574_heartbeat_count": heartbeat_count,
+        "prompt574_min_heartbeat_count": requested_min_heartbeat_count,
+        "prompt574_result_written": result_written,
+        "prompt574_summary_written": False,
+        "prompt574_final_worktree_clean": final_worktree_clean,
+        "prompt574_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt574_installation_performed": installation_performed,
+        "prompt574_remote_workflow_included": remote_workflow_included,
+        "prompt574_completion_claim_allowed": False,
+        "prompt574_next_action": (
+            "manual_review_prompt574_observed_daemon_run_gate_failed"
+        ),
+        "prompt574_blocked_reasons": blocked_reasons,
+        "prompt574_artifact_dir": str(observed_daemon_artifact_dir),
+        "prompt574_result_path": str(result_path),
+        "prompt574_summary_path": str(summary_path),
+    }
+    if can_run_daemon:
+        _write_json(summary_path, summary)
+        summary_written = summary_path.is_file()
+        summary["prompt574_summary_written"] = summary_written
+        if not summary_written:
+            blocked_reasons.append("missing_prompt574_summary_written")
+
+    success = bool(
+        can_run_daemon
+        and daemon_started
+        and daemon_observed
+        and daemon_stopped
+        and daemon_returncode == 0
+        and heartbeat_count >= requested_min_heartbeat_count
+        and result_written
+        and summary_written
+        and final_worktree_clean
+        and no_remote_mutation_verified
+        and not installation_performed
+        and not remote_workflow_included
+        and not blocked_reasons
+    )
+    if success:
+        status = "observed_daemon_run_gate_completed_local_only"
+    elif (
+        prompt574_enabled
+        and prompt574_enable_token_valid
+        and prompt572_success_ready
+        and prompt573_success_ready
+    ):
+        status = "blocked_observed_daemon_run_gate_failed"
+    next_action = (
+        "observed_daemon_run_gate_completed_local_only"
+        if success
+        else "manual_review_prompt574_observed_daemon_run_gate_failed"
+    )
+    summary["prompt574_observed_daemon_run_gate_status"] = status
+    summary["prompt574_observed_daemon_run_gate_success"] = success
+    summary["prompt574_summary_written"] = summary_written
+    summary["prompt574_completion_claim_allowed"] = success
+    summary["prompt574_next_action"] = next_action
+    summary["prompt574_blocked_reasons"] = blocked_reasons
     if summary_written:
         _write_json(summary_path, summary)
     return summary

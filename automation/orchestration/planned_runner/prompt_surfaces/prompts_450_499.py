@@ -27169,6 +27169,146 @@ def _build_prompt572_longer_soak_stability_gate_state(
     }
 
 
+def _build_prompt574_observed_daemon_run_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    def _prompt574_int(value: Any) -> int:
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt574_enabled") is True
+    enable_token_valid = payload.get("prompt574_enable_token_valid") is True
+    prompt572_success_ready = (
+        payload.get("prompt574_prompt572_success_ready") is True
+    )
+    prompt573_success_ready = (
+        payload.get("prompt574_prompt573_success_ready") is True
+    )
+    daemon_observed = payload.get("prompt574_daemon_observed") is True
+    daemon_started = payload.get("prompt574_daemon_started") is True
+    daemon_stopped = payload.get("prompt574_daemon_stopped") is True
+    daemon_returncode = payload.get("prompt574_daemon_returncode")
+    heartbeat_count = _prompt574_int(payload.get("prompt574_heartbeat_count"))
+    min_heartbeat_count = max(
+        1,
+        _prompt574_int(payload.get("prompt574_min_heartbeat_count") or 3),
+    )
+    result_written = payload.get("prompt574_result_written") is True
+    summary_written = payload.get("prompt574_summary_written") is True
+    final_worktree_clean = (
+        payload.get("prompt574_final_worktree_clean") is True
+    )
+    no_remote_mutation_verified = (
+        payload.get("prompt574_no_remote_mutation_verified") is True
+    )
+    installation_performed = (
+        payload.get("prompt574_installation_performed") is True
+    )
+    remote_workflow_included = (
+        payload.get("prompt574_remote_workflow_included") is True
+    )
+    blocked_reasons = list(payload.get("prompt574_blocked_reasons") or [])
+
+    readiness_checks = (
+        ("prompt574_enabled", enabled),
+        ("prompt574_enable_token_valid", enable_token_valid),
+        ("prompt574_prompt572_success_ready", prompt572_success_ready),
+        ("prompt574_prompt573_success_ready", prompt573_success_ready),
+        ("prompt574_daemon_started", daemon_started),
+        ("prompt574_daemon_observed", daemon_observed),
+        ("prompt574_daemon_stopped", daemon_stopped),
+        ("prompt574_daemon_returncode_zero", daemon_returncode == 0),
+        (
+            "prompt574_heartbeat_count_at_least_min",
+            heartbeat_count >= min_heartbeat_count,
+        ),
+        ("prompt574_result_written", result_written),
+        ("prompt574_summary_written", summary_written),
+        ("prompt574_final_worktree_clean", final_worktree_clean),
+        (
+            "prompt574_no_remote_mutation_verified",
+            no_remote_mutation_verified,
+        ),
+        (
+            "prompt574_installation_performed_false",
+            not installation_performed,
+        ),
+        (
+            "prompt574_remote_workflow_included_false",
+            not remote_workflow_included,
+        ),
+    )
+    for field, passed in readiness_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    success = bool(
+        payload.get("prompt574_observed_daemon_run_gate_success") is True
+        and all(passed for _, passed in readiness_checks)
+        and not blocked_reasons
+    )
+    if success:
+        status = "observed_daemon_run_gate_completed_local_only"
+    elif not enabled:
+        status = "blocked_observed_daemon_run_gate_disabled"
+    elif not enable_token_valid:
+        status = "blocked_observed_daemon_run_gate_invalid_enable_token"
+    elif not (prompt572_success_ready and prompt573_success_ready):
+        status = "blocked_observed_daemon_run_gate_missing_prerequisite"
+    else:
+        status = _normalize_text(
+            payload.get("prompt574_observed_daemon_run_gate_status"),
+            default="blocked_observed_daemon_run_gate_failed",
+        )
+    next_action = (
+        "observed_daemon_run_gate_completed_local_only"
+        if success
+        else "manual_review_prompt574_observed_daemon_run_gate_failed"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt574",
+        "prompt574_observed_daemon_run_gate_status": status,
+        "prompt574_observed_daemon_run_gate_ready": bool(
+            enabled
+            and enable_token_valid
+            and prompt572_success_ready
+            and prompt573_success_ready
+        ),
+        "prompt574_observed_daemon_run_gate_success": success,
+        "prompt574_enabled": enabled,
+        "prompt574_enable_token_valid": enable_token_valid,
+        "prompt574_prompt572_success_ready": prompt572_success_ready,
+        "prompt574_prompt573_success_ready": prompt573_success_ready,
+        "prompt574_daemon_observed": daemon_observed,
+        "prompt574_daemon_started": daemon_started,
+        "prompt574_daemon_stopped": daemon_stopped,
+        "prompt574_daemon_returncode": daemon_returncode,
+        "prompt574_heartbeat_count": heartbeat_count,
+        "prompt574_min_heartbeat_count": min_heartbeat_count,
+        "prompt574_result_written": result_written,
+        "prompt574_summary_written": summary_written,
+        "prompt574_final_worktree_clean": final_worktree_clean,
+        "prompt574_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt574_installation_performed": installation_performed,
+        "prompt574_remote_workflow_included": remote_workflow_included,
+        "prompt574_completion_claim_allowed": success,
+        "prompt574_next_action": next_action,
+        "prompt574_blocked_reasons": blocked_reasons,
+        "prompt574_prompt_surface": (
+            "Observed daemon run gate only; excludes service install, "
+            "systemd files, remote operations, push, PR, merge, and "
+            "persistent daemon execution."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -29053,4 +29193,5 @@ __all__ = [
     "_build_prompt570_fix_prompt569_soak_artifact_cleanup_state",
     "_build_prompt571_service_artifacts_local_only_state",
     "_build_prompt572_longer_soak_stability_gate_state",
+    "_build_prompt574_observed_daemon_run_gate_state",
 ]
