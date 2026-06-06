@@ -29311,6 +29311,417 @@ def _build_prompt581_verify_real_dev_task_changes_gate_state(
     }
 
 
+def _prompt582_prompt581_success_ready(
+    payload: Mapping[str, Any],
+) -> tuple[bool, list[str]]:
+    prompt581_changed_tracked_files = _normalize_string_list(
+        payload.get("prompt581_prompt580_changed_tracked_files")
+    )
+    required_checks = (
+        (
+            "prompt581_real_dev_task_changes_verification_success",
+            payload.get(
+                "prompt581_real_dev_task_changes_verification_success"
+            )
+            is True,
+        ),
+        (
+            "prompt581_prompt580_success_ready",
+            payload.get("prompt581_prompt580_success_ready") is True,
+        ),
+        (
+            "prompt581_prompt580_real_dev_task_executed",
+            payload.get("prompt581_prompt580_real_dev_task_executed") is True,
+        ),
+        (
+            "prompt581_prompt580_returncode_0",
+            payload.get("prompt581_prompt580_returncode") == 0,
+        ),
+        (
+            "prompt581_prompt580_returncode_classification_success",
+            payload.get("prompt581_prompt580_returncode_classification")
+            == "success",
+        ),
+        (
+            "prompt581_prompt580_timeout_occurred_false",
+            payload.get("prompt581_prompt580_timeout_occurred") is False,
+        ),
+        (
+            "prompt581_prompt580_dispatch_completed",
+            payload.get("prompt581_prompt580_dispatch_completed") is True,
+        ),
+        (
+            "prompt581_prompt580_dispatch_failed_false",
+            payload.get("prompt581_prompt580_dispatch_failed") is False,
+        ),
+        (
+            "prompt581_prompt580_dispatch_not_run_false",
+            payload.get("prompt581_prompt580_dispatch_not_run") is False,
+        ),
+        (
+            "prompt581_prompt580_tracked_files_modified_by_codex",
+            payload.get(
+                "prompt581_prompt580_tracked_files_modified_by_codex"
+            )
+            is True,
+        ),
+        (
+            "prompt581_prompt580_changed_tracked_files_non_empty",
+            prompt581_changed_tracked_files != [],
+        ),
+        (
+            "prompt581_changed_files_written",
+            payload.get("prompt581_changed_files_written") is True,
+        ),
+        (
+            "prompt581_stdout_excerpt_written",
+            payload.get("prompt581_stdout_excerpt_written") is True,
+        ),
+        (
+            "prompt581_stderr_excerpt_written",
+            payload.get("prompt581_stderr_excerpt_written") is True,
+        ),
+        (
+            "prompt581_evaluation_written",
+            payload.get("prompt581_evaluation_written") is True,
+        ),
+        (
+            "prompt581_route_written",
+            payload.get("prompt581_route_written") is True,
+        ),
+        (
+            "prompt581_summary_written",
+            payload.get("prompt581_summary_written") is True,
+        ),
+        (
+            "prompt581_result_route_changes_review_ready",
+            payload.get("prompt581_result_route") == "changes_review_ready",
+        ),
+        (
+            "prompt581_retry_required_false",
+            payload.get("prompt581_retry_required") is False,
+        ),
+        (
+            "prompt581_manual_review_required_false",
+            payload.get("prompt581_manual_review_required") is False,
+        ),
+        (
+            "prompt581_changes_review_ready",
+            payload.get("prompt581_changes_review_ready") is True,
+        ),
+        (
+            "prompt581_no_changes_review_required_false",
+            payload.get("prompt581_no_changes_review_required") is False,
+        ),
+        (
+            "prompt581_codex_executed_during_runtime_false",
+            payload.get("prompt581_codex_executed_during_runtime") is False,
+        ),
+        (
+            "prompt581_tracked_files_modified_during_runtime_false",
+            payload.get("prompt581_tracked_files_modified_during_runtime")
+            is False,
+        ),
+        (
+            "prompt581_commit_performed_false",
+            payload.get("prompt581_commit_performed") is False,
+        ),
+        (
+            "prompt581_installation_performed_false",
+            payload.get("prompt581_installation_performed") is False,
+        ),
+        (
+            "prompt581_systemd_used_false",
+            payload.get("prompt581_systemd_used") is False,
+        ),
+        (
+            "prompt581_service_enable_performed_false",
+            payload.get("prompt581_service_enable_performed") is False,
+        ),
+        (
+            "prompt581_service_start_performed_false",
+            payload.get("prompt581_service_start_performed") is False,
+        ),
+        (
+            "prompt581_persistent_service_started_false",
+            payload.get("prompt581_persistent_service_started") is False,
+        ),
+        (
+            "prompt581_remote_workflow_included_false",
+            payload.get("prompt581_remote_workflow_included") is False,
+        ),
+        (
+            "prompt581_no_remote_mutation_verified",
+            payload.get("prompt581_no_remote_mutation_verified") is True,
+        ),
+        (
+            "prompt581_final_worktree_clean",
+            payload.get("prompt581_final_worktree_clean") is True,
+        ),
+        (
+            "prompt581_completion_claim_allowed",
+            payload.get("prompt581_completion_claim_allowed") is True,
+        ),
+        (
+            "prompt581_next_action_prepare_prompt582_review_and_commit",
+            payload.get("prompt581_next_action")
+            == "prepare_prompt582_review_and_commit_real_dev_changes",
+        ),
+        (
+            "prompt581_blocked_reasons_empty",
+            _normalize_string_list(payload.get("prompt581_blocked_reasons"))
+            == [],
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{name}" for name, ready in required_checks if not ready
+    ]
+    return blocked_reasons == [], blocked_reasons
+
+
+def _prompt582_result_route(
+    *,
+    prompt581_success_ready: bool,
+    changed_files: Sequence[str],
+    review_payload: Mapping[str, Any],
+) -> str:
+    review_route = _normalize_text(
+        review_payload.get("result_route")
+        or review_payload.get("route")
+        or review_payload.get("review_route"),
+        default="",
+    )
+    if (
+        review_payload.get("retry_required") is True
+        or review_payload.get("reject_retry_required") is True
+        or review_route == "reject_retry_required"
+    ):
+        return "reject_retry_required"
+    if (
+        review_payload.get("manual_review_required") is True
+        or review_route == "manual_review_required"
+    ):
+        return "manual_review_required"
+    if not changed_files:
+        return "no_changes_review_required"
+    if not prompt581_success_ready:
+        return "manual_review_required"
+    return "approve_commit_tag"
+
+
+def _prompt582_next_action(result_route: str) -> str:
+    return {
+        "approve_commit_tag": "prepare_prompt583_commit_tag_real_dev_changes",
+        "reject_retry_required": "prepare_prompt583_retry_real_dev_task",
+        "manual_review_required": (
+            "manual_review_prompt582_review_and_commit_real_dev_changes"
+        ),
+        "no_changes_review_required": "prepare_prompt583_no_change_review",
+    }[result_route]
+
+
+def _build_prompt582_review_and_commit_real_dev_changes_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt581_success_ready, prerequisite_blocked_reasons = (
+        _prompt582_prompt581_success_ready(payload)
+    )
+    prompt581_changed_tracked_files = _normalize_string_list(
+        payload.get("prompt582_prompt581_changed_tracked_files")
+        or payload.get("prompt581_prompt580_changed_tracked_files")
+    )
+    reviewed_changed_files = _normalize_string_list(
+        payload.get("prompt582_changed_files")
+    )
+    if not reviewed_changed_files:
+        reviewed_changed_files = prompt581_changed_tracked_files
+    review_payload = (
+        payload.get("prompt582_review_payload")
+        if isinstance(payload.get("prompt582_review_payload"), Mapping)
+        else {}
+    )
+
+    prompt581_changes_review_ready = (
+        payload.get("prompt581_changes_review_ready") is True
+    )
+    prompt581_result_route = _normalize_text(
+        payload.get("prompt581_result_route"), default=""
+    )
+    prompt581_next_action = _normalize_text(
+        payload.get("prompt581_next_action"), default=""
+    )
+
+    review_input_written = (
+        payload.get("prompt582_review_input_written") is True
+    )
+    review_evaluation_written = (
+        payload.get("prompt582_review_evaluation_written") is True
+    )
+    review_route_written = (
+        payload.get("prompt582_review_route_written") is True
+    )
+    commit_plan_written = (
+        payload.get("prompt582_commit_plan_written") is True
+    )
+    summary_written = payload.get("prompt582_summary_written") is True
+    all_artifacts_written = all(
+        (
+            review_input_written,
+            review_evaluation_written,
+            review_route_written,
+            commit_plan_written,
+            summary_written,
+        )
+    )
+
+    result_route = _normalize_text(
+        payload.get("prompt582_result_route"), default=""
+    )
+    if result_route not in {
+        "approve_commit_tag",
+        "reject_retry_required",
+        "manual_review_required",
+        "no_changes_review_required",
+    }:
+        result_route = _prompt582_result_route(
+            prompt581_success_ready=prompt581_success_ready,
+            changed_files=reviewed_changed_files,
+            review_payload=review_payload,
+        )
+
+    approve_commit_tag = result_route == "approve_commit_tag"
+    reject_retry_required = result_route == "reject_retry_required"
+    manual_review_required = result_route == "manual_review_required"
+    no_changes_review_required = result_route == "no_changes_review_required"
+    commit_tag_allowed = approve_commit_tag
+
+    codex_executed_during_runtime = False
+    tracked_files_modified_during_runtime = False
+    commit_performed = False
+    tag_performed = False
+    installation_performed = False
+    systemd_used = False
+    service_enable_performed = False
+    service_start_performed = False
+    persistent_service_started = False
+    remote_workflow_included = False
+    no_remote_mutation_verified = True
+    final_worktree_clean = not tracked_files_modified_during_runtime
+
+    blocked_reasons = list(prerequisite_blocked_reasons)
+    if prompt581_success_ready and not all_artifacts_written:
+        blocked_reasons.append("prompt582_required_artifact_write_missing")
+
+    if not prompt581_success_ready:
+        status = "blocked_real_dev_changes_review_missing_prerequisite"
+        success = False
+        next_action = (
+            "manual_review_prompt582_review_and_commit_real_dev_changes"
+        )
+    elif not all_artifacts_written:
+        status = "blocked_real_dev_changes_review_failed"
+        success = False
+        next_action = (
+            "manual_review_prompt582_review_and_commit_real_dev_changes"
+        )
+    else:
+        status = "real_dev_changes_review_completed_local_only"
+        success = True
+        next_action = _prompt582_next_action(result_route)
+
+    completion_claim_allowed = bool(
+        success
+        and prompt581_success_ready
+        and prompt581_changes_review_ready
+        and prompt581_result_route == "changes_review_ready"
+        and prompt581_next_action
+        == "prepare_prompt582_review_and_commit_real_dev_changes"
+        and prompt581_changed_tracked_files
+        and reviewed_changed_files
+        and all_artifacts_written
+        and result_route == "approve_commit_tag"
+        and approve_commit_tag
+        and not reject_retry_required
+        and not manual_review_required
+        and not no_changes_review_required
+        and commit_tag_allowed
+        and not codex_executed_during_runtime
+        and not tracked_files_modified_during_runtime
+        and not commit_performed
+        and not tag_performed
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and final_worktree_clean
+        and next_action == "prepare_prompt583_commit_tag_real_dev_changes"
+        and blocked_reasons == []
+    )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt582",
+        "prompt582_real_dev_changes_review_status": status,
+        "prompt582_real_dev_changes_review_ready": (
+            prompt581_success_ready
+        ),
+        "prompt582_real_dev_changes_review_success": success,
+        "prompt582_prompt581_success_ready": prompt581_success_ready,
+        "prompt582_prompt581_changes_review_ready": (
+            prompt581_changes_review_ready
+        ),
+        "prompt582_prompt581_result_route": prompt581_result_route,
+        "prompt582_prompt581_next_action": prompt581_next_action,
+        "prompt582_prompt581_changed_tracked_files": (
+            prompt581_changed_tracked_files
+        ),
+        "prompt582_changed_files": reviewed_changed_files,
+        "prompt582_review_input_written": review_input_written,
+        "prompt582_review_evaluation_written": review_evaluation_written,
+        "prompt582_review_route_written": review_route_written,
+        "prompt582_commit_plan_written": commit_plan_written,
+        "prompt582_summary_written": summary_written,
+        "prompt582_result_route": result_route,
+        "prompt582_approve_commit_tag": approve_commit_tag,
+        "prompt582_reject_retry_required": reject_retry_required,
+        "prompt582_manual_review_required": manual_review_required,
+        "prompt582_no_changes_review_required": no_changes_review_required,
+        "prompt582_commit_tag_allowed": commit_tag_allowed,
+        "prompt582_codex_executed_during_runtime": (
+            codex_executed_during_runtime
+        ),
+        "prompt582_tracked_files_modified_during_runtime": (
+            tracked_files_modified_during_runtime
+        ),
+        "prompt582_commit_performed": commit_performed,
+        "prompt582_tag_performed": tag_performed,
+        "prompt582_installation_performed": installation_performed,
+        "prompt582_systemd_used": systemd_used,
+        "prompt582_service_enable_performed": service_enable_performed,
+        "prompt582_service_start_performed": service_start_performed,
+        "prompt582_persistent_service_started": persistent_service_started,
+        "prompt582_remote_workflow_included": remote_workflow_included,
+        "prompt582_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt582_final_worktree_clean": final_worktree_clean,
+        "prompt582_completion_claim_allowed": completion_claim_allowed,
+        "prompt582_next_action": next_action,
+        "prompt582_blocked_reasons": blocked_reasons,
+        "prompt582_prompt_surface": (
+            "Real development changes review gate only; requires Prompt581 "
+            "changes_review_ready evidence, writes no tracked files, does "
+            "not execute Codex, does not commit or tag, emits a local "
+            "commit plan for Prompt583 only, and excludes installs, "
+            "systemd, systemctl, sudo, persistent service starts, and "
+            "remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -31203,4 +31614,5 @@ __all__ = [
     "_build_prompt579_actual_dispatch_result_ingestion_gate_state",
     "_build_prompt580_real_dev_task_dispatch_gate_state",
     "_build_prompt581_verify_real_dev_task_changes_gate_state",
+    "_build_prompt582_review_and_commit_real_dev_changes_gate_state",
 ]
