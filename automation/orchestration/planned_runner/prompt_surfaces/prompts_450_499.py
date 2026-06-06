@@ -27309,6 +27309,179 @@ def _build_prompt574_observed_daemon_run_gate_state(
     }
 
 
+def _build_prompt575_manual_service_install_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    def _prompt575_int(value: Any) -> int:
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    heartbeat_count = _prompt575_int(payload.get("prompt574_heartbeat_count"))
+    min_heartbeat_count = max(
+        1,
+        _prompt575_int(payload.get("prompt574_min_heartbeat_count") or 3),
+    )
+    prompt574_success_ready = bool(
+        payload.get("prompt574_observed_daemon_run_gate_success") is True
+        and payload.get("prompt574_daemon_started") is True
+        and payload.get("prompt574_daemon_observed") is True
+        and payload.get("prompt574_daemon_stopped") is True
+        and payload.get("prompt574_daemon_returncode") == 0
+        and heartbeat_count >= min_heartbeat_count
+        and payload.get("prompt574_final_worktree_clean") is True
+        and payload.get("prompt574_no_remote_mutation_verified") is True
+        and payload.get("prompt574_installation_performed") is False
+        and payload.get("prompt574_remote_workflow_included") is False
+        and payload.get("prompt574_completion_claim_allowed") is True
+    )
+    prompt575_enabled = payload.get("prompt575_enabled") is True
+    prompt575_enable_token_valid = (
+        payload.get("prompt575_enable_token_valid") is True
+    )
+    plan_written = payload.get("prompt575_plan_written") is True
+    summary_written = payload.get("prompt575_summary_written") is True
+    service_name = _normalize_text(
+        payload.get("prompt575_service_name"),
+        default="codex-local-runner",
+    )
+    plan_path = _normalize_text(
+        payload.get("prompt575_service_install_plan_path"),
+        default=(
+            "artifacts/runtime_commands/"
+            "prompt575_manual_service_install_gate/"
+            "manual_service_install_plan.json"
+        ),
+    )
+    summary_path = _normalize_text(
+        payload.get("prompt575_service_install_summary_path"),
+        default=(
+            "artifacts/runtime_commands/"
+            "prompt575_manual_service_install_gate/"
+            "manual_service_install_summary.json"
+        ),
+    )
+    systemd_file_created = (
+        payload.get("prompt575_systemd_file_created") is True
+    )
+    service_install_performed = (
+        payload.get("prompt575_service_install_performed") is True
+    )
+    service_enable_performed = (
+        payload.get("prompt575_service_enable_performed") is True
+    )
+    service_start_performed = (
+        payload.get("prompt575_service_start_performed") is True
+    )
+    persistent_daemon_started = (
+        payload.get("prompt575_persistent_daemon_started") is True
+    )
+    no_remote_mutation_verified = (
+        payload.get("prompt575_no_remote_mutation_verified") is True
+    )
+    remote_workflow_included = (
+        payload.get("prompt575_remote_workflow_included") is True
+    )
+    final_worktree_clean = (
+        payload.get("prompt575_final_worktree_clean") is True
+    )
+    blocked_reasons = list(payload.get("prompt575_blocked_reasons") or [])
+
+    readiness_checks = (
+        ("prompt575_enabled", prompt575_enabled),
+        ("prompt575_enable_token_valid", prompt575_enable_token_valid),
+        ("prompt575_prompt574_success_ready", prompt574_success_ready),
+        ("prompt575_plan_written", plan_written),
+        ("prompt575_summary_written", summary_written),
+        ("prompt575_systemd_file_created_false", not systemd_file_created),
+        (
+            "prompt575_service_install_performed_false",
+            not service_install_performed,
+        ),
+        (
+            "prompt575_service_enable_performed_false",
+            not service_enable_performed,
+        ),
+        ("prompt575_service_start_performed_false", not service_start_performed),
+        (
+            "prompt575_persistent_daemon_started_false",
+            not persistent_daemon_started,
+        ),
+        (
+            "prompt575_no_remote_mutation_verified",
+            no_remote_mutation_verified,
+        ),
+        (
+            "prompt575_remote_workflow_included_false",
+            not remote_workflow_included,
+        ),
+        ("prompt575_final_worktree_clean", final_worktree_clean),
+    )
+    for field, passed in readiness_checks:
+        if not passed:
+            blocked_reason = f"missing_{field}"
+            if blocked_reason not in blocked_reasons:
+                blocked_reasons.append(blocked_reason)
+
+    success = bool(
+        payload.get("prompt575_manual_service_install_gate_success") is True
+        and all(passed for _, passed in readiness_checks)
+        and not blocked_reasons
+    )
+    if success:
+        status = "manual_service_install_gate_ready_local_only"
+    elif not prompt574_success_ready:
+        status = "blocked_manual_service_install_gate_missing_prerequisite"
+    else:
+        status = _normalize_text(
+            payload.get("prompt575_manual_service_install_gate_status"),
+            default="blocked_manual_service_install_gate_failed",
+        )
+    next_action = (
+        _normalize_text(
+            payload.get("prompt575_next_action"),
+            default="manual_service_install_ready_for_separate_manual_step",
+        )
+        if success
+        else "manual_review_prompt575_manual_service_install_gate_failed"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt575",
+        "prompt575_manual_service_install_gate_status": status,
+        "prompt575_manual_service_install_gate_ready": prompt574_success_ready,
+        "prompt575_manual_service_install_gate_success": success,
+        "prompt575_enabled": prompt575_enabled,
+        "prompt575_enable_token_valid": prompt575_enable_token_valid,
+        "prompt575_prompt574_success_ready": prompt574_success_ready,
+        "prompt575_plan_written": plan_written,
+        "prompt575_summary_written": summary_written,
+        "prompt575_service_name": service_name,
+        "prompt575_service_install_plan_path": plan_path,
+        "prompt575_service_install_summary_path": summary_path,
+        "prompt575_systemd_file_created": systemd_file_created,
+        "prompt575_service_install_performed": service_install_performed,
+        "prompt575_service_enable_performed": service_enable_performed,
+        "prompt575_service_start_performed": service_start_performed,
+        "prompt575_persistent_daemon_started": persistent_daemon_started,
+        "prompt575_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt575_remote_workflow_included": remote_workflow_included,
+        "prompt575_final_worktree_clean": final_worktree_clean,
+        "prompt575_completion_claim_allowed": success,
+        "prompt575_next_action": next_action,
+        "prompt575_blocked_reasons": blocked_reasons,
+        "prompt575_prompt_surface": (
+            "Manual service install readiness gate only; writes a local "
+            "text-only plan and summary, and excludes service install, "
+            "systemd writes, systemctl, sudo, persistent daemon execution, "
+            "remote workflows, push, PR, merge, and network APIs."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -29194,4 +29367,5 @@ __all__ = [
     "_build_prompt571_service_artifacts_local_only_state",
     "_build_prompt572_longer_soak_stability_gate_state",
     "_build_prompt574_observed_daemon_run_gate_state",
+    "_build_prompt575_manual_service_install_gate_state",
 ]
