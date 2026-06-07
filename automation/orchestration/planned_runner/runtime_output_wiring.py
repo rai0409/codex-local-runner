@@ -146,6 +146,9 @@ PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN = (
 PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN = (
     "PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE"
 )
+PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN = (
+    "PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -271,6 +274,10 @@ _PROMPT582_DEFAULT_ARTIFACT_DIR = Path(
 _PROMPT583_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt583_commit_tag_real_dev_changes"
+)
+_PROMPT584_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt584_integrated_real_dev_one_cycle"
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -7402,6 +7409,726 @@ def run_prompt583_commit_tag_real_dev_changes_gate(
     summary["prompt583_summary_written"] = summary_written
     summary["prompt583_completion_claim_allowed"] = bool(
         completion_claim_allowed and summary_written
+    )
+    if summary_written:
+        _write_json(summary_path, summary)
+    return summary
+
+
+_PROMPT584_DEFAULT_CHANGED_FILES = (
+    "automation/orchestration/planned_runner/runtime_output_wiring.py",
+)
+
+_PROMPT584_DEFAULT_PROMPT579_PREREQUISITE_PAYLOAD: dict[str, Any] = {
+    "prompt579_actual_dispatch_result_ingestion_success": True,
+    "prompt579_prompt578_success_ready": True,
+    "prompt579_prompt578_actual_codex_executed": True,
+    "prompt579_prompt578_returncode": 0,
+    "prompt579_prompt578_returncode_classification": "success",
+    "prompt579_prompt578_timeout_occurred": False,
+    "prompt579_prompt578_dispatch_completed": True,
+    "prompt579_prompt578_dispatch_failed": False,
+    "prompt579_prompt578_dispatch_not_run": False,
+    "prompt579_prompt578_tracked_files_modified_by_codex": False,
+    "prompt579_actual_codex_executed": True,
+    "prompt579_ingested_result_written": True,
+    "prompt579_stdout_excerpt_written": True,
+    "prompt579_stderr_excerpt_written": True,
+    "prompt579_evaluation_written": True,
+    "prompt579_route_written": True,
+    "prompt579_summary_written": True,
+    "prompt579_result_route": "success_no_changes",
+    "prompt579_success_no_changes": True,
+    "prompt579_success_with_tracked_changes": False,
+    "prompt579_retry_required": False,
+    "prompt579_manual_review_required": False,
+    "prompt579_codex_executed_during_runtime": False,
+    "prompt579_tracked_files_modified_during_runtime": False,
+    "prompt579_commit_performed": False,
+    "prompt579_installation_performed": False,
+    "prompt579_systemd_used": False,
+    "prompt579_service_enable_performed": False,
+    "prompt579_service_start_performed": False,
+    "prompt579_persistent_service_started": False,
+    "prompt579_remote_workflow_included": False,
+    "prompt579_no_remote_mutation_verified": True,
+    "prompt579_final_worktree_clean": True,
+    "prompt579_completion_claim_allowed": True,
+    "prompt579_next_action": "prepare_prompt580_real_dev_task_dispatch",
+    "prompt579_blocked_reasons": [],
+}
+
+
+def _prompt584_merge_prompt580_input_payload(
+    *,
+    run_state_payload: Mapping[str, Any],
+    cycle_payload: Mapping[str, Any] | None = None,
+    prompt579_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    prompt579_next_action = "prepare_prompt580_real_dev_task_dispatch"
+    merged: dict[str, Any] = dict(
+        _PROMPT584_DEFAULT_PROMPT579_PREREQUISITE_PAYLOAD
+    )
+    merged.update(dict(run_state_payload))
+
+    nested_cycle_payload = run_state_payload.get("cycle_payload")
+    if isinstance(nested_cycle_payload, Mapping):
+        merged.update(dict(nested_cycle_payload))
+    if isinstance(cycle_payload, Mapping):
+        merged.update(dict(cycle_payload))
+
+    nested_prompt579_payload = merged.get("prompt579_payload")
+    if isinstance(nested_prompt579_payload, Mapping):
+        merged.update(dict(nested_prompt579_payload))
+    if isinstance(prompt579_payload, Mapping):
+        merged.update(dict(prompt579_payload))
+
+    for key, value in _PROMPT584_DEFAULT_PROMPT579_PREREQUISITE_PAYLOAD.items():
+        if key not in merged:
+            merged[key] = value
+    if merged.get("prompt579_result_route") == "success_no_changes":
+        merged["prompt579_next_action"] = prompt579_next_action
+    return merged
+
+
+def _prompt584_default_dev_task_prompt_text() -> str:
+    return """Mode: Implement
+Goal:
+Add a harmless local-only marker comment to automation/orchestration/planned_runner/runtime_output_wiring.py for Prompt584 integrated one-cycle verification.
+
+Allowed files:
+- automation/orchestration/planned_runner/runtime_output_wiring.py
+
+Forbidden files:
+- all files not listed above
+
+Expected artifact/output:
+- A concise stdout summary of whether the marker comment was added.
+
+Allowed validation commands:
+- python -m py_compile automation/orchestration/planned_runner/runtime_output_wiring.py automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py automation/orchestration/planned_runner/prompt_surfaces/registry.py
+
+Explicitly out-of-scope items:
+- commits or tags
+- installs
+- systemd, systemctl, sudo, or service operations
+- remote operations
+- persistent services
+"""
+
+
+def _prompt584_write_integrated_artifact(
+    path: Path,
+    *,
+    source_prompt: str,
+    payload: Mapping[str, Any] | None,
+    executed: bool,
+    skipped_reason: str = "",
+) -> bool:
+    artifact_payload: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt584",
+        "integrated_source_prompt": source_prompt,
+        "executed": executed,
+        "skipped_reason": skipped_reason,
+        "payload": dict(payload) if isinstance(payload, Mapping) else {},
+    }
+    _write_json(path, artifact_payload)
+    return path.is_file()
+
+
+def run_prompt584_integrated_real_dev_one_cycle_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    dev_task_prompt: str | None = None,
+    changed_files: Sequence[str] | str | None = None,
+    commit_message: str | None = None,
+    tag_name: str | None = None,
+    prompt580_timeout_seconds: int | None = None,
+    prompt580_enable_token: str | None = None,
+    prompt583_enable_token: str | None = None,
+    cycle_payload: Mapping[str, Any] | None = None,
+    prompt579_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    integrated_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT584_DEFAULT_ARTIFACT_DIR
+    )
+    if not integrated_artifact_dir.is_absolute():
+        integrated_artifact_dir = repo_path / integrated_artifact_dir
+
+    input_path = integrated_artifact_dir / "integrated_one_cycle_input.json"
+    dispatch_path = (
+        integrated_artifact_dir / "integrated_one_cycle_prompt580_dispatch.json"
+    )
+    prompt580_input_payload_path = (
+        integrated_artifact_dir / "prompt580_input_payload.json"
+    )
+    verify_path = (
+        integrated_artifact_dir / "integrated_one_cycle_prompt581_verify.json"
+    )
+    review_path = (
+        integrated_artifact_dir / "integrated_one_cycle_prompt582_review.json"
+    )
+    commit_tag_path = (
+        integrated_artifact_dir
+        / "integrated_one_cycle_prompt583_commit_tag.json"
+    )
+    route_path = integrated_artifact_dir / "integrated_one_cycle_route.json"
+    summary_path = integrated_artifact_dir / "integrated_one_cycle_summary.json"
+
+    prompt584_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt584_enabled") is True
+    )
+    prompt584_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt584_enable_token"),
+        default="",
+    )
+    prompt580_token = _normalize_text(
+        prompt580_enable_token
+        if prompt580_enable_token is not None
+        else payload.get("prompt580_enable_token"),
+        default="",
+    )
+    prompt583_token = _normalize_text(
+        prompt583_enable_token
+        if prompt583_enable_token is not None
+        else payload.get("prompt583_enable_token"),
+        default="",
+    )
+    prompt584_enable_token_valid = (
+        prompt584_token == PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+    )
+    prompt584_prompt580_enable_token_valid = (
+        prompt580_token == PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN
+    )
+    prompt584_prompt583_enable_token_valid = (
+        prompt583_token == PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+    )
+
+    final_dev_task_prompt = (
+        dev_task_prompt
+        if dev_task_prompt is not None
+        else _normalize_text(payload.get("prompt584_dev_task_prompt"), default="")
+    )
+    if not final_dev_task_prompt:
+        final_dev_task_prompt = _prompt584_default_dev_task_prompt_text()
+    final_changed_files = _prompt579_string_list(changed_files)
+    if not final_changed_files:
+        final_changed_files = _prompt579_string_list(
+            payload.get("prompt584_changed_files")
+        )
+    if not final_changed_files:
+        final_changed_files = list(_PROMPT584_DEFAULT_CHANGED_FILES)
+    final_commit_message = _normalize_text(
+        commit_message
+        if commit_message is not None
+        else payload.get("prompt584_commit_message"),
+        default="Add Prompt584 integrated real dev one cycle result",
+    )
+    final_tag_name = _normalize_text(
+        tag_name if tag_name is not None else payload.get("prompt584_tag_name"),
+        default="prompt584-integrated-real-dev-one-cycle-result",
+    )
+    timeout = _prompt580_timeout_seconds(
+        prompt580_timeout_seconds
+        if prompt580_timeout_seconds is not None
+        else payload.get("prompt580_timeout_seconds", 180),
+        default=180,
+    )
+
+    integrated_artifact_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(
+        input_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt584",
+            "execution_repo_path": str(repo_path),
+            "artifact_dir": str(integrated_artifact_dir),
+            "enabled": prompt584_enabled,
+            "prompt584_enable_token_valid": prompt584_enable_token_valid,
+            "prompt580_enable_token_valid": (
+                prompt584_prompt580_enable_token_valid
+            ),
+            "prompt583_enable_token_valid": (
+                prompt584_prompt583_enable_token_valid
+            ),
+            "dev_task_prompt": final_dev_task_prompt,
+            "changed_files": final_changed_files,
+            "commit_message": final_commit_message,
+            "tag_name": final_tag_name,
+            "prompt580_timeout_seconds": timeout,
+            "remote_operations_allowed": False,
+        },
+    )
+    input_written = input_path.is_file()
+
+    prompt580_summary: dict[str, Any] = {}
+    prompt581_summary: dict[str, Any] = {}
+    prompt582_summary: dict[str, Any] = {}
+    prompt583_summary: dict[str, Any] = {}
+    blocked_reasons: list[str] = []
+    prompt580_input_payload: dict[str, Any] = {}
+    prompt579_prerequisite_injected = False
+    prompt579_prerequisite_ready = False
+    prompt580_input_payload_written = False
+    result_route = "not_run"
+    next_action = (
+        "provide_explicit_enable_token_for_integrated_real_dev_one_cycle"
+    )
+    status = "integrated_real_dev_one_cycle_ready_not_run_local_only"
+    success = False
+    ready = True
+
+    can_start_cycle = bool(
+        prompt584_enabled
+        and prompt584_enable_token_valid
+        and prompt584_prompt580_enable_token_valid
+        and prompt584_prompt583_enable_token_valid
+    )
+    if can_start_cycle:
+        prompt580_input_payload = _prompt584_merge_prompt580_input_payload(
+            run_state_payload=payload,
+            cycle_payload=cycle_payload,
+            prompt579_payload=prompt579_payload,
+        )
+        prompt579_next_action = "prepare_prompt580_real_dev_task_dispatch"
+        if (
+            prompt580_input_payload.get("prompt579_result_route")
+            == "success_no_changes"
+        ):
+            prompt580_input_payload["prompt579_next_action"] = (
+                prompt579_next_action
+            )
+        prompt579_prerequisite_injected = True
+        prompt579_prerequisite_ready, _ = _prompt580_prompt579_success_ready(
+            prompt580_input_payload
+        )
+        _write_json(prompt580_input_payload_path, prompt580_input_payload)
+        prompt580_input_payload_written = prompt580_input_payload_path.is_file()
+        cycle_state: dict[str, Any] = dict(prompt580_input_payload)
+        prompt580_summary = run_prompt580_real_dev_task_dispatch_gate(
+            run_state_payload=cycle_state,
+            execution_repo_path=repo_path,
+            artifact_dir=integrated_artifact_dir / "prompt580_dispatch",
+            enabled=True,
+            enable_token=prompt580_token,
+            dev_task_prompt_text=final_dev_task_prompt,
+            timeout_seconds=timeout,
+        )
+        cycle_state.update(prompt580_summary)
+        prompt580_route = _normalize_text(
+            prompt580_summary.get("prompt580_result_route"), default=""
+        )
+        if prompt580_route == "verify_codex_changes":
+            prompt581_summary = run_prompt581_verify_real_dev_task_changes_gate(
+                run_state_payload=cycle_state,
+                execution_repo_path=repo_path,
+                artifact_dir=integrated_artifact_dir / "prompt581_verify",
+                changed_files=final_changed_files,
+            )
+            cycle_state.update(prompt581_summary)
+            prompt581_route = _normalize_text(
+                prompt581_summary.get("prompt581_result_route"), default=""
+            )
+            if prompt581_route == "changes_review_ready":
+                prompt582_summary = (
+                    run_prompt582_review_and_commit_real_dev_changes_gate(
+                        run_state_payload=cycle_state,
+                        execution_repo_path=repo_path,
+                        artifact_dir=(
+                            integrated_artifact_dir / "prompt582_review"
+                        ),
+                        changed_files=final_changed_files,
+                        review_payload={},
+                    )
+                )
+                cycle_state.update(prompt582_summary)
+                prompt582_route = _normalize_text(
+                    prompt582_summary.get("prompt582_result_route"),
+                    default="",
+                )
+                if prompt582_route == "approve_commit_tag":
+                    prompt583_summary = (
+                        run_prompt583_commit_tag_real_dev_changes_gate(
+                            run_state_payload=cycle_state,
+                            execution_repo_path=repo_path,
+                            artifact_dir=(
+                                integrated_artifact_dir
+                                / "prompt583_commit_tag"
+                            ),
+                            changed_files=final_changed_files,
+                            commit_message=final_commit_message,
+                            tag_name=final_tag_name,
+                            enabled=True,
+                            enable_token=prompt583_token,
+                        )
+                    )
+                    cycle_state.update(prompt583_summary)
+                    prompt583_route = _normalize_text(
+                        prompt583_summary.get("prompt583_result_route"),
+                        default="",
+                    )
+                    if prompt583_route == "commit_tag_completed":
+                        result_route = "one_cycle_completed"
+                        next_action = (
+                            "prepare_prompt585_integrated_real_dev_failure_routes"
+                        )
+                        status = (
+                            "integrated_real_dev_one_cycle_completed_local_only"
+                        )
+                        success = True
+                    else:
+                        result_route = "retry_required"
+                        next_action = (
+                            "retry_prompt584_integrated_real_dev_commit_tag"
+                        )
+                        status = "blocked_integrated_real_dev_one_cycle_failed"
+                        blocked_reasons.append(
+                            "prompt583_commit_tag_not_completed"
+                        )
+                elif prompt582_route == "no_changes_review_required":
+                    result_route = "no_changes_review_required"
+                    next_action = (
+                        "manual_review_prompt584_no_changes_review_required"
+                    )
+                    status = "blocked_integrated_real_dev_one_cycle_failed"
+                else:
+                    result_route = "manual_review_required"
+                    next_action = "manual_review_prompt584_review_rejected"
+                    status = "blocked_integrated_real_dev_one_cycle_failed"
+                    blocked_reasons.append("prompt582_review_not_approved")
+            elif prompt581_route == "no_changes_review_required":
+                result_route = "no_changes_review_required"
+                next_action = (
+                    "manual_review_prompt584_no_changes_review_required"
+                )
+                status = "blocked_integrated_real_dev_one_cycle_failed"
+            elif prompt581_route in {
+                "failed_retry_required",
+                "timeout_retry_required",
+            }:
+                result_route = "retry_required"
+                next_action = "retry_prompt584_integrated_real_dev_verify"
+                status = "blocked_integrated_real_dev_one_cycle_failed"
+                blocked_reasons.append("prompt581_verify_retry_required")
+            else:
+                result_route = "manual_review_required"
+                next_action = "manual_review_prompt584_verify_rejected"
+                status = "blocked_integrated_real_dev_one_cycle_failed"
+                blocked_reasons.append("prompt581_verify_not_ready")
+        elif prompt580_route == "success_no_changes":
+            result_route = "no_changes_review_required"
+            next_action = "manual_review_prompt584_no_changes_review_required"
+            status = "blocked_integrated_real_dev_one_cycle_failed"
+        elif prompt580_route == "missing_prerequisite":
+            result_route = "missing_prerequisite"
+            next_action = "manual_review_prompt584_missing_prerequisite"
+            status = (
+                "blocked_integrated_real_dev_one_cycle_missing_prerequisite"
+            )
+            ready = False
+            blocked_reasons.extend(
+                _prompt579_string_list(
+                    prompt580_summary.get("prompt580_blocked_reasons")
+                )
+            )
+        else:
+            result_route = "retry_required"
+            next_action = "retry_prompt584_integrated_real_dev_dispatch"
+            status = "blocked_integrated_real_dev_one_cycle_failed"
+            blocked_reasons.append("prompt580_dispatch_retry_required")
+
+    dispatch_artifact_written = _prompt584_write_integrated_artifact(
+        dispatch_path,
+        source_prompt="prompt580",
+        payload=prompt580_summary,
+        executed=bool(prompt580_summary.get("prompt580_real_dev_task_executed")),
+        skipped_reason="" if prompt580_summary else "not_started",
+    )
+    verify_artifact_written = _prompt584_write_integrated_artifact(
+        verify_path,
+        source_prompt="prompt581",
+        payload=prompt581_summary,
+        executed=bool(prompt581_summary),
+        skipped_reason="" if prompt581_summary else "not_started",
+    )
+    review_artifact_written = _prompt584_write_integrated_artifact(
+        review_path,
+        source_prompt="prompt582",
+        payload=prompt582_summary,
+        executed=bool(prompt582_summary),
+        skipped_reason="" if prompt582_summary else "not_started",
+    )
+    commit_tag_artifact_written = _prompt584_write_integrated_artifact(
+        commit_tag_path,
+        source_prompt="prompt583",
+        payload=prompt583_summary,
+        executed=bool(prompt583_summary),
+        skipped_reason="" if prompt583_summary else "not_started",
+    )
+
+    prompt580_route = _normalize_text(
+        prompt580_summary.get("prompt580_result_route"), default=""
+    )
+    prompt581_route = _normalize_text(
+        prompt581_summary.get("prompt581_result_route"), default=""
+    )
+    prompt582_route = _normalize_text(
+        prompt582_summary.get("prompt582_result_route"), default=""
+    )
+    prompt583_route = _normalize_text(
+        prompt583_summary.get("prompt583_result_route"), default=""
+    )
+    prompt583_commit_hash = _normalize_text(
+        prompt583_summary.get("prompt583_commit_hash"), default=""
+    )
+    prompt583_tag_name = _normalize_text(
+        prompt583_summary.get("prompt583_tag_name"), default=final_tag_name
+    )
+    prompt580_changed_tracked_files = _prompt579_string_list(
+        prompt580_summary.get("prompt580_changed_tracked_files")
+    )
+    prompt579_next_action_value = _normalize_text(
+        prompt580_input_payload.get("prompt579_next_action"), default=""
+    )
+
+    one_cycle_dispatch_step_completed = prompt580_route == "verify_codex_changes"
+    one_cycle_verify_step_completed = prompt581_route == "changes_review_ready"
+    one_cycle_review_step_completed = prompt582_route == "approve_commit_tag"
+    one_cycle_commit_tag_step_completed = prompt583_route == "commit_tag_completed"
+    one_cycle_completed = bool(
+        one_cycle_dispatch_step_completed
+        and one_cycle_verify_step_completed
+        and one_cycle_review_step_completed
+        and one_cycle_commit_tag_step_completed
+    )
+    prompt580_dispatch_executed = (
+        prompt580_summary.get("prompt580_real_dev_task_executed") is True
+    )
+    prompt581_verify_executed = bool(prompt581_summary)
+    prompt582_review_executed = bool(prompt582_summary)
+    prompt583_commit_tag_executed = bool(prompt583_summary)
+    prompt583_commit_performed = (
+        prompt583_summary.get("prompt583_commit_performed") is True
+    )
+    prompt583_tag_performed = (
+        prompt583_summary.get("prompt583_tag_performed") is True
+    )
+
+    installation_performed = False
+    systemd_used = False
+    service_enable_performed = False
+    service_start_performed = False
+    persistent_service_started = False
+    remote_workflow_included = False
+    no_remote_mutation_verified = True
+    final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
+        repo_path=repo_path,
+        daemon_artifact_dir=integrated_artifact_dir,
+    )
+    all_integrated_artifacts_except_summary_written = all(
+        (
+            input_written,
+            dispatch_artifact_written,
+            verify_artifact_written,
+            review_artifact_written,
+            commit_tag_artifact_written,
+            prompt580_input_payload_written,
+        )
+    )
+    prompt584_completion_claim_allowed = bool(
+        success
+        and prompt584_enabled
+        and prompt584_enable_token_valid
+        and prompt584_prompt580_enable_token_valid
+        and prompt584_prompt583_enable_token_valid
+        and prompt579_prerequisite_injected
+        and prompt579_prerequisite_ready
+        and prompt580_input_payload_written
+        and prompt580_dispatch_executed
+        and prompt580_summary.get("prompt580_real_dev_task_dispatch_success")
+        is True
+        and prompt580_route == "verify_codex_changes"
+        and prompt580_changed_tracked_files
+        and prompt581_verify_executed
+        and prompt581_summary.get(
+            "prompt581_real_dev_task_changes_verification_success"
+        )
+        is True
+        and prompt581_route == "changes_review_ready"
+        and prompt582_review_executed
+        and prompt582_summary.get("prompt582_real_dev_changes_review_success")
+        is True
+        and prompt582_route == "approve_commit_tag"
+        and prompt583_commit_tag_executed
+        and prompt583_summary.get(
+            "prompt583_real_dev_changes_commit_tag_success"
+        )
+        is True
+        and prompt583_route == "commit_tag_completed"
+        and prompt583_commit_hash
+        and prompt583_summary.get("prompt583_tag_exists_at_head") is True
+        and one_cycle_completed
+        and all_integrated_artifacts_except_summary_written
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and final_worktree_clean
+        and result_route == "one_cycle_completed"
+        and next_action
+        == "prepare_prompt585_integrated_real_dev_failure_routes"
+        and blocked_reasons == []
+    )
+
+    route_payload = {
+        "local_only": True,
+        "source_prompt": "prompt584",
+        "prompt584_result_route": result_route,
+        "prompt584_next_action": next_action,
+        "prompt584_blocked_reasons": blocked_reasons,
+    }
+    _write_json(route_path, route_payload)
+    route_written = route_path.is_file()
+    prompt584_completion_claim_allowed = bool(
+        prompt584_completion_claim_allowed and route_written
+    )
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt584",
+        "prompt584_integrated_real_dev_one_cycle_status": status,
+        "prompt584_integrated_real_dev_one_cycle_ready": ready,
+        "prompt584_integrated_real_dev_one_cycle_success": success,
+        "prompt584_enabled": prompt584_enabled,
+        "prompt584_enable_token_valid": prompt584_enable_token_valid,
+        "prompt584_prompt580_enable_token_valid": (
+            prompt584_prompt580_enable_token_valid
+        ),
+        "prompt584_prompt583_enable_token_valid": (
+            prompt584_prompt583_enable_token_valid
+        ),
+        "prompt584_prompt579_prerequisite_injected": (
+            prompt579_prerequisite_injected
+        ),
+        "prompt584_prompt579_prerequisite_ready": (
+            prompt579_prerequisite_ready
+        ),
+        "prompt579_next_action": prompt579_next_action_value,
+        "prompt584_prompt580_input_payload_written": (
+            prompt580_input_payload_written
+        ),
+        "prompt584_dev_task_prompt_written": (
+            prompt580_summary.get("prompt580_dev_task_prompt_written") is True
+        ),
+        "prompt584_prompt580_dispatch_executed": prompt580_dispatch_executed,
+        "prompt584_prompt580_dispatch_success": (
+            prompt580_summary.get("prompt580_real_dev_task_dispatch_success")
+            is True
+        ),
+        "prompt584_prompt580_result_route": prompt580_route,
+        "prompt584_prompt580_changed_tracked_files": (
+            prompt580_changed_tracked_files
+        ),
+        "prompt584_prompt581_verify_executed": prompt581_verify_executed,
+        "prompt584_prompt581_verify_success": (
+            prompt581_summary.get(
+                "prompt581_real_dev_task_changes_verification_success"
+            )
+            is True
+        ),
+        "prompt584_prompt581_result_route": prompt581_route,
+        "prompt584_prompt582_review_executed": prompt582_review_executed,
+        "prompt584_prompt582_review_success": (
+            prompt582_summary.get("prompt582_real_dev_changes_review_success")
+            is True
+        ),
+        "prompt584_prompt582_result_route": prompt582_route,
+        "prompt584_prompt583_commit_tag_executed": (
+            prompt583_commit_tag_executed
+        ),
+        "prompt584_prompt583_commit_tag_success": (
+            prompt583_summary.get(
+                "prompt583_real_dev_changes_commit_tag_success"
+            )
+            is True
+        ),
+        "prompt584_prompt583_result_route": prompt583_route,
+        "prompt584_prompt583_commit_hash": prompt583_commit_hash,
+        "prompt584_prompt583_tag_name": prompt583_tag_name,
+        "prompt584_prompt583_tag_exists_at_head": (
+            prompt583_summary.get("prompt583_tag_exists_at_head") is True
+        ),
+        "prompt584_one_cycle_dispatch_step_completed": (
+            one_cycle_dispatch_step_completed
+        ),
+        "prompt584_one_cycle_verify_step_completed": (
+            one_cycle_verify_step_completed
+        ),
+        "prompt584_one_cycle_review_step_completed": (
+            one_cycle_review_step_completed
+        ),
+        "prompt584_one_cycle_commit_tag_step_completed": (
+            one_cycle_commit_tag_step_completed
+        ),
+        "prompt584_one_cycle_completed": one_cycle_completed,
+        "prompt584_dispatch_not_run": not prompt580_dispatch_executed,
+        "prompt584_input_written": input_written,
+        "prompt584_dispatch_artifact_written": dispatch_artifact_written,
+        "prompt584_verify_artifact_written": verify_artifact_written,
+        "prompt584_review_artifact_written": review_artifact_written,
+        "prompt584_commit_tag_artifact_written": (
+            commit_tag_artifact_written
+        ),
+        "prompt584_route_written": route_written,
+        "prompt584_summary_written": False,
+        "prompt584_codex_executed_during_runtime": (
+            prompt580_dispatch_executed
+        ),
+        "prompt584_tracked_files_modified_by_codex": bool(
+            prompt580_summary.get("prompt580_tracked_files_modified_by_codex")
+            is True
+        ),
+        "prompt584_commit_performed": prompt583_commit_performed,
+        "prompt584_tag_performed": prompt583_tag_performed,
+        "prompt584_installation_performed": installation_performed,
+        "prompt584_systemd_used": systemd_used,
+        "prompt584_service_enable_performed": service_enable_performed,
+        "prompt584_service_start_performed": service_start_performed,
+        "prompt584_persistent_service_started": persistent_service_started,
+        "prompt584_remote_workflow_included": remote_workflow_included,
+        "prompt584_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt584_final_worktree_clean": final_worktree_clean,
+        "prompt584_completion_claim_allowed": (
+            prompt584_completion_claim_allowed
+        ),
+        "prompt584_result_route": result_route,
+        "prompt584_next_action": next_action,
+        "prompt584_blocked_reasons": blocked_reasons,
+    }
+    _write_json(summary_path, summary)
+    summary_written = summary_path.is_file()
+    summary["prompt584_summary_written"] = summary_written
+    summary["prompt584_completion_claim_allowed"] = bool(
+        prompt584_completion_claim_allowed and summary_written
     )
     if summary_written:
         _write_json(summary_path, summary)

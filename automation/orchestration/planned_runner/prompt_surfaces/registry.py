@@ -245,6 +245,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt581_verify_real_dev_task_changes_gate_state,
     _build_prompt582_review_and_commit_real_dev_changes_gate_state,
     _build_prompt583_commit_tag_real_dev_changes_gate_state,
+    _build_prompt584_integrated_real_dev_one_cycle_gate_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -486,6 +487,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt581_verify_real_dev_task_changes_gate_state": _build_prompt581_verify_real_dev_task_changes_gate_state,
     "_build_prompt582_review_and_commit_real_dev_changes_gate_state": _build_prompt582_review_and_commit_real_dev_changes_gate_state,
     "_build_prompt583_commit_tag_real_dev_changes_gate_state": _build_prompt583_commit_tag_real_dev_changes_gate_state,
+    "_build_prompt584_integrated_real_dev_one_cycle_gate_state": _build_prompt584_integrated_real_dev_one_cycle_gate_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -731,4 +733,5 @@ __all__ = [
     "_build_prompt581_verify_real_dev_task_changes_gate_state",
     "_build_prompt582_review_and_commit_real_dev_changes_gate_state",
     "_build_prompt583_commit_tag_real_dev_changes_gate_state",
+    "_build_prompt584_integrated_real_dev_one_cycle_gate_state",
 ]

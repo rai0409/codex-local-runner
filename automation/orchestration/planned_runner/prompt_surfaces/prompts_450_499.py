@@ -30122,6 +30122,335 @@ def _build_prompt583_commit_tag_real_dev_changes_gate_state(
     }
 
 
+def _build_prompt584_integrated_real_dev_one_cycle_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt584_enabled") is True
+    enable_token_valid = payload.get("prompt584_enable_token_valid") is True
+    prompt580_enable_token_valid = (
+        payload.get("prompt584_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt584_prompt583_enable_token_valid") is True
+    )
+    prompt579_prerequisite_injected = (
+        payload.get("prompt584_prompt579_prerequisite_injected") is True
+    )
+    prompt579_next_action = _normalize_text(
+        payload.get("prompt579_next_action"), default=""
+    )
+    prompt579_prerequisite_ready = (
+        payload.get("prompt584_prompt579_prerequisite_ready") is True
+        and prompt579_next_action
+        == "prepare_prompt580_real_dev_task_dispatch"
+    )
+    prompt580_input_payload_written = (
+        payload.get("prompt584_prompt580_input_payload_written") is True
+    )
+    prompt580_dispatch_executed = (
+        payload.get("prompt584_prompt580_dispatch_executed") is True
+    )
+    prompt581_verify_executed = (
+        payload.get("prompt584_prompt581_verify_executed") is True
+    )
+    prompt582_review_executed = (
+        payload.get("prompt584_prompt582_review_executed") is True
+    )
+    prompt583_commit_tag_executed = (
+        payload.get("prompt584_prompt583_commit_tag_executed") is True
+    )
+    all_integrated_artifacts_written = all(
+        (
+            payload.get("prompt584_input_written") is True,
+            payload.get("prompt584_dispatch_artifact_written") is True,
+            payload.get("prompt584_verify_artifact_written") is True,
+            payload.get("prompt584_review_artifact_written") is True,
+            payload.get("prompt584_commit_tag_artifact_written") is True,
+            prompt580_input_payload_written,
+            payload.get("prompt584_route_written") is True,
+            payload.get("prompt584_summary_written") is True,
+        )
+    )
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt584_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt584_result_route"), default=""
+    )
+    if not result_route:
+        if not enabled or not enable_token_valid:
+            result_route = "not_run"
+        elif payload.get("prompt584_one_cycle_completed") is True:
+            result_route = "one_cycle_completed"
+        elif blocked_reasons:
+            result_route = "manual_review_required"
+        else:
+            result_route = "retry_required"
+    next_action = _normalize_text(
+        payload.get("prompt584_next_action"), default=""
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_integrated_real_dev_one_cycle"
+            ),
+            "one_cycle_completed": (
+                "prepare_prompt585_integrated_real_dev_failure_routes"
+            ),
+            "missing_prerequisite": "manual_review_prompt584_missing_prerequisite",
+            "no_changes_review_required": (
+                "manual_review_prompt584_no_changes_review_required"
+            ),
+            "manual_review_required": "manual_review_prompt584_integrated_cycle",
+            "retry_required": "retry_prompt584_integrated_real_dev_one_cycle",
+        }.get(result_route, "manual_review_prompt584_integrated_cycle")
+
+    not_run_predicates = bool(
+        payload.get("prompt584_integrated_real_dev_one_cycle_ready", True)
+        is True
+        and not payload.get("prompt584_integrated_real_dev_one_cycle_success")
+        and (not enabled or not enable_token_valid)
+        and not prompt580_dispatch_executed
+        and not prompt581_verify_executed
+        and not prompt582_review_executed
+        and not prompt583_commit_tag_executed
+        and payload.get("prompt584_dispatch_not_run") is True
+        and payload.get("prompt584_codex_executed_during_runtime") is False
+        and payload.get("prompt584_commit_performed") is False
+        and payload.get("prompt584_tag_performed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_integrated_real_dev_one_cycle"
+    )
+    success_predicates = bool(
+        enabled
+        and enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+        and prompt579_prerequisite_injected
+        and prompt579_prerequisite_ready
+        and prompt580_input_payload_written
+        and prompt580_dispatch_executed
+        and payload.get("prompt584_prompt580_dispatch_success") is True
+        and payload.get("prompt584_prompt580_result_route")
+        == "verify_codex_changes"
+        and _normalize_string_list(
+            payload.get("prompt584_prompt580_changed_tracked_files")
+        )
+        != []
+        and prompt581_verify_executed
+        and payload.get("prompt584_prompt581_verify_success") is True
+        and payload.get("prompt584_prompt581_result_route")
+        == "changes_review_ready"
+        and prompt582_review_executed
+        and payload.get("prompt584_prompt582_review_success") is True
+        and payload.get("prompt584_prompt582_result_route")
+        == "approve_commit_tag"
+        and prompt583_commit_tag_executed
+        and payload.get("prompt584_prompt583_commit_tag_success") is True
+        and payload.get("prompt584_prompt583_result_route")
+        == "commit_tag_completed"
+        and _normalize_text(
+            payload.get("prompt584_prompt583_commit_hash"), default=""
+        )
+        != ""
+        and payload.get("prompt584_prompt583_tag_exists_at_head") is True
+        and payload.get("prompt584_one_cycle_dispatch_step_completed") is True
+        and payload.get("prompt584_one_cycle_verify_step_completed") is True
+        and payload.get("prompt584_one_cycle_review_step_completed") is True
+        and payload.get("prompt584_one_cycle_commit_tag_step_completed") is True
+        and payload.get("prompt584_one_cycle_completed") is True
+        and all_integrated_artifacts_written
+        and payload.get("prompt584_codex_executed_during_runtime") is True
+        and payload.get("prompt584_tracked_files_modified_by_codex") is True
+        and payload.get("prompt584_commit_performed") is True
+        and payload.get("prompt584_tag_performed") is True
+        and payload.get("prompt584_installation_performed") is False
+        and payload.get("prompt584_systemd_used") is False
+        and payload.get("prompt584_service_enable_performed") is False
+        and payload.get("prompt584_service_start_performed") is False
+        and payload.get("prompt584_persistent_service_started") is False
+        and payload.get("prompt584_remote_workflow_included") is False
+        and payload.get("prompt584_no_remote_mutation_verified") is True
+        and payload.get("prompt584_final_worktree_clean") is True
+        and payload.get("prompt584_completion_claim_allowed") is True
+        and result_route == "one_cycle_completed"
+        and next_action
+        == "prepare_prompt585_integrated_real_dev_failure_routes"
+        and blocked_reasons == []
+    )
+
+    if success_predicates:
+        status = "integrated_real_dev_one_cycle_completed_local_only"
+        success = True
+        ready = True
+    elif not_run_predicates:
+        status = "integrated_real_dev_one_cycle_ready_not_run_local_only"
+        success = False
+        ready = True
+    elif result_route == "missing_prerequisite":
+        status = "blocked_integrated_real_dev_one_cycle_missing_prerequisite"
+        success = False
+        ready = False
+    else:
+        status = "blocked_integrated_real_dev_one_cycle_failed"
+        success = False
+        ready = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt584",
+        "prompt584_integrated_real_dev_one_cycle_status": status,
+        "prompt584_integrated_real_dev_one_cycle_ready": ready,
+        "prompt584_integrated_real_dev_one_cycle_success": success,
+        "prompt584_enabled": enabled,
+        "prompt584_enable_token_valid": enable_token_valid,
+        "prompt584_prompt580_enable_token_valid": prompt580_enable_token_valid,
+        "prompt584_prompt583_enable_token_valid": prompt583_enable_token_valid,
+        "prompt584_prompt579_prerequisite_injected": (
+            prompt579_prerequisite_injected
+        ),
+        "prompt584_prompt579_prerequisite_ready": (
+            prompt579_prerequisite_ready
+        ),
+        "prompt579_next_action": prompt579_next_action,
+        "prompt584_prompt580_input_payload_written": (
+            prompt580_input_payload_written
+        ),
+        "prompt584_dev_task_prompt_written": (
+            payload.get("prompt584_dev_task_prompt_written") is True
+        ),
+        "prompt584_prompt580_dispatch_executed": prompt580_dispatch_executed,
+        "prompt584_prompt580_dispatch_success": (
+            payload.get("prompt584_prompt580_dispatch_success") is True
+        ),
+        "prompt584_prompt580_result_route": _normalize_text(
+            payload.get("prompt584_prompt580_result_route"), default=""
+        ),
+        "prompt584_prompt580_changed_tracked_files": (
+            _normalize_string_list(
+                payload.get("prompt584_prompt580_changed_tracked_files")
+            )
+        ),
+        "prompt584_prompt581_verify_executed": prompt581_verify_executed,
+        "prompt584_prompt581_verify_success": (
+            payload.get("prompt584_prompt581_verify_success") is True
+        ),
+        "prompt584_prompt581_result_route": _normalize_text(
+            payload.get("prompt584_prompt581_result_route"), default=""
+        ),
+        "prompt584_prompt582_review_executed": prompt582_review_executed,
+        "prompt584_prompt582_review_success": (
+            payload.get("prompt584_prompt582_review_success") is True
+        ),
+        "prompt584_prompt582_result_route": _normalize_text(
+            payload.get("prompt584_prompt582_result_route"), default=""
+        ),
+        "prompt584_prompt583_commit_tag_executed": (
+            prompt583_commit_tag_executed
+        ),
+        "prompt584_prompt583_commit_tag_success": (
+            payload.get("prompt584_prompt583_commit_tag_success") is True
+        ),
+        "prompt584_prompt583_result_route": _normalize_text(
+            payload.get("prompt584_prompt583_result_route"), default=""
+        ),
+        "prompt584_prompt583_commit_hash": _normalize_text(
+            payload.get("prompt584_prompt583_commit_hash"), default=""
+        ),
+        "prompt584_prompt583_tag_name": _normalize_text(
+            payload.get("prompt584_prompt583_tag_name"), default=""
+        ),
+        "prompt584_prompt583_tag_exists_at_head": (
+            payload.get("prompt584_prompt583_tag_exists_at_head") is True
+        ),
+        "prompt584_one_cycle_dispatch_step_completed": (
+            payload.get("prompt584_one_cycle_dispatch_step_completed") is True
+        ),
+        "prompt584_one_cycle_verify_step_completed": (
+            payload.get("prompt584_one_cycle_verify_step_completed") is True
+        ),
+        "prompt584_one_cycle_review_step_completed": (
+            payload.get("prompt584_one_cycle_review_step_completed") is True
+        ),
+        "prompt584_one_cycle_commit_tag_step_completed": (
+            payload.get("prompt584_one_cycle_commit_tag_step_completed") is True
+        ),
+        "prompt584_one_cycle_completed": (
+            payload.get("prompt584_one_cycle_completed") is True
+        ),
+        "prompt584_dispatch_not_run": (
+            payload.get("prompt584_dispatch_not_run") is True
+        ),
+        "prompt584_input_written": payload.get("prompt584_input_written") is True,
+        "prompt584_dispatch_artifact_written": (
+            payload.get("prompt584_dispatch_artifact_written") is True
+        ),
+        "prompt584_verify_artifact_written": (
+            payload.get("prompt584_verify_artifact_written") is True
+        ),
+        "prompt584_review_artifact_written": (
+            payload.get("prompt584_review_artifact_written") is True
+        ),
+        "prompt584_commit_tag_artifact_written": (
+            payload.get("prompt584_commit_tag_artifact_written") is True
+        ),
+        "prompt584_route_written": payload.get("prompt584_route_written") is True,
+        "prompt584_summary_written": (
+            payload.get("prompt584_summary_written") is True
+        ),
+        "prompt584_codex_executed_during_runtime": (
+            payload.get("prompt584_codex_executed_during_runtime") is True
+        ),
+        "prompt584_tracked_files_modified_by_codex": (
+            payload.get("prompt584_tracked_files_modified_by_codex") is True
+        ),
+        "prompt584_commit_performed": (
+            payload.get("prompt584_commit_performed") is True
+        ),
+        "prompt584_tag_performed": payload.get("prompt584_tag_performed") is True,
+        "prompt584_installation_performed": (
+            payload.get("prompt584_installation_performed") is True
+        ),
+        "prompt584_systemd_used": payload.get("prompt584_systemd_used") is True,
+        "prompt584_service_enable_performed": (
+            payload.get("prompt584_service_enable_performed") is True
+        ),
+        "prompt584_service_start_performed": (
+            payload.get("prompt584_service_start_performed") is True
+        ),
+        "prompt584_persistent_service_started": (
+            payload.get("prompt584_persistent_service_started") is True
+        ),
+        "prompt584_remote_workflow_included": (
+            payload.get("prompt584_remote_workflow_included") is True
+        ),
+        "prompt584_no_remote_mutation_verified": (
+            payload.get("prompt584_no_remote_mutation_verified") is True
+        ),
+        "prompt584_final_worktree_clean": (
+            payload.get("prompt584_final_worktree_clean") is True
+        ),
+        "prompt584_completion_claim_allowed": (
+            payload.get("prompt584_completion_claim_allowed") is True
+        ),
+        "prompt584_result_route": result_route,
+        "prompt584_next_action": next_action,
+        "prompt584_blocked_reasons": blocked_reasons,
+        "prompt584_prompt_surface": (
+            "Integrated local-only one-cycle runner gate; requires the "
+            "exact Prompt584 enable token plus Prompt580 and Prompt583 "
+            "downstream enable tokens before any Codex execution, calls "
+            "Prompt580, Prompt581, Prompt582, and Prompt583 in order, "
+            "commits and tags only through Prompt583, and excludes push, "
+            "gh pr, installs, systemd, systemctl, sudo, persistent "
+            "services, shell=True, and remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -32016,4 +32345,5 @@ __all__ = [
     "_build_prompt581_verify_real_dev_task_changes_gate_state",
     "_build_prompt582_review_and_commit_real_dev_changes_gate_state",
     "_build_prompt583_commit_tag_real_dev_changes_gate_state",
+    "_build_prompt584_integrated_real_dev_one_cycle_gate_state",
 ]
