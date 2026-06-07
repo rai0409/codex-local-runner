@@ -30451,6 +30451,266 @@ def _build_prompt584_integrated_real_dev_one_cycle_gate_state(
     }
 
 
+def _prompt585_cycle_result_succeeded(cycle: Mapping[str, Any]) -> bool:
+    prompt584_result = cycle.get("prompt584_result")
+    if not isinstance(prompt584_result, Mapping):
+        return False
+    return bool(
+        cycle.get("cycle_succeeded") is True
+        and prompt584_result.get("prompt584_result_route")
+        == "one_cycle_completed"
+        and prompt584_result.get("prompt584_one_cycle_completed") is True
+        and prompt584_result.get("prompt584_prompt583_result_route")
+        == "commit_tag_completed"
+        and prompt584_result.get("prompt584_completion_claim_allowed") is True
+        and _normalize_string_list(
+            prompt584_result.get("prompt584_blocked_reasons")
+        )
+        == []
+    )
+
+
+def _build_prompt585_success_only_multi_cycle_real_dev_runner_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt585_enabled") is True
+    enable_token_valid = payload.get("prompt585_enable_token_valid") is True
+    prompt584_enable_token_valid = (
+        payload.get("prompt585_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt585_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt585_prompt583_enable_token_valid") is True
+    )
+    max_cycles = payload.get("prompt585_max_cycles")
+    if not isinstance(max_cycles, int):
+        max_cycles = 2
+    max_cycles = max(1, min(5, max_cycles))
+    started_cycles = payload.get("prompt585_started_cycles")
+    if not isinstance(started_cycles, int):
+        started_cycles = 0
+    completed_cycles = payload.get("prompt585_completed_cycles")
+    if not isinstance(completed_cycles, int):
+        completed_cycles = 0
+    failed_cycles = payload.get("prompt585_failed_cycles")
+    if not isinstance(failed_cycles, int):
+        failed_cycles = 0
+    raw_cycle_results = payload.get("prompt585_cycle_results")
+    cycle_results = (
+        list(raw_cycle_results) if isinstance(raw_cycle_results, Sequence) else []
+    )
+    cycle_successes = [
+        _prompt585_cycle_result_succeeded(cycle)
+        for cycle in cycle_results
+        if isinstance(cycle, Mapping)
+    ]
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt585_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt585_result_route"), default=""
+    )
+    if not result_route:
+        if not (
+            enabled
+            and enable_token_valid
+            and prompt584_enable_token_valid
+            and prompt580_enable_token_valid
+            and prompt583_enable_token_valid
+        ):
+            result_route = "not_run"
+        elif failed_cycles:
+            result_route = "cycle_failed"
+        elif completed_cycles == max_cycles:
+            result_route = "multi_cycle_completed"
+        else:
+            result_route = "cycle_failed"
+    next_action = _normalize_text(
+        payload.get("prompt585_next_action"), default=""
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_success_only_multi_cycle"
+            ),
+            "multi_cycle_completed": (
+                "prepare_prompt586_success_multi_cycle_daemon_soak"
+            ),
+            "cycle_failed": "manual_review_prompt585_failed_cycle",
+        }.get(result_route, "manual_review_prompt585_failed_cycle")
+    stop_reason = _normalize_text(
+        payload.get("prompt585_stop_reason"), default=""
+    )
+    if not stop_reason:
+        stop_reason = {
+            "not_run": "not_run",
+            "multi_cycle_completed": "max_cycles_reached",
+            "cycle_failed": "cycle_failed",
+        }.get(result_route, "")
+
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and started_cycles == 0
+        and completed_cycles == 0
+        and failed_cycles == 0
+        and payload.get("prompt585_codex_executed_during_runtime") is False
+        and payload.get("prompt585_tracked_files_modified_by_codex") is False
+        and payload.get("prompt585_commit_performed") is False
+        and payload.get("prompt585_tag_performed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_success_only_multi_cycle"
+    )
+    success_predicates = bool(
+        token_gate_open
+        and max_cycles >= 2
+        and started_cycles == max_cycles
+        and completed_cycles == max_cycles
+        and failed_cycles == 0
+        and len(cycle_successes) == max_cycles
+        and all(cycle_successes)
+        and stop_reason == "max_cycles_reached"
+        and payload.get("prompt585_all_cycles_completed") is True
+        and payload.get("prompt585_input_written") is True
+        and payload.get("prompt585_resume_state_written") is True
+        and payload.get("prompt585_cycles_artifact_written") is True
+        and payload.get("prompt585_summary_written") is True
+        and payload.get("prompt585_route_written") is True
+        and payload.get("prompt585_codex_executed_during_runtime") is True
+        and payload.get("prompt585_tracked_files_modified_by_codex") is True
+        and payload.get("prompt585_commit_performed") is True
+        and payload.get("prompt585_tag_performed") is True
+        and payload.get("prompt585_installation_performed") is False
+        and payload.get("prompt585_systemd_used") is False
+        and payload.get("prompt585_service_enable_performed") is False
+        and payload.get("prompt585_service_start_performed") is False
+        and payload.get("prompt585_persistent_service_started") is False
+        and payload.get("prompt585_remote_workflow_included") is False
+        and payload.get("prompt585_no_remote_mutation_verified") is True
+        and payload.get("prompt585_final_worktree_clean") is True
+        and payload.get("prompt585_completion_claim_allowed") is True
+        and result_route == "multi_cycle_completed"
+        and next_action == "prepare_prompt586_success_multi_cycle_daemon_soak"
+        and blocked_reasons == []
+    )
+    failed_predicates = bool(
+        token_gate_open
+        and failed_cycles >= 1
+        and result_route == "cycle_failed"
+        and next_action == "manual_review_prompt585_failed_cycle"
+    )
+
+    if success_predicates:
+        status = "success_only_multi_cycle_completed_local_only"
+        ready = True
+        success = True
+    elif not_run_predicates:
+        status = "success_only_multi_cycle_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif failed_predicates:
+        status = "blocked_success_only_multi_cycle_failed"
+        ready = False
+        success = False
+    else:
+        status = "blocked_success_only_multi_cycle_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt585",
+        "prompt585_success_multi_cycle_status": status,
+        "prompt585_success_multi_cycle_ready": ready,
+        "prompt585_success_multi_cycle_success": success,
+        "prompt585_enabled": enabled,
+        "prompt585_enable_token_valid": enable_token_valid,
+        "prompt585_prompt584_enable_token_valid": prompt584_enable_token_valid,
+        "prompt585_prompt580_enable_token_valid": prompt580_enable_token_valid,
+        "prompt585_prompt583_enable_token_valid": prompt583_enable_token_valid,
+        "prompt585_max_cycles": max_cycles,
+        "prompt585_started_cycles": started_cycles,
+        "prompt585_completed_cycles": completed_cycles,
+        "prompt585_failed_cycles": failed_cycles,
+        "prompt585_cycle_results": cycle_results,
+        "prompt585_stop_reason": stop_reason,
+        "prompt585_all_cycles_completed": (
+            payload.get("prompt585_all_cycles_completed") is True
+        ),
+        "prompt585_input_written": payload.get("prompt585_input_written") is True,
+        "prompt585_resume_state_written": (
+            payload.get("prompt585_resume_state_written") is True
+        ),
+        "prompt585_cycles_artifact_written": (
+            payload.get("prompt585_cycles_artifact_written") is True
+        ),
+        "prompt585_summary_written": (
+            payload.get("prompt585_summary_written") is True
+        ),
+        "prompt585_route_written": (
+            payload.get("prompt585_route_written") is True
+        ),
+        "prompt585_codex_executed_during_runtime": (
+            payload.get("prompt585_codex_executed_during_runtime") is True
+        ),
+        "prompt585_tracked_files_modified_by_codex": (
+            payload.get("prompt585_tracked_files_modified_by_codex") is True
+        ),
+        "prompt585_commit_performed": (
+            payload.get("prompt585_commit_performed") is True
+        ),
+        "prompt585_tag_performed": payload.get("prompt585_tag_performed") is True,
+        "prompt585_installation_performed": (
+            payload.get("prompt585_installation_performed") is True
+        ),
+        "prompt585_systemd_used": payload.get("prompt585_systemd_used") is True,
+        "prompt585_service_enable_performed": (
+            payload.get("prompt585_service_enable_performed") is True
+        ),
+        "prompt585_service_start_performed": (
+            payload.get("prompt585_service_start_performed") is True
+        ),
+        "prompt585_persistent_service_started": (
+            payload.get("prompt585_persistent_service_started") is True
+        ),
+        "prompt585_remote_workflow_included": (
+            payload.get("prompt585_remote_workflow_included") is True
+        ),
+        "prompt585_no_remote_mutation_verified": (
+            payload.get("prompt585_no_remote_mutation_verified") is True
+        ),
+        "prompt585_final_worktree_clean": (
+            payload.get("prompt585_final_worktree_clean") is True
+        ),
+        "prompt585_completion_claim_allowed": (
+            payload.get("prompt585_completion_claim_allowed") is True
+        ),
+        "prompt585_result_route": result_route,
+        "prompt585_next_action": next_action,
+        "prompt585_blocked_reasons": blocked_reasons,
+        "prompt585_prompt_surface": (
+            "Success-only local multi-cycle real-dev runner; requires the "
+            "exact Prompt585 token plus Prompt584, Prompt580, and Prompt583 "
+            "downstream tokens before calling Prompt584, runs bounded "
+            "unique marker/commit/tag cycles, stops on the first failed "
+            "cycle, and excludes push, gh pr, installs, systemd, "
+            "systemctl, sudo, persistent services, shell=True, and remote "
+            "operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -32346,4 +32606,5 @@ __all__ = [
     "_build_prompt582_review_and_commit_real_dev_changes_gate_state",
     "_build_prompt583_commit_tag_real_dev_changes_gate_state",
     "_build_prompt584_integrated_real_dev_one_cycle_gate_state",
+    "_build_prompt585_success_only_multi_cycle_real_dev_runner_gate_state",
 ]
