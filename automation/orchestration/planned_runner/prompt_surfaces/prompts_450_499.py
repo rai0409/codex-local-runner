@@ -32918,6 +32918,408 @@ def _build_prompt592_role_evaluation_retry_gate_state(
     }
 
 
+def _build_prompt593_multi_role_autonomous_cycle_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt593_enabled") is True
+    enable_token_valid = payload.get("prompt593_enable_token_valid") is True
+    prompt592_enable_token_valid = (
+        payload.get("prompt593_prompt592_enable_token_valid") is True
+    )
+    prompt591_enable_token_valid = (
+        payload.get("prompt593_prompt591_enable_token_valid") is True
+    )
+    prompt590_enable_token_valid = (
+        payload.get("prompt593_prompt590_enable_token_valid") is True
+    )
+    prompt589_enable_token_valid = (
+        payload.get("prompt593_prompt589_enable_token_valid") is True
+    )
+    prompt588_enable_token_valid = (
+        payload.get("prompt593_prompt588_enable_token_valid") is True
+    )
+    prompt587_enable_token_valid = (
+        payload.get("prompt593_prompt587_enable_token_valid") is True
+    )
+    prompt586_enable_token_valid = (
+        payload.get("prompt593_prompt586_enable_token_valid") is True
+    )
+    prompt585_enable_token_valid = (
+        payload.get("prompt593_prompt585_enable_token_valid") is True
+    )
+    prompt584_enable_token_valid = (
+        payload.get("prompt593_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt593_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt593_prompt583_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt592_enable_token_valid
+        and prompt591_enable_token_valid
+        and prompt590_enable_token_valid
+        and prompt589_enable_token_valid
+        and prompt588_enable_token_valid
+        and prompt587_enable_token_valid
+        and prompt586_enable_token_valid
+        and prompt585_enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    project_goal_present = (
+        payload.get("prompt593_project_goal_present") is True
+    )
+    cycle_request_valid = (
+        payload.get("prompt593_cycle_request_valid") is True
+    )
+    try:
+        roles_count = int(payload.get("prompt593_roles_count", 0))
+    except (TypeError, ValueError):
+        roles_count = 0
+    try:
+        max_role_cycles = int(payload.get("prompt593_max_role_cycles", 1))
+    except (TypeError, ValueError):
+        max_role_cycles = 1
+    max_role_cycles = max(1, min(max_role_cycles, 3))
+    try:
+        max_retries_per_role = int(
+            payload.get("prompt593_max_retries_per_role", 1)
+        )
+    except (TypeError, ValueError):
+        max_retries_per_role = 1
+    max_retries_per_role = max(0, min(max_retries_per_role, 3))
+    dry_run = payload.get("prompt593_dry_run", True) is not False
+    execute_roles = payload.get("prompt593_execute_roles") is True
+    prompt590_executed = payload.get("prompt593_prompt590_executed") is True
+    prompt590_success = payload.get("prompt593_prompt590_success") is True
+    prompt590_route = _normalize_text(
+        payload.get("prompt593_prompt590_route"),
+        default="",
+    )
+    prompt591_executed = payload.get("prompt593_prompt591_executed") is True
+    prompt591_success = payload.get("prompt593_prompt591_success") is True
+    prompt591_route = _normalize_text(
+        payload.get("prompt593_prompt591_route"),
+        default="",
+    )
+    prompt592_executed = payload.get("prompt593_prompt592_executed") is True
+    prompt592_success = payload.get("prompt593_prompt592_success") is True
+    prompt592_route = _normalize_text(
+        payload.get("prompt593_prompt592_route"),
+        default="",
+    )
+    score = payload.get("prompt593_score")
+    if not isinstance(score, int):
+        score = 0
+    retry_required = payload.get("prompt593_retry_required") is True
+    fixer_prompt_required = (
+        payload.get("prompt593_fixer_prompt_required") is True
+    )
+    retry_exhausted = payload.get("prompt593_retry_exhausted") is True
+    cycle_completed = payload.get("prompt593_cycle_completed") is True
+    artifacts_written = (
+        payload.get("prompt593_cycle_artifacts_written") is True
+    )
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt593_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt593_result_route"),
+        default="",
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif not cycle_request_valid:
+            result_route = "multi_role_cycle_request_invalid"
+        elif retry_exhausted:
+            result_route = "multi_role_cycle_retry_exhausted"
+        elif retry_required:
+            result_route = "multi_role_cycle_retry_prepared"
+        elif cycle_completed:
+            result_route = "multi_role_cycle_completed"
+        else:
+            result_route = "multi_role_cycle_failed"
+    next_action = _normalize_text(
+        payload.get("prompt593_next_action"),
+        default="",
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_multi_role_autonomous_cycle"
+            ),
+            "multi_role_cycle_request_invalid": (
+                "manual_review_multi_role_cycle_request"
+            ),
+            "multi_role_cycle_retry_exhausted": (
+                "manual_review_multi_role_cycle_failure"
+            ),
+            "multi_role_cycle_retry_prepared": (
+                "prepare_prompt591_retry_role_execution"
+            ),
+            "multi_role_cycle_completed": (
+                "prepare_prompt594_cli_dogfood_entrypoint"
+            ),
+        }.get(result_route, "manual_review_multi_role_cycle_failure")
+
+    no_child_execution = bool(
+        not prompt590_executed and not prompt591_executed and not prompt592_executed
+    )
+    no_codex_commit_tag = bool(
+        payload.get("prompt593_codex_executed_during_runtime") is False
+        and payload.get("prompt593_tracked_files_modified_by_codex") is False
+        and payload.get("prompt593_commit_performed") is False
+        and payload.get("prompt593_tag_performed") is False
+    )
+    no_install_service_remote = bool(
+        payload.get("prompt593_installation_performed") is False
+        and payload.get("prompt593_systemd_used") is False
+        and payload.get("prompt593_service_enable_performed") is False
+        and payload.get("prompt593_service_start_performed") is False
+        and payload.get("prompt593_persistent_service_started") is False
+        and payload.get("prompt593_remote_workflow_included") is False
+        and payload.get("prompt593_no_remote_mutation_verified") is True
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and no_child_execution
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt593_final_worktree_clean") is True
+        and payload.get("prompt593_completion_claim_allowed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_multi_role_autonomous_cycle"
+        and blocked_reasons == []
+    )
+    invalid_request_predicates = bool(
+        token_gate_open
+        and not cycle_request_valid
+        and no_child_execution
+        and no_codex_commit_tag
+        and result_route == "multi_role_cycle_request_invalid"
+        and next_action == "manual_review_multi_role_cycle_request"
+        and "prompt593_multi_role_cycle_request_invalid" in blocked_reasons
+        and payload.get("prompt593_completion_claim_allowed") is False
+    )
+    pass_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and cycle_request_valid
+        and roles_count >= 1
+        and max_role_cycles <= 3
+        and max_retries_per_role <= 3
+        and dry_run
+        and not execute_roles
+        and prompt590_executed
+        and prompt591_executed
+        and prompt592_executed
+        and prompt590_success
+        and prompt591_success
+        and prompt592_success
+        and prompt590_route == "role_task_entrypoint_ready"
+        and prompt591_route == "role_execution_dry_run_ready"
+        and prompt592_route == "role_evaluation_passed"
+        and score >= 80
+        and not retry_required
+        and not fixer_prompt_required
+        and not retry_exhausted
+        and cycle_completed
+        and artifacts_written
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt593_final_worktree_clean") is True
+        and payload.get("prompt593_completion_claim_allowed") is True
+        and result_route == "multi_role_cycle_completed"
+        and next_action == "prepare_prompt594_cli_dogfood_entrypoint"
+        and blocked_reasons == []
+    )
+    retry_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and cycle_request_valid
+        and prompt590_executed
+        and prompt591_executed
+        and prompt592_executed
+        and prompt592_route == "role_evaluation_retry_prepared"
+        and retry_required
+        and fixer_prompt_required
+        and not retry_exhausted
+        and cycle_completed
+        and artifacts_written
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt593_completion_claim_allowed") is True
+        and result_route == "multi_role_cycle_retry_prepared"
+        and next_action == "prepare_prompt591_retry_role_execution"
+        and blocked_reasons == []
+    )
+    exhausted_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and cycle_request_valid
+        and prompt590_executed
+        and prompt591_executed
+        and prompt592_executed
+        and prompt592_route == "role_evaluation_retry_exhausted"
+        and retry_exhausted
+        and not cycle_completed
+        and no_codex_commit_tag
+        and result_route == "multi_role_cycle_retry_exhausted"
+        and next_action == "manual_review_multi_role_cycle_failure"
+        and "prompt593_retry_limit_exhausted" in blocked_reasons
+        and payload.get("prompt593_completion_claim_allowed") is False
+    )
+    if artifacts_written and pass_predicates:
+        status = "multi_role_autonomous_cycle_ready_local_only"
+        ready = True
+        success = True
+    elif artifacts_written and retry_predicates:
+        status = "multi_role_autonomous_cycle_ready_local_only"
+        ready = True
+        success = True
+    elif artifacts_written and not_run_predicates:
+        status = "multi_role_autonomous_cycle_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif artifacts_written and invalid_request_predicates:
+        status = "blocked_multi_role_autonomous_cycle_invalid_request"
+        ready = False
+        success = False
+    elif artifacts_written and exhausted_predicates:
+        status = "blocked_multi_role_autonomous_cycle_retry_exhausted"
+        ready = False
+        success = False
+    else:
+        status = "blocked_multi_role_autonomous_cycle_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt593",
+        "prompt593_multi_role_cycle_status": status,
+        "prompt593_multi_role_cycle_ready": ready,
+        "prompt593_multi_role_cycle_success": success,
+        "prompt593_enabled": enabled,
+        "prompt593_enable_token_valid": enable_token_valid,
+        "prompt593_prompt592_enable_token_valid": (
+            prompt592_enable_token_valid
+        ),
+        "prompt593_prompt591_enable_token_valid": (
+            prompt591_enable_token_valid
+        ),
+        "prompt593_prompt590_enable_token_valid": (
+            prompt590_enable_token_valid
+        ),
+        "prompt593_prompt589_enable_token_valid": (
+            prompt589_enable_token_valid
+        ),
+        "prompt593_prompt588_enable_token_valid": (
+            prompt588_enable_token_valid
+        ),
+        "prompt593_prompt587_enable_token_valid": (
+            prompt587_enable_token_valid
+        ),
+        "prompt593_prompt586_enable_token_valid": (
+            prompt586_enable_token_valid
+        ),
+        "prompt593_prompt585_enable_token_valid": (
+            prompt585_enable_token_valid
+        ),
+        "prompt593_prompt584_enable_token_valid": (
+            prompt584_enable_token_valid
+        ),
+        "prompt593_prompt580_enable_token_valid": (
+            prompt580_enable_token_valid
+        ),
+        "prompt593_prompt583_enable_token_valid": (
+            prompt583_enable_token_valid
+        ),
+        "prompt593_project_goal_present": project_goal_present,
+        "prompt593_cycle_request_valid": cycle_request_valid,
+        "prompt593_roles_count": roles_count,
+        "prompt593_max_role_cycles": max_role_cycles,
+        "prompt593_max_retries_per_role": max_retries_per_role,
+        "prompt593_dry_run": dry_run,
+        "prompt593_execute_roles": execute_roles,
+        "prompt593_prompt590_executed": prompt590_executed,
+        "prompt593_prompt590_success": prompt590_success,
+        "prompt593_prompt590_route": prompt590_route,
+        "prompt593_prompt591_executed": prompt591_executed,
+        "prompt593_prompt591_success": prompt591_success,
+        "prompt593_prompt591_route": prompt591_route,
+        "prompt593_prompt592_executed": prompt592_executed,
+        "prompt593_prompt592_success": prompt592_success,
+        "prompt593_prompt592_route": prompt592_route,
+        "prompt593_score": score,
+        "prompt593_retry_required": retry_required,
+        "prompt593_fixer_prompt_required": fixer_prompt_required,
+        "prompt593_retry_exhausted": retry_exhausted,
+        "prompt593_cycle_completed": cycle_completed,
+        "prompt593_cycle_artifacts_written": artifacts_written,
+        "prompt593_codex_executed_during_runtime": (
+            payload.get("prompt593_codex_executed_during_runtime") is True
+        ),
+        "prompt593_tracked_files_modified_by_codex": (
+            payload.get("prompt593_tracked_files_modified_by_codex") is True
+        ),
+        "prompt593_commit_performed": (
+            payload.get("prompt593_commit_performed") is True
+        ),
+        "prompt593_tag_performed": (
+            payload.get("prompt593_tag_performed") is True
+        ),
+        "prompt593_installation_performed": (
+            payload.get("prompt593_installation_performed") is True
+        ),
+        "prompt593_systemd_used": payload.get("prompt593_systemd_used") is True,
+        "prompt593_service_enable_performed": (
+            payload.get("prompt593_service_enable_performed") is True
+        ),
+        "prompt593_service_start_performed": (
+            payload.get("prompt593_service_start_performed") is True
+        ),
+        "prompt593_persistent_service_started": (
+            payload.get("prompt593_persistent_service_started") is True
+        ),
+        "prompt593_remote_workflow_included": (
+            payload.get("prompt593_remote_workflow_included") is True
+        ),
+        "prompt593_no_remote_mutation_verified": (
+            payload.get("prompt593_no_remote_mutation_verified") is True
+        ),
+        "prompt593_final_worktree_clean": (
+            payload.get("prompt593_final_worktree_clean") is True
+        ),
+        "prompt593_completion_claim_allowed": (
+            payload.get("prompt593_completion_claim_allowed") is True
+        ),
+        "prompt593_result_route": result_route,
+        "prompt593_next_action": next_action,
+        "prompt593_blocked_reasons": blocked_reasons,
+        "prompt593_prompt_surface": (
+            "Local-only bounded multi-role autonomous cycle gate that "
+            "connects Prompt590 task entrypoint, Prompt591 role execution "
+            "adapter, and Prompt592 role evaluation/retry. It requires the "
+            "Prompt593 enable token plus all downstream tokens, writes "
+            "cycle request/result/retry/decision artifacts, allows dry-run "
+            "role execution only unless a safe execution API is available, "
+            "and never claims Codex execution, tracked-file mutation, "
+            "commit/tag, install, systemd, service start, persistent daemon, "
+            "shell=True, or remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -34821,4 +35223,5 @@ __all__ = [
     "_build_prompt590_role_driven_task_entrypoint_gate_state",
     "_build_prompt591_role_execution_adapter_gate_state",
     "_build_prompt592_role_evaluation_retry_gate_state",
+    "_build_prompt593_multi_role_autonomous_cycle_gate_state",
 ]
