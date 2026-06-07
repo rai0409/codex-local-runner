@@ -31862,6 +31862,303 @@ def _build_prompt589_daemon_loop_entrypoint_gate_state(
     }
 
 
+def _build_prompt590_role_driven_task_entrypoint_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt590_enabled") is True
+    enable_token_valid = payload.get("prompt590_enable_token_valid") is True
+    prompt589_enable_token_valid = (
+        payload.get("prompt590_prompt589_enable_token_valid") is True
+    )
+    prompt588_enable_token_valid = (
+        payload.get("prompt590_prompt588_enable_token_valid") is True
+    )
+    prompt587_enable_token_valid = (
+        payload.get("prompt590_prompt587_enable_token_valid") is True
+    )
+    prompt586_enable_token_valid = (
+        payload.get("prompt590_prompt586_enable_token_valid") is True
+    )
+    prompt585_enable_token_valid = (
+        payload.get("prompt590_prompt585_enable_token_valid") is True
+    )
+    prompt584_enable_token_valid = (
+        payload.get("prompt590_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt590_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt590_prompt583_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt589_enable_token_valid
+        and prompt588_enable_token_valid
+        and prompt587_enable_token_valid
+        and prompt586_enable_token_valid
+        and prompt585_enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    project_goal_present = (
+        payload.get("prompt590_project_goal_present") is True
+    )
+    role_config_valid = payload.get("prompt590_role_config_valid") is True
+    roles_count = payload.get("prompt590_roles_count")
+    if not isinstance(roles_count, int):
+        roles_count = 0
+    task_queue_count = payload.get("prompt590_task_queue_count")
+    if not isinstance(task_queue_count, int):
+        task_queue_count = 0
+    selected_role = _normalize_text(
+        payload.get("prompt590_selected_role"),
+        default="",
+    )
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt590_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt590_result_route"),
+        default="",
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif not role_config_valid:
+            result_route = "role_config_invalid"
+        else:
+            result_route = "role_task_entrypoint_ready"
+    next_action = _normalize_text(
+        payload.get("prompt590_next_action"),
+        default="",
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_role_driven_task_entrypoint"
+            ),
+            "role_config_invalid": "manual_review_role_config",
+            "role_task_entrypoint_ready": (
+                "prepare_prompt591_role_execution_adapter"
+            ),
+        }.get(result_route, "manual_review_role_driven_task_entrypoint")
+
+    no_downstream_execution = bool(
+        payload.get("prompt590_prompt589_executed") is False
+        and payload.get("prompt590_prompt588_executed") is False
+        and payload.get("prompt590_prompt587_executed") is False
+        and payload.get("prompt590_prompt586_executed") is False
+    )
+    no_codex_commit_tag = bool(
+        payload.get("prompt590_codex_executed_during_runtime") is False
+        and payload.get("prompt590_tracked_files_modified_by_codex") is False
+        and payload.get("prompt590_commit_performed") is False
+        and payload.get("prompt590_tag_performed") is False
+    )
+    no_install_service_remote = bool(
+        payload.get("prompt590_installation_performed") is False
+        and payload.get("prompt590_systemd_used") is False
+        and payload.get("prompt590_service_enable_performed") is False
+        and payload.get("prompt590_service_start_performed") is False
+        and payload.get("prompt590_persistent_service_started") is False
+        and payload.get("prompt590_remote_workflow_included") is False
+        and payload.get("prompt590_no_remote_mutation_verified") is True
+    )
+    artifacts_written = payload.get("prompt590_artifacts_written") is True
+    artifacts_ready = bool(
+        payload.get("prompt590_task_queue_written") is True
+        and payload.get("prompt590_execution_prompt_written") is True
+        and payload.get("prompt590_verification_plan_written") is True
+        and payload.get("prompt590_review_plan_written") is True
+        and payload.get("prompt590_fix_prompt_written") is True
+        and payload.get("prompt590_commit_plan_written") is True
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt590_final_worktree_clean") is True
+        and payload.get("prompt590_completion_claim_allowed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_role_driven_task_entrypoint"
+        and blocked_reasons == []
+    )
+    invalid_config_predicates = bool(
+        token_gate_open
+        and not role_config_valid
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and result_route == "role_config_invalid"
+        and next_action == "manual_review_role_config"
+        and "prompt590_role_config_invalid" in blocked_reasons
+        and payload.get("prompt590_completion_claim_allowed") is False
+    )
+    success_predicates = bool(
+        token_gate_open
+        and enable_token_valid
+        and role_config_valid
+        and project_goal_present
+        and roles_count >= 1
+        and task_queue_count >= 1
+        and artifacts_ready
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt590_final_worktree_clean") is True
+        and payload.get("prompt590_completion_claim_allowed") is True
+        and result_route == "role_task_entrypoint_ready"
+        and next_action == "prepare_prompt591_role_execution_adapter"
+        and blocked_reasons == []
+    )
+    if artifacts_written and success_predicates:
+        status = "role_driven_task_entrypoint_ready_local_only"
+        ready = True
+        success = True
+    elif artifacts_written and not_run_predicates:
+        status = "role_driven_task_entrypoint_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif artifacts_written and invalid_config_predicates:
+        status = "blocked_role_driven_task_entrypoint_invalid_config"
+        ready = False
+        success = False
+    else:
+        status = "blocked_role_driven_task_entrypoint_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt590",
+        "prompt590_role_task_status": status,
+        "prompt590_role_task_ready": ready,
+        "prompt590_role_task_success": success,
+        "prompt590_enabled": enabled,
+        "prompt590_enable_token_valid": enable_token_valid,
+        "prompt590_prompt589_enable_token_valid": (
+            prompt589_enable_token_valid
+        ),
+        "prompt590_prompt588_enable_token_valid": (
+            prompt588_enable_token_valid
+        ),
+        "prompt590_prompt587_enable_token_valid": (
+            prompt587_enable_token_valid
+        ),
+        "prompt590_prompt586_enable_token_valid": (
+            prompt586_enable_token_valid
+        ),
+        "prompt590_prompt585_enable_token_valid": (
+            prompt585_enable_token_valid
+        ),
+        "prompt590_prompt584_enable_token_valid": (
+            prompt584_enable_token_valid
+        ),
+        "prompt590_prompt580_enable_token_valid": (
+            prompt580_enable_token_valid
+        ),
+        "prompt590_prompt583_enable_token_valid": (
+            prompt583_enable_token_valid
+        ),
+        "prompt590_project_goal_present": project_goal_present,
+        "prompt590_role_config_valid": role_config_valid,
+        "prompt590_roles_count": roles_count,
+        "prompt590_task_queue_written": (
+            payload.get("prompt590_task_queue_written") is True
+        ),
+        "prompt590_task_queue_count": task_queue_count,
+        "prompt590_selected_role": selected_role,
+        "prompt590_execution_prompt_written": (
+            payload.get("prompt590_execution_prompt_written") is True
+        ),
+        "prompt590_verification_plan_written": (
+            payload.get("prompt590_verification_plan_written") is True
+        ),
+        "prompt590_review_plan_written": (
+            payload.get("prompt590_review_plan_written") is True
+        ),
+        "prompt590_fix_prompt_written": (
+            payload.get("prompt590_fix_prompt_written") is True
+        ),
+        "prompt590_commit_plan_written": (
+            payload.get("prompt590_commit_plan_written") is True
+        ),
+        "prompt590_prompt589_probe_executed": (
+            payload.get("prompt590_prompt589_probe_executed") is True
+        ),
+        "prompt590_prompt589_probe_success": (
+            payload.get("prompt590_prompt589_probe_success") is True
+        ),
+        "prompt590_prompt589_executed": (
+            payload.get("prompt590_prompt589_executed") is True
+        ),
+        "prompt590_prompt588_executed": (
+            payload.get("prompt590_prompt588_executed") is True
+        ),
+        "prompt590_prompt587_executed": (
+            payload.get("prompt590_prompt587_executed") is True
+        ),
+        "prompt590_prompt586_executed": (
+            payload.get("prompt590_prompt586_executed") is True
+        ),
+        "prompt590_codex_executed_during_runtime": (
+            payload.get("prompt590_codex_executed_during_runtime") is True
+        ),
+        "prompt590_tracked_files_modified_by_codex": (
+            payload.get("prompt590_tracked_files_modified_by_codex") is True
+        ),
+        "prompt590_commit_performed": (
+            payload.get("prompt590_commit_performed") is True
+        ),
+        "prompt590_tag_performed": (
+            payload.get("prompt590_tag_performed") is True
+        ),
+        "prompt590_installation_performed": (
+            payload.get("prompt590_installation_performed") is True
+        ),
+        "prompt590_systemd_used": payload.get("prompt590_systemd_used") is True,
+        "prompt590_service_enable_performed": (
+            payload.get("prompt590_service_enable_performed") is True
+        ),
+        "prompt590_service_start_performed": (
+            payload.get("prompt590_service_start_performed") is True
+        ),
+        "prompt590_persistent_service_started": (
+            payload.get("prompt590_persistent_service_started") is True
+        ),
+        "prompt590_remote_workflow_included": (
+            payload.get("prompt590_remote_workflow_included") is True
+        ),
+        "prompt590_no_remote_mutation_verified": (
+            payload.get("prompt590_no_remote_mutation_verified") is True
+        ),
+        "prompt590_final_worktree_clean": (
+            payload.get("prompt590_final_worktree_clean") is True
+        ),
+        "prompt590_completion_claim_allowed": (
+            payload.get("prompt590_completion_claim_allowed") is True
+        ),
+        "prompt590_result_route": result_route,
+        "prompt590_next_action": next_action,
+        "prompt590_blocked_reasons": blocked_reasons,
+        "prompt590_prompt_surface": (
+            "Local-only role-driven task entrypoint bridge after Prompt589; "
+            "requires the exact Prompt590 enable token plus Prompt589, "
+            "Prompt588, Prompt587, Prompt586, Prompt585, Prompt584, "
+            "Prompt580, and Prompt583 downstream tokens before artifact "
+            "preparation. It creates role/task prompt artifacts for Prompt591 "
+            "without direct Codex execution, commit/tag, install, service, "
+            "systemd, persistent daemon, shell=True, or remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -33762,4 +34059,5 @@ __all__ = [
     "_build_prompt587_daemon_resume_stop_cleanup_gate_state",
     "_build_prompt588_minimal_failure_routes_gate_state",
     "_build_prompt589_daemon_loop_entrypoint_gate_state",
+    "_build_prompt590_role_driven_task_entrypoint_gate_state",
 ]
