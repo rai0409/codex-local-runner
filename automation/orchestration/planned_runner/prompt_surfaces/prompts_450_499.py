@@ -31010,6 +31010,267 @@ def _build_prompt586_success_multi_cycle_daemon_soak_gate_state(
     }
 
 
+def _build_prompt587_daemon_resume_stop_cleanup_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt587_enabled") is True
+    enable_token_valid = payload.get("prompt587_enable_token_valid") is True
+    prompt586_enable_token_valid = (
+        payload.get("prompt587_prompt586_enable_token_valid") is True
+    )
+    prompt585_enable_token_valid = (
+        payload.get("prompt587_prompt585_enable_token_valid") is True
+    )
+    prompt584_enable_token_valid = (
+        payload.get("prompt587_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt587_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt587_prompt583_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt586_enable_token_valid
+        and prompt585_enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    resume_state_readable = (
+        payload.get("prompt587_resume_state_readable") is True
+    )
+    resume_state_counts_consistent = (
+        payload.get("prompt587_resume_state_counts_consistent") is True
+    )
+    stop_file_detected = payload.get("prompt587_stop_file_detected") is True
+    clean_stop_without_execution = (
+        payload.get("prompt587_clean_stop_without_execution") is True
+    )
+    prompt586_executed = (
+        payload.get("prompt587_prompt586_executed") is True
+    )
+    prompt586_success = payload.get("prompt587_prompt586_success") is True
+    prompt586_total_completed_cycles = payload.get(
+        "prompt587_prompt586_total_completed_cycles"
+    )
+    if not isinstance(prompt586_total_completed_cycles, int):
+        prompt586_total_completed_cycles = 0
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt587_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt587_result_route"), default=""
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif blocked_reasons:
+            result_route = "control_failed"
+        else:
+            result_route = "resume_stop_cleanup_ready"
+    next_action = _normalize_text(
+        payload.get("prompt587_next_action"), default=""
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_daemon_resume_stop_cleanup"
+            ),
+            "resume_stop_cleanup_ready": "prepare_prompt588_failure_routes",
+            "control_failed": "manual_review_prompt587_control_failure",
+        }.get(result_route, "manual_review_prompt587_control_failure")
+
+    not_run_predicates = bool(
+        not token_gate_open
+        and not prompt586_executed
+        and payload.get("prompt587_codex_executed_during_runtime") is not True
+        and payload.get("prompt587_tracked_files_modified_by_codex")
+        is not True
+        and payload.get("prompt587_commit_performed") is not True
+        and payload.get("prompt587_tag_performed") is not True
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_daemon_resume_stop_cleanup"
+    )
+    stop_branch_success = bool(
+        stop_file_detected
+        and clean_stop_without_execution
+        and not prompt586_executed
+    )
+    run_branch_success = bool(
+        not stop_file_detected
+        and prompt586_executed
+        and prompt586_success
+        and prompt586_total_completed_cycles == 2
+    )
+    success_predicates = bool(
+        token_gate_open
+        and resume_state_readable
+        and resume_state_counts_consistent
+        and (stop_branch_success or run_branch_success)
+        and payload.get("prompt587_heartbeat_verified") is True
+        and payload.get("prompt587_resume_state_written") is True
+        and payload.get("prompt587_cleanup_performed") is True
+        and payload.get("prompt587_cleanup_bounded") is True
+        and payload.get("prompt587_artifacts_written") is True
+        and (
+            payload.get("prompt587_codex_executed_during_runtime")
+            is prompt586_executed
+        )
+        and (
+            payload.get("prompt587_tracked_files_modified_by_codex")
+            is prompt586_executed
+        )
+        and payload.get("prompt587_commit_performed") is prompt586_executed
+        and payload.get("prompt587_tag_performed") is prompt586_executed
+        and payload.get("prompt587_installation_performed") is False
+        and payload.get("prompt587_systemd_used") is False
+        and payload.get("prompt587_service_enable_performed") is False
+        and payload.get("prompt587_service_start_performed") is False
+        and payload.get("prompt587_persistent_service_started") is False
+        and payload.get("prompt587_remote_workflow_included") is False
+        and payload.get("prompt587_no_remote_mutation_verified") is True
+        and payload.get("prompt587_final_worktree_clean") is True
+        and payload.get("prompt587_completion_claim_allowed") is True
+        and result_route == "resume_stop_cleanup_ready"
+        and next_action == "prepare_prompt588_failure_routes"
+        and blocked_reasons == []
+    )
+    failed_predicates = bool(
+        token_gate_open
+        and result_route == "control_failed"
+        and next_action == "manual_review_prompt587_control_failure"
+    )
+    if success_predicates:
+        status = "daemon_resume_stop_cleanup_ready_local_only"
+        ready = True
+        success = True
+    elif not_run_predicates:
+        status = "daemon_resume_stop_cleanup_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif failed_predicates:
+        status = "blocked_daemon_resume_stop_cleanup_failed"
+        ready = False
+        success = False
+    else:
+        status = "blocked_daemon_resume_stop_cleanup_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt587",
+        "prompt587_daemon_control_status": status,
+        "prompt587_daemon_control_ready": ready,
+        "prompt587_daemon_control_success": success,
+        "prompt587_enabled": enabled,
+        "prompt587_enable_token_valid": enable_token_valid,
+        "prompt587_prompt586_enable_token_valid": (
+            prompt586_enable_token_valid
+        ),
+        "prompt587_prompt585_enable_token_valid": (
+            prompt585_enable_token_valid
+        ),
+        "prompt587_prompt584_enable_token_valid": (
+            prompt584_enable_token_valid
+        ),
+        "prompt587_prompt580_enable_token_valid": (
+            prompt580_enable_token_valid
+        ),
+        "prompt587_prompt583_enable_token_valid": (
+            prompt583_enable_token_valid
+        ),
+        "prompt587_resume_state_readable": resume_state_readable,
+        "prompt587_resume_state_counts_consistent": (
+            resume_state_counts_consistent
+        ),
+        "prompt587_stop_file_detected": stop_file_detected,
+        "prompt587_clean_stop_without_execution": (
+            clean_stop_without_execution
+        ),
+        "prompt587_prompt586_executed": prompt586_executed,
+        "prompt587_prompt586_success": prompt586_success,
+        "prompt587_prompt586_total_completed_cycles": (
+            prompt586_total_completed_cycles
+        ),
+        "prompt587_heartbeat_verified": (
+            payload.get("prompt587_heartbeat_verified") is True
+        ),
+        "prompt587_resume_state_written": (
+            payload.get("prompt587_resume_state_written") is True
+        ),
+        "prompt587_cleanup_performed": (
+            payload.get("prompt587_cleanup_performed") is True
+        ),
+        "prompt587_cleanup_bounded": (
+            payload.get("prompt587_cleanup_bounded") is True
+        ),
+        "prompt587_artifacts_written": (
+            payload.get("prompt587_artifacts_written") is True
+        ),
+        "prompt587_codex_executed_during_runtime": (
+            payload.get("prompt587_codex_executed_during_runtime") is True
+        ),
+        "prompt587_tracked_files_modified_by_codex": (
+            payload.get("prompt587_tracked_files_modified_by_codex") is True
+        ),
+        "prompt587_commit_performed": (
+            payload.get("prompt587_commit_performed") is True
+        ),
+        "prompt587_tag_performed": (
+            payload.get("prompt587_tag_performed") is True
+        ),
+        "prompt587_installation_performed": (
+            payload.get("prompt587_installation_performed") is True
+        ),
+        "prompt587_systemd_used": (
+            payload.get("prompt587_systemd_used") is True
+        ),
+        "prompt587_service_enable_performed": (
+            payload.get("prompt587_service_enable_performed") is True
+        ),
+        "prompt587_service_start_performed": (
+            payload.get("prompt587_service_start_performed") is True
+        ),
+        "prompt587_persistent_service_started": (
+            payload.get("prompt587_persistent_service_started") is True
+        ),
+        "prompt587_remote_workflow_included": (
+            payload.get("prompt587_remote_workflow_included") is True
+        ),
+        "prompt587_no_remote_mutation_verified": (
+            payload.get("prompt587_no_remote_mutation_verified") is True
+        ),
+        "prompt587_final_worktree_clean": (
+            payload.get("prompt587_final_worktree_clean") is True
+        ),
+        "prompt587_completion_claim_allowed": (
+            payload.get("prompt587_completion_claim_allowed") is True
+        ),
+        "prompt587_result_route": result_route,
+        "prompt587_next_action": next_action,
+        "prompt587_blocked_reasons": blocked_reasons,
+        "prompt587_prompt_surface": (
+            "Local-only daemon resume, stop-file, and cleanup control for "
+            "Prompt586; requires the exact Prompt587 token plus Prompt586, "
+            "Prompt585, Prompt584, Prompt580, and Prompt583 downstream "
+            "tokens before any Prompt586 call, validates Prompt586-style "
+            "resume state, cleanly stops without execution when a stop file "
+            "is present, otherwise runs one bounded Prompt586 1x2 control "
+            "soak, bounds cleanup to known control artifacts, and excludes "
+            "failure-route matrix expansion, service install, systemd, "
+            "systemctl, sudo, persistent services, background-forever "
+            "execution, shell=True, and remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -32907,4 +33168,5 @@ __all__ = [
     "_build_prompt584_integrated_real_dev_one_cycle_gate_state",
     "_build_prompt585_success_only_multi_cycle_real_dev_runner_gate_state",
     "_build_prompt586_success_multi_cycle_daemon_soak_gate_state",
+    "_build_prompt587_daemon_resume_stop_cleanup_gate_state",
 ]
