@@ -161,6 +161,9 @@ PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN = (
 PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN = (
     "PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE"
 )
+PROMPT589_DAEMON_LOOP_ENTRYPOINT_ENABLE_TOKEN = (
+    "PROMPT589_DAEMON_LOOP_ENTRYPOINT_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -307,6 +310,10 @@ _PROMPT588_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt588_minimal_failure_routes"
 )
+_PROMPT589_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt589_daemon_loop_entrypoint"
+)
 _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_input.json",
     "daemon_control_resume_state_before.json",
@@ -324,6 +331,15 @@ _PROMPT588_REQUIRED_ARTIFACT_NAMES = (
     "minimal_failure_routes_success_run.json",
     "minimal_failure_routes_route.json",
     "minimal_failure_routes_summary.json",
+)
+_PROMPT589_REQUIRED_ARTIFACT_NAMES = (
+    "daemon_loop_entrypoint_input.json",
+    "daemon_loop_entrypoint_iterations.json",
+    "daemon_loop_entrypoint_resume_state_before.json",
+    "daemon_loop_entrypoint_resume_state_after.json",
+    "daemon_loop_entrypoint_stop_check.json",
+    "daemon_loop_entrypoint_route.json",
+    "daemon_loop_entrypoint_summary.json",
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -8758,6 +8774,12 @@ def run_prompt586_success_multi_cycle_daemon_soak_gate(
     )
     if not daemon_artifact_dir.is_absolute():
         daemon_artifact_dir = repo_path / daemon_artifact_dir
+    clean_exclusion_dir = Path(
+        payload.get("prompt586_worktree_clean_exclusion_dir")
+        or daemon_artifact_dir
+    )
+    if not clean_exclusion_dir.is_absolute():
+        clean_exclusion_dir = repo_path / clean_exclusion_dir
 
     input_path = daemon_artifact_dir / "daemon_soak_input.json"
     iterations_path = daemon_artifact_dir / "daemon_soak_iterations.json"
@@ -8876,6 +8898,7 @@ def run_prompt586_success_multi_cycle_daemon_soak_gate(
             "cycle_marker_prefix": marker_prefix,
             "cycle_tag_prefix": tag_prefix,
             "prompt580_timeout_seconds": timeout,
+            "worktree_clean_exclusion_dir": str(clean_exclusion_dir),
             "remote_operations_allowed": False,
         },
     )
@@ -8929,7 +8952,7 @@ def run_prompt586_success_multi_cycle_daemon_soak_gate(
                         f"{marker_prefix}_{iteration_number:03d}"
                     ),
                     cycle_tag_prefix=f"{tag_prefix}-{iteration_number:03d}",
-                    worktree_clean_exclusion_dir=daemon_artifact_dir,
+                    worktree_clean_exclusion_dir=clean_exclusion_dir,
                 )
             )
             total_started_cycles += int(
@@ -9148,7 +9171,7 @@ def run_prompt586_success_multi_cycle_daemon_soak_gate(
     no_remote_mutation_verified = True
     final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
         repo_path=repo_path,
-        daemon_artifact_dir=daemon_artifact_dir,
+        daemon_artifact_dir=clean_exclusion_dir,
     )
     completion_claim_allowed = bool(
         success
@@ -10525,6 +10548,723 @@ def run_prompt588_minimal_failure_routes_gate(
     return summary
 
 
+def _prompt589_max_loop_iterations(value: Any) -> int:
+    iterations = _prompt587_int(value, default=2)
+    if iterations < 1:
+        return 1
+    if iterations > 3:
+        return 3
+    return iterations
+
+
+def _prompt589_call_prompt588(
+    *,
+    payload: Mapping[str, Any],
+    repo_path: Path,
+    artifact_dir: Path,
+    worktree_clean_exclusion_dir: Path,
+    success_payload_defaults: Mapping[str, Any],
+    iteration_id: str,
+    force_invalid_resume: bool,
+    force_stop_file: bool,
+    prompt580_timeout_seconds: int | None,
+) -> dict[str, Any]:
+    prompt588_payload = {
+        "execution_repo_path": str(repo_path),
+        "prompt588_enabled": True,
+        "prompt588_enable_token": PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN,
+        "prompt587_enabled": True,
+        "prompt587_enable_token": (
+            PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN
+        ),
+        "prompt586_enable_token": (
+            PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+        ),
+        "prompt585_enable_token": PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN,
+        "prompt584_enable_token": (
+            PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+        ),
+        "prompt580_enable_token": PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN,
+        "prompt583_enable_token": (
+            PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+        ),
+        "prompt587_stop_file_present": False,
+        "prompt586_worktree_clean_exclusion_dir": str(
+            worktree_clean_exclusion_dir
+        ),
+        "prompt586_cycle_marker_prefix": f"PROMPT589_{iteration_id}",
+        "prompt586_cycle_tag_prefix": (
+            f"prompt589-{iteration_id}-prompt586"
+            "-success-multi-cycle-result"
+        ),
+    }
+    prompt588_payload.update(success_payload_defaults)
+    if force_invalid_resume:
+        prompt588_payload[
+            "prompt588_force_invalid_resume_state"
+        ] = force_invalid_resume
+    if force_stop_file:
+        prompt588_payload["prompt588_force_stop_file"] = force_stop_file
+    if "prompt580_timeout_seconds" in payload:
+        prompt588_payload["prompt580_timeout_seconds"] = payload[
+            "prompt580_timeout_seconds"
+        ]
+    return run_prompt588_minimal_failure_routes_gate(
+        run_state_payload=prompt588_payload,
+        execution_repo_path=repo_path,
+        artifact_dir=artifact_dir,
+        enabled=True,
+        enable_token=PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN,
+        prompt587_enable_token=(
+            PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN
+        ),
+        prompt586_enable_token=(
+            PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+        ),
+        prompt585_enable_token=PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN,
+        prompt584_enable_token=(
+            PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+        ),
+        prompt580_enable_token=PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN,
+        prompt583_enable_token=(
+            PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+        ),
+        prompt580_timeout_seconds=prompt580_timeout_seconds,
+    )
+
+
+def _prompt589_worktree_clean_for_loop(
+    *,
+    repo_path: Path,
+    control_artifact_dir: Path,
+) -> bool:
+    return _prompt565_worktree_clean_excluding_daemon_artifacts(
+        repo_path=repo_path,
+        daemon_artifact_dir=control_artifact_dir,
+    )
+
+
+def run_prompt589_daemon_loop_entrypoint_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt588_enable_token: str | None = None,
+    prompt587_enable_token: str | None = None,
+    prompt586_enable_token: str | None = None,
+    prompt585_enable_token: str | None = None,
+    prompt584_enable_token: str | None = None,
+    prompt580_enable_token: str | None = None,
+    prompt583_enable_token: str | None = None,
+    prompt580_timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    control_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT589_DEFAULT_ARTIFACT_DIR
+    )
+    if not control_artifact_dir.is_absolute():
+        control_artifact_dir = repo_path / control_artifact_dir
+    control_artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    input_path = control_artifact_dir / "daemon_loop_entrypoint_input.json"
+    iterations_path = (
+        control_artifact_dir / "daemon_loop_entrypoint_iterations.json"
+    )
+    resume_before_path = (
+        control_artifact_dir
+        / "daemon_loop_entrypoint_resume_state_before.json"
+    )
+    resume_after_path = (
+        control_artifact_dir / "daemon_loop_entrypoint_resume_state_after.json"
+    )
+    stop_check_path = (
+        control_artifact_dir / "daemon_loop_entrypoint_stop_check.json"
+    )
+    route_path = control_artifact_dir / "daemon_loop_entrypoint_route.json"
+    summary_path = (
+        control_artifact_dir / "daemon_loop_entrypoint_summary.json"
+    )
+
+    prompt589_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt589_enabled") is True
+    )
+    prompt589_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt589_enable_token"),
+        default="",
+    )
+    prompt588_token = _normalize_text(
+        prompt588_enable_token
+        if prompt588_enable_token is not None
+        else payload.get("prompt588_enable_token"),
+        default="",
+    )
+    prompt587_token = _normalize_text(
+        prompt587_enable_token
+        if prompt587_enable_token is not None
+        else payload.get("prompt587_enable_token"),
+        default="",
+    )
+    prompt586_token = _normalize_text(
+        prompt586_enable_token
+        if prompt586_enable_token is not None
+        else payload.get("prompt586_enable_token"),
+        default="",
+    )
+    prompt585_token = _normalize_text(
+        prompt585_enable_token
+        if prompt585_enable_token is not None
+        else payload.get("prompt585_enable_token"),
+        default="",
+    )
+    prompt584_token = _normalize_text(
+        prompt584_enable_token
+        if prompt584_enable_token is not None
+        else payload.get("prompt584_enable_token"),
+        default="",
+    )
+    prompt580_token = _normalize_text(
+        prompt580_enable_token
+        if prompt580_enable_token is not None
+        else payload.get("prompt580_enable_token"),
+        default="",
+    )
+    prompt583_token = _normalize_text(
+        prompt583_enable_token
+        if prompt583_enable_token is not None
+        else payload.get("prompt583_enable_token"),
+        default="",
+    )
+
+    prompt589_enable_token_valid = (
+        prompt589_token == PROMPT589_DAEMON_LOOP_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt589_prompt588_enable_token_valid = (
+        prompt588_token == PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN
+    )
+    prompt589_prompt587_enable_token_valid = (
+        prompt587_token == PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN
+    )
+    prompt589_prompt586_enable_token_valid = (
+        prompt586_token
+        == PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+    )
+    prompt589_prompt585_enable_token_valid = (
+        prompt585_token == PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN
+    )
+    prompt589_prompt584_enable_token_valid = (
+        prompt584_token == PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+    )
+    prompt589_prompt580_enable_token_valid = (
+        prompt580_token == PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN
+    )
+    prompt589_prompt583_enable_token_valid = (
+        prompt583_token == PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+    )
+    token_gate_open = bool(
+        prompt589_enabled
+        and prompt589_enable_token_valid
+        and prompt589_prompt588_enable_token_valid
+        and prompt589_prompt587_enable_token_valid
+        and prompt589_prompt586_enable_token_valid
+        and prompt589_prompt585_enable_token_valid
+        and prompt589_prompt584_enable_token_valid
+        and prompt589_prompt580_enable_token_valid
+        and prompt589_prompt583_enable_token_valid
+    )
+    max_loop_iterations = _prompt589_max_loop_iterations(
+        payload.get("prompt589_max_loop_iterations", 2)
+    )
+    force_stop_after_iteration = _prompt587_int(
+        payload.get("prompt589_force_stop_after_iteration"),
+        default=0,
+    )
+    force_invalid_resume_first = (
+        payload.get("prompt589_force_invalid_resume_first") is True
+    )
+    timeout = _prompt580_timeout_seconds(
+        prompt580_timeout_seconds
+        if prompt580_timeout_seconds is not None
+        else payload.get("prompt580_timeout_seconds", 180),
+        default=180,
+    )
+
+    input_written = _prompt585_write_artifact(
+        input_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt589",
+            "execution_repo_path": str(repo_path),
+            "artifact_dir": str(control_artifact_dir),
+            "enabled": prompt589_enabled,
+            "max_loop_iterations": max_loop_iterations,
+            "force_stop_after_iteration": force_stop_after_iteration,
+            "force_invalid_resume_first": force_invalid_resume_first,
+            "remote_operations_allowed": False,
+            "persistent_service_allowed": False,
+        },
+    )
+    resume_state_before = {
+        "local_only": True,
+        "source_prompt": "prompt589",
+        "loop_started": False,
+        "started_iterations": 0,
+        "completed_iterations": 0,
+    }
+    resume_before_written = _prompt585_write_artifact(
+        resume_before_path,
+        resume_state_before,
+    )
+
+    iteration_records: list[dict[str, Any]] = []
+    prompt589_loop_started = False
+    prompt589_loop_completed = False
+    prompt589_started_iterations = 0
+    prompt589_completed_iterations = 0
+    prompt589_failed_iterations = 0
+    prompt589_clean_stop_detected = False
+    prompt589_invalid_resume_detected = False
+    prompt589_prompt588_executed = False
+    prompt589_prompt587_executed = False
+    prompt589_prompt586_executed = False
+    prompt589_prompt586_total_completed_cycles = 0
+    prompt589_codex_executed_during_runtime = False
+    prompt589_tracked_files_modified_by_codex = False
+    prompt589_commit_performed = False
+    prompt589_tag_performed = False
+    prompt589_final_worktree_clean = True
+    selected_prompt588_result: dict[str, Any] = {}
+
+    if token_gate_open:
+        prompt589_loop_started = True
+        for iteration in range(1, max_loop_iterations + 1):
+            pre_iteration_worktree_clean = _prompt589_worktree_clean_for_loop(
+                repo_path=repo_path,
+                control_artifact_dir=control_artifact_dir,
+            )
+            if not pre_iteration_worktree_clean:
+                prompt589_final_worktree_clean = False
+                prompt589_failed_iterations += 1
+                iteration_records.append(
+                    {
+                        "local_only": True,
+                        "source_prompt": "prompt589",
+                        "iteration": iteration,
+                        "iteration_started": False,
+                        "pre_iteration_worktree_clean": False,
+                        "prompt588_result_route": "not_started",
+                        "prompt588_success": False,
+                        "blocked_reason": (
+                            "prompt589_pre_iteration_worktree_dirty"
+                        ),
+                    }
+                )
+                break
+            prompt589_started_iterations += 1
+            iteration_id = f"iteration-{iteration:03d}"
+            prompt588_success_payload_defaults = {
+                "prompt587_prompt586_soak_iterations": 1,
+                "prompt587_prompt586_max_cycles_per_iteration": 2,
+            }
+            force_invalid_resume = bool(
+                iteration == 1 and force_invalid_resume_first
+            )
+            force_stop_file = bool(
+                force_stop_after_iteration == iteration
+            )
+            prompt588_result = _prompt589_call_prompt588(
+                payload=payload,
+                repo_path=repo_path,
+                artifact_dir=(
+                    control_artifact_dir
+                    / f"prompt588_iteration_{iteration}"
+                ),
+                worktree_clean_exclusion_dir=control_artifact_dir,
+                success_payload_defaults=prompt588_success_payload_defaults,
+                iteration_id=iteration_id,
+                force_invalid_resume=force_invalid_resume,
+                force_stop_file=force_stop_file,
+                prompt580_timeout_seconds=timeout,
+            )
+            selected_prompt588_result = prompt588_result
+            prompt589_prompt588_executed = True
+            prompt589_prompt587_executed = bool(
+                prompt589_prompt587_executed
+                or prompt588_result.get("prompt588_prompt587_executed")
+                is True
+            )
+            prompt589_prompt586_executed = bool(
+                prompt589_prompt586_executed
+                or prompt588_result.get("prompt588_prompt586_executed")
+                is True
+            )
+            prompt589_prompt586_total_completed_cycles += _prompt587_int(
+                prompt588_result.get(
+                    "prompt588_prompt586_total_completed_cycles"
+                )
+            )
+            prompt589_codex_executed_during_runtime = bool(
+                prompt589_codex_executed_during_runtime
+                or prompt588_result.get(
+                    "prompt588_codex_executed_during_runtime"
+                )
+                is True
+            )
+            prompt589_tracked_files_modified_by_codex = bool(
+                prompt589_tracked_files_modified_by_codex
+                or prompt588_result.get(
+                    "prompt588_tracked_files_modified_by_codex"
+                )
+                is True
+            )
+            prompt589_commit_performed = bool(
+                prompt589_commit_performed
+                or prompt588_result.get("prompt588_commit_performed") is True
+            )
+            prompt589_tag_performed = bool(
+                prompt589_tag_performed
+                or prompt588_result.get("prompt588_tag_performed") is True
+            )
+            prompt589_final_worktree_clean = bool(
+                prompt589_final_worktree_clean
+                and prompt588_result.get("prompt588_final_worktree_clean")
+                is True
+            )
+            result_route = _normalize_text(
+                prompt588_result.get("prompt588_result_route"),
+                default="",
+            )
+            iteration_success = bool(
+                prompt588_result.get("prompt588_failure_routes_success")
+                is True
+                and result_route
+                in {
+                    "failure_routes_validated",
+                    "clean_stop_completed",
+                }
+            )
+            post_iteration_worktree_clean = True
+            if iteration_success:
+                post_iteration_worktree_clean = (
+                    _prompt589_worktree_clean_for_loop(
+                        repo_path=repo_path,
+                        control_artifact_dir=control_artifact_dir,
+                    )
+                )
+                prompt589_final_worktree_clean = bool(
+                    prompt589_final_worktree_clean
+                    and post_iteration_worktree_clean
+                )
+            invalid_resume = result_route == "resume_state_invalid"
+            if invalid_resume:
+                prompt589_invalid_resume_detected = True
+                prompt589_failed_iterations += 1
+            elif iteration_success and post_iteration_worktree_clean:
+                prompt589_completed_iterations += 1
+            else:
+                prompt589_failed_iterations += 1
+            if result_route == "clean_stop_completed":
+                prompt589_clean_stop_detected = True
+            iteration_records.append(
+                {
+                    "local_only": True,
+                    "source_prompt": "prompt589",
+                    "iteration": iteration,
+                    "iteration_started": True,
+                    "iteration_id": iteration_id,
+                    "artifact_dir": str(
+                        control_artifact_dir
+                        / f"prompt588_iteration_{iteration}"
+                    ),
+                    "pre_iteration_worktree_clean": (
+                        pre_iteration_worktree_clean
+                    ),
+                    "post_iteration_worktree_clean": (
+                        post_iteration_worktree_clean
+                    ),
+                    "force_invalid_resume": force_invalid_resume,
+                    "force_stop_file": force_stop_file,
+                    "prompt588_result_route": result_route,
+                    "prompt588_success": (
+                        prompt588_result.get(
+                            "prompt588_failure_routes_success"
+                        )
+                        is True
+                    ),
+                    "prompt586_completed_cycles": _prompt587_int(
+                        prompt588_result.get(
+                            "prompt588_prompt586_total_completed_cycles"
+                        )
+                    ),
+                }
+            )
+            if prompt589_invalid_resume_detected:
+                break
+            if iteration_success and not post_iteration_worktree_clean:
+                break
+            if prompt589_clean_stop_detected:
+                break
+        prompt589_loop_completed = bool(
+            prompt589_completed_iterations == max_loop_iterations
+            and prompt589_failed_iterations == 0
+            and not prompt589_clean_stop_detected
+            and not prompt589_invalid_resume_detected
+        )
+
+    stop_check_written = _prompt585_write_artifact(
+        stop_check_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt589",
+            "force_stop_after_iteration": force_stop_after_iteration,
+            "clean_stop_detected": prompt589_clean_stop_detected,
+            "started_iterations": prompt589_started_iterations,
+            "completed_iterations": prompt589_completed_iterations,
+        },
+    )
+    iterations_written = _prompt585_write_artifact(
+        iterations_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt589",
+            "iterations": iteration_records,
+        },
+    )
+    resume_state_after = {
+        "local_only": True,
+        "source_prompt": "prompt589",
+        "loop_started": prompt589_loop_started,
+        "loop_completed": prompt589_loop_completed,
+        "started_iterations": prompt589_started_iterations,
+        "completed_iterations": prompt589_completed_iterations,
+        "failed_iterations": prompt589_failed_iterations,
+        "last_prompt588_result_route": _normalize_text(
+            selected_prompt588_result.get("prompt588_result_route"),
+            default="",
+        ),
+    }
+    resume_after_written = _prompt585_write_artifact(
+        resume_after_path,
+        resume_state_after,
+    )
+
+    prompt589_installation_performed = False
+    prompt589_systemd_used = False
+    prompt589_service_enable_performed = False
+    prompt589_service_start_performed = False
+    prompt589_persistent_service_started = False
+    prompt589_remote_workflow_included = False
+    prompt589_no_remote_mutation_verified = True
+    blocked_reasons: list[str] = []
+    prompt589_final_worktree_clean = bool(
+        prompt589_final_worktree_clean
+        and _prompt589_worktree_clean_for_loop(
+            repo_path=repo_path,
+            control_artifact_dir=control_artifact_dir,
+        )
+    )
+
+    default_route_success = bool(
+        token_gate_open
+        and prompt589_loop_completed
+        and prompt589_completed_iterations == max_loop_iterations
+        and prompt589_failed_iterations == 0
+        and prompt589_prompt586_total_completed_cycles
+        == max_loop_iterations * 2
+        and prompt589_codex_executed_during_runtime
+        and prompt589_tracked_files_modified_by_codex
+        and prompt589_commit_performed
+        and prompt589_tag_performed
+        and prompt589_final_worktree_clean
+    )
+    clean_stop_success = bool(
+        token_gate_open
+        and prompt589_clean_stop_detected
+        and prompt589_failed_iterations == 0
+        and prompt589_final_worktree_clean
+    )
+    invalid_resume_route = bool(
+        token_gate_open and prompt589_invalid_resume_detected
+    )
+    if not token_gate_open:
+        status = "daemon_loop_entrypoint_ready_not_run_local_only"
+        ready = True
+        success = False
+        result_route = "not_run"
+        next_action = (
+            "provide_explicit_enable_token_for_daemon_loop_entrypoint"
+        )
+    elif default_route_success:
+        status = "daemon_loop_entrypoint_completed_local_only"
+        ready = True
+        success = True
+        result_route = "daemon_loop_entrypoint_completed"
+        next_action = "prepare_prompt590_bounded_daemon_controller"
+    elif clean_stop_success:
+        status = "daemon_loop_entrypoint_completed_local_only"
+        ready = True
+        success = True
+        result_route = "daemon_loop_entrypoint_clean_stop"
+        next_action = "prepare_prompt590_bounded_daemon_controller"
+    elif invalid_resume_route:
+        status = "blocked_daemon_loop_entrypoint_invalid_resume"
+        ready = False
+        success = False
+        result_route = "daemon_loop_entrypoint_blocked_invalid_resume"
+        next_action = "manual_review_invalid_resume_state"
+    else:
+        status = "blocked_daemon_loop_entrypoint_failed"
+        ready = False
+        success = False
+        result_route = "daemon_loop_entrypoint_failed"
+        next_action = "manual_review_prompt589_daemon_loop_entrypoint"
+        blocked_reasons.append("prompt589_loop_route_failed")
+
+    completion_claim_allowed = bool(
+        success
+        and result_route
+        in {
+            "daemon_loop_entrypoint_completed",
+            "daemon_loop_entrypoint_clean_stop",
+        }
+        and blocked_reasons == []
+    )
+    route_written = _prompt585_write_artifact(
+        route_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt589",
+            "prompt589_result_route": result_route,
+            "prompt589_next_action": next_action,
+            "prompt589_blocked_reasons": blocked_reasons,
+        },
+    )
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt589",
+        "prompt589_daemon_loop_status": status,
+        "prompt589_daemon_loop_ready": ready,
+        "prompt589_daemon_loop_success": success,
+        "prompt589_enabled": prompt589_enabled,
+        "prompt589_enable_token_valid": prompt589_enable_token_valid,
+        "prompt589_prompt588_enable_token_valid": (
+            prompt589_prompt588_enable_token_valid
+        ),
+        "prompt589_prompt587_enable_token_valid": (
+            prompt589_prompt587_enable_token_valid
+        ),
+        "prompt589_prompt586_enable_token_valid": (
+            prompt589_prompt586_enable_token_valid
+        ),
+        "prompt589_prompt585_enable_token_valid": (
+            prompt589_prompt585_enable_token_valid
+        ),
+        "prompt589_prompt584_enable_token_valid": (
+            prompt589_prompt584_enable_token_valid
+        ),
+        "prompt589_prompt580_enable_token_valid": (
+            prompt589_prompt580_enable_token_valid
+        ),
+        "prompt589_prompt583_enable_token_valid": (
+            prompt589_prompt583_enable_token_valid
+        ),
+        "prompt589_loop_started": prompt589_loop_started,
+        "prompt589_loop_completed": prompt589_loop_completed,
+        "prompt589_max_loop_iterations": max_loop_iterations,
+        "prompt589_started_iterations": prompt589_started_iterations,
+        "prompt589_completed_iterations": prompt589_completed_iterations,
+        "prompt589_failed_iterations": prompt589_failed_iterations,
+        "prompt589_clean_stop_detected": prompt589_clean_stop_detected,
+        "prompt589_invalid_resume_detected": (
+            prompt589_invalid_resume_detected
+        ),
+        "prompt589_prompt588_executed": prompt589_prompt588_executed,
+        "prompt589_prompt587_executed": prompt589_prompt587_executed,
+        "prompt589_prompt586_executed": prompt589_prompt586_executed,
+        "prompt589_prompt586_total_completed_cycles": (
+            prompt589_prompt586_total_completed_cycles
+        ),
+        "prompt589_codex_executed_during_runtime": (
+            prompt589_codex_executed_during_runtime
+        ),
+        "prompt589_tracked_files_modified_by_codex": (
+            prompt589_tracked_files_modified_by_codex
+        ),
+        "prompt589_commit_performed": prompt589_commit_performed,
+        "prompt589_tag_performed": prompt589_tag_performed,
+        "prompt589_installation_performed": (
+            prompt589_installation_performed
+        ),
+        "prompt589_systemd_used": prompt589_systemd_used,
+        "prompt589_service_enable_performed": (
+            prompt589_service_enable_performed
+        ),
+        "prompt589_service_start_performed": (
+            prompt589_service_start_performed
+        ),
+        "prompt589_persistent_service_started": (
+            prompt589_persistent_service_started
+        ),
+        "prompt589_remote_workflow_included": (
+            prompt589_remote_workflow_included
+        ),
+        "prompt589_no_remote_mutation_verified": (
+            prompt589_no_remote_mutation_verified
+        ),
+        "prompt589_final_worktree_clean": prompt589_final_worktree_clean,
+        "prompt589_completion_claim_allowed": completion_claim_allowed,
+        "prompt589_result_route": result_route,
+        "prompt589_next_action": next_action,
+        "prompt589_blocked_reasons": blocked_reasons,
+        "prompt589_input_written": input_written,
+        "prompt589_iterations_written": iterations_written,
+        "prompt589_resume_state_before_written": resume_before_written,
+        "prompt589_resume_state_after_written": resume_after_written,
+        "prompt589_stop_check_written": stop_check_written,
+        "prompt589_route_written": route_written,
+        "prompt589_artifacts_written": False,
+    }
+    summary_written = _prompt585_write_artifact(summary_path, summary)
+    artifacts_written = bool(
+        summary_written
+        and all(
+            (control_artifact_dir / name).is_file()
+            for name in _PROMPT589_REQUIRED_ARTIFACT_NAMES
+        )
+    )
+    summary["prompt589_artifacts_written"] = artifacts_written
+    if not artifacts_written and token_gate_open:
+        summary["prompt589_daemon_loop_status"] = (
+            "blocked_daemon_loop_entrypoint_failed"
+        )
+        summary["prompt589_daemon_loop_ready"] = False
+        summary["prompt589_daemon_loop_success"] = False
+        summary["prompt589_completion_claim_allowed"] = False
+        summary["prompt589_result_route"] = "daemon_loop_entrypoint_failed"
+        summary["prompt589_next_action"] = (
+            "manual_review_prompt589_daemon_loop_entrypoint"
+        )
+        summary["prompt589_blocked_reasons"] = [
+            *blocked_reasons,
+            "prompt589_required_artifacts_missing",
+        ]
+    if summary_written:
+        _write_json(summary_path, summary)
+    return summary
+
+
 def _prompt548_returncode_zero(repo_path: Path) -> bool:
     returncode_path = repo_path / PROMPT547_RETURNCODE_ARTIFACT
     try:
@@ -11287,3 +12027,7 @@ def reconnect_runtime_output_generation(
 
 
 __all__ = ["reconnect_runtime_output_generation"]
+# PROMPT585_SUCCESS_MULTI_CYCLE_PROMPT587_20260607081934300210-0e434dc0_001_MARKER_001
+# PROMPT585_SUCCESS_MULTI_CYCLE_PROMPT587_20260607081956329288-ac63d41f_001_MARKER_001
+# PROMPT585_SUCCESS_MULTI_CYCLE_PROMPT587_20260607082056904134-20959294_001_MARKER_001
+# PROMPT585_SUCCESS_MULTI_CYCLE_PROMPT587_20260607082121848361-47933ba4_001_MARKER_001

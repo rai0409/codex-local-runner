@@ -31550,6 +31550,318 @@ def _build_prompt588_minimal_failure_routes_gate_state(
     }
 
 
+def _build_prompt589_daemon_loop_entrypoint_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt589_enabled") is True
+    enable_token_valid = payload.get("prompt589_enable_token_valid") is True
+    prompt588_enable_token_valid = (
+        payload.get("prompt589_prompt588_enable_token_valid") is True
+    )
+    prompt587_enable_token_valid = (
+        payload.get("prompt589_prompt587_enable_token_valid") is True
+    )
+    prompt586_enable_token_valid = (
+        payload.get("prompt589_prompt586_enable_token_valid") is True
+    )
+    prompt585_enable_token_valid = (
+        payload.get("prompt589_prompt585_enable_token_valid") is True
+    )
+    prompt584_enable_token_valid = (
+        payload.get("prompt589_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt589_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt589_prompt583_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt588_enable_token_valid
+        and prompt587_enable_token_valid
+        and prompt586_enable_token_valid
+        and prompt585_enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    loop_started = payload.get("prompt589_loop_started") is True
+    loop_completed = payload.get("prompt589_loop_completed") is True
+    max_loop_iterations = payload.get("prompt589_max_loop_iterations")
+    if not isinstance(max_loop_iterations, int):
+        max_loop_iterations = 2
+    started_iterations = payload.get("prompt589_started_iterations")
+    if not isinstance(started_iterations, int):
+        started_iterations = 0
+    completed_iterations = payload.get("prompt589_completed_iterations")
+    if not isinstance(completed_iterations, int):
+        completed_iterations = 0
+    failed_iterations = payload.get("prompt589_failed_iterations")
+    if not isinstance(failed_iterations, int):
+        failed_iterations = 0
+    total_completed_cycles = payload.get(
+        "prompt589_prompt586_total_completed_cycles"
+    )
+    if not isinstance(total_completed_cycles, int):
+        total_completed_cycles = 0
+    clean_stop_detected = (
+        payload.get("prompt589_clean_stop_detected") is True
+    )
+    invalid_resume_detected = (
+        payload.get("prompt589_invalid_resume_detected") is True
+    )
+    prompt588_executed = payload.get("prompt589_prompt588_executed") is True
+    prompt587_executed = payload.get("prompt589_prompt587_executed") is True
+    prompt586_executed = payload.get("prompt589_prompt586_executed") is True
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt589_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt589_result_route"),
+        default="",
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif invalid_resume_detected:
+            result_route = "daemon_loop_entrypoint_blocked_invalid_resume"
+        elif clean_stop_detected:
+            result_route = "daemon_loop_entrypoint_clean_stop"
+        elif loop_completed:
+            result_route = "daemon_loop_entrypoint_completed"
+        else:
+            result_route = "daemon_loop_entrypoint_failed"
+    next_action = _normalize_text(
+        payload.get("prompt589_next_action"),
+        default="",
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_daemon_loop_entrypoint"
+            ),
+            "daemon_loop_entrypoint_completed": (
+                "prepare_prompt590_bounded_daemon_controller"
+            ),
+            "daemon_loop_entrypoint_clean_stop": (
+                "prepare_prompt590_bounded_daemon_controller"
+            ),
+            "daemon_loop_entrypoint_blocked_invalid_resume": (
+                "manual_review_invalid_resume_state"
+            ),
+        }.get(result_route, "manual_review_prompt589_daemon_loop_entrypoint")
+
+    no_install_service_remote = bool(
+        payload.get("prompt589_installation_performed") is False
+        and payload.get("prompt589_systemd_used") is False
+        and payload.get("prompt589_service_enable_performed") is False
+        and payload.get("prompt589_service_start_performed") is False
+        and payload.get("prompt589_persistent_service_started") is False
+        and payload.get("prompt589_remote_workflow_included") is False
+        and payload.get("prompt589_no_remote_mutation_verified") is True
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and not loop_started
+        and not prompt588_executed
+        and not prompt587_executed
+        and not prompt586_executed
+        and payload.get("prompt589_codex_executed_during_runtime")
+        is not True
+        and payload.get("prompt589_tracked_files_modified_by_codex")
+        is not True
+        and payload.get("prompt589_commit_performed") is not True
+        and payload.get("prompt589_tag_performed") is not True
+        and no_install_service_remote
+        and payload.get("prompt589_final_worktree_clean") is True
+        and payload.get("prompt589_completion_claim_allowed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_daemon_loop_entrypoint"
+        and blocked_reasons == []
+    )
+    default_route_predicates = bool(
+        token_gate_open
+        and loop_started
+        and loop_completed
+        and completed_iterations == max_loop_iterations
+        and failed_iterations == 0
+        and total_completed_cycles == max_loop_iterations * 2
+        and not clean_stop_detected
+        and not invalid_resume_detected
+        and prompt588_executed
+        and prompt587_executed
+        and prompt586_executed
+        and payload.get("prompt589_codex_executed_during_runtime") is True
+        and payload.get("prompt589_tracked_files_modified_by_codex") is True
+        and payload.get("prompt589_commit_performed") is True
+        and payload.get("prompt589_tag_performed") is True
+        and no_install_service_remote
+        and payload.get("prompt589_final_worktree_clean") is True
+        and payload.get("prompt589_completion_claim_allowed") is True
+        and result_route == "daemon_loop_entrypoint_completed"
+        and next_action == "prepare_prompt590_bounded_daemon_controller"
+        and blocked_reasons == []
+    )
+    stop_route_predicates = bool(
+        token_gate_open
+        and loop_started
+        and clean_stop_detected
+        and not invalid_resume_detected
+        and completed_iterations >= 1
+        and failed_iterations == 0
+        and prompt588_executed
+        and prompt587_executed
+        and not prompt586_executed
+        and payload.get("prompt589_codex_executed_during_runtime") is False
+        and payload.get("prompt589_tracked_files_modified_by_codex") is False
+        and payload.get("prompt589_commit_performed") is False
+        and payload.get("prompt589_tag_performed") is False
+        and no_install_service_remote
+        and payload.get("prompt589_final_worktree_clean") is True
+        and payload.get("prompt589_completion_claim_allowed") is True
+        and result_route == "daemon_loop_entrypoint_clean_stop"
+        and next_action == "prepare_prompt590_bounded_daemon_controller"
+        and blocked_reasons == []
+    )
+    invalid_resume_predicates = bool(
+        token_gate_open
+        and loop_started
+        and invalid_resume_detected
+        and not clean_stop_detected
+        and prompt588_executed
+        and prompt587_executed
+        and not prompt586_executed
+        and no_install_service_remote
+        and payload.get("prompt589_final_worktree_clean") is True
+        and payload.get("prompt589_completion_claim_allowed") is False
+        and result_route == "daemon_loop_entrypoint_blocked_invalid_resume"
+        and next_action == "manual_review_invalid_resume_state"
+    )
+    artifacts_written = payload.get("prompt589_artifacts_written") is True
+    success_predicates = bool(
+        artifacts_written
+        and (
+            default_route_predicates
+            or stop_route_predicates
+            or invalid_resume_predicates
+        )
+    )
+    if success_predicates and invalid_resume_predicates:
+        status = "blocked_daemon_loop_entrypoint_invalid_resume"
+        ready = False
+        success = False
+    elif success_predicates:
+        status = "daemon_loop_entrypoint_completed_local_only"
+        ready = True
+        success = True
+    elif artifacts_written and not_run_predicates:
+        status = "daemon_loop_entrypoint_ready_not_run_local_only"
+        ready = True
+        success = False
+    else:
+        status = "blocked_daemon_loop_entrypoint_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt589",
+        "prompt589_daemon_loop_status": status,
+        "prompt589_daemon_loop_ready": ready,
+        "prompt589_daemon_loop_success": success,
+        "prompt589_enabled": enabled,
+        "prompt589_enable_token_valid": enable_token_valid,
+        "prompt589_prompt588_enable_token_valid": (
+            prompt588_enable_token_valid
+        ),
+        "prompt589_prompt587_enable_token_valid": (
+            prompt587_enable_token_valid
+        ),
+        "prompt589_prompt586_enable_token_valid": (
+            prompt586_enable_token_valid
+        ),
+        "prompt589_prompt585_enable_token_valid": (
+            prompt585_enable_token_valid
+        ),
+        "prompt589_prompt584_enable_token_valid": (
+            prompt584_enable_token_valid
+        ),
+        "prompt589_prompt580_enable_token_valid": (
+            prompt580_enable_token_valid
+        ),
+        "prompt589_prompt583_enable_token_valid": (
+            prompt583_enable_token_valid
+        ),
+        "prompt589_loop_started": loop_started,
+        "prompt589_loop_completed": loop_completed,
+        "prompt589_max_loop_iterations": max_loop_iterations,
+        "prompt589_started_iterations": started_iterations,
+        "prompt589_completed_iterations": completed_iterations,
+        "prompt589_failed_iterations": failed_iterations,
+        "prompt589_clean_stop_detected": clean_stop_detected,
+        "prompt589_invalid_resume_detected": invalid_resume_detected,
+        "prompt589_prompt588_executed": prompt588_executed,
+        "prompt589_prompt587_executed": prompt587_executed,
+        "prompt589_prompt586_executed": prompt586_executed,
+        "prompt589_prompt586_total_completed_cycles": total_completed_cycles,
+        "prompt589_codex_executed_during_runtime": (
+            payload.get("prompt589_codex_executed_during_runtime") is True
+        ),
+        "prompt589_tracked_files_modified_by_codex": (
+            payload.get("prompt589_tracked_files_modified_by_codex") is True
+        ),
+        "prompt589_commit_performed": (
+            payload.get("prompt589_commit_performed") is True
+        ),
+        "prompt589_tag_performed": (
+            payload.get("prompt589_tag_performed") is True
+        ),
+        "prompt589_installation_performed": (
+            payload.get("prompt589_installation_performed") is True
+        ),
+        "prompt589_systemd_used": payload.get("prompt589_systemd_used") is True,
+        "prompt589_service_enable_performed": (
+            payload.get("prompt589_service_enable_performed") is True
+        ),
+        "prompt589_service_start_performed": (
+            payload.get("prompt589_service_start_performed") is True
+        ),
+        "prompt589_persistent_service_started": (
+            payload.get("prompt589_persistent_service_started") is True
+        ),
+        "prompt589_remote_workflow_included": (
+            payload.get("prompt589_remote_workflow_included") is True
+        ),
+        "prompt589_no_remote_mutation_verified": (
+            payload.get("prompt589_no_remote_mutation_verified") is True
+        ),
+        "prompt589_final_worktree_clean": (
+            payload.get("prompt589_final_worktree_clean") is True
+        ),
+        "prompt589_completion_claim_allowed": (
+            payload.get("prompt589_completion_claim_allowed") is True
+        ),
+        "prompt589_result_route": result_route,
+        "prompt589_next_action": next_action,
+        "prompt589_blocked_reasons": blocked_reasons,
+        "prompt589_prompt_surface": (
+            "Local-only bounded daemon loop entrypoint after Prompt588; "
+            "requires the exact Prompt589 enable token plus Prompt588, "
+            "Prompt587, Prompt586, Prompt585, Prompt584, Prompt580, and "
+            "Prompt583 downstream tokens before any Prompt588 call, runs a "
+            "bounded loop capped at three iterations, stops cleanly on a "
+            "stop-file route, blocks explicitly on invalid resume, and "
+            "excludes service install, systemd, systemctl, sudo, persistent "
+            "services, forever execution, shell=True, and remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -33449,4 +33761,5 @@ __all__ = [
     "_build_prompt586_success_multi_cycle_daemon_soak_gate_state",
     "_build_prompt587_daemon_resume_stop_cleanup_gate_state",
     "_build_prompt588_minimal_failure_routes_gate_state",
+    "_build_prompt589_daemon_loop_entrypoint_gate_state",
 ]
