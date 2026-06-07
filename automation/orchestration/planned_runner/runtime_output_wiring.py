@@ -143,6 +143,9 @@ PROMPT578_ACTUAL_CODEX_DISPATCH_ENABLE_TOKEN = (
 PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN = (
     "PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE"
 )
+PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN = (
+    "PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -264,6 +267,10 @@ _PROMPT581_DEFAULT_ARTIFACT_DIR = Path(
 _PROMPT582_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt582_review_and_commit_real_dev_changes"
+)
+_PROMPT583_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt583_commit_tag_real_dev_changes"
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -6840,6 +6847,560 @@ def run_prompt582_review_and_commit_real_dev_changes_gate(
     summary_written = summary_path.is_file()
     summary["prompt582_summary_written"] = summary_written
     summary["prompt582_completion_claim_allowed"] = bool(
+        completion_claim_allowed and summary_written
+    )
+    if summary_written:
+        _write_json(summary_path, summary)
+    return summary
+
+
+def _prompt583_prompt582_success_ready(
+    payload: Mapping[str, Any],
+) -> tuple[bool, list[str]]:
+    required_checks = (
+        (
+            "prompt582_real_dev_changes_review_success",
+            payload.get("prompt582_real_dev_changes_review_success")
+            is True,
+        ),
+        (
+            "prompt582_prompt581_success_ready",
+            payload.get("prompt582_prompt581_success_ready") is True,
+        ),
+        (
+            "prompt582_prompt581_changes_review_ready",
+            payload.get("prompt582_prompt581_changes_review_ready")
+            is True,
+        ),
+        (
+            "prompt582_prompt581_result_route_changes_review_ready",
+            payload.get("prompt582_prompt581_result_route")
+            == "changes_review_ready",
+        ),
+        (
+            "prompt582_prompt581_next_action_prepare_prompt582",
+            payload.get("prompt582_prompt581_next_action")
+            == "prepare_prompt582_review_and_commit_real_dev_changes",
+        ),
+        (
+            "prompt582_prompt581_changed_tracked_files_non_empty",
+            _prompt579_string_list(
+                payload.get("prompt582_prompt581_changed_tracked_files")
+            )
+            != [],
+        ),
+        (
+            "prompt582_changed_files_non_empty",
+            _prompt579_string_list(payload.get("prompt582_changed_files"))
+            != [],
+        ),
+        (
+            "prompt582_review_input_written",
+            payload.get("prompt582_review_input_written") is True,
+        ),
+        (
+            "prompt582_review_evaluation_written",
+            payload.get("prompt582_review_evaluation_written") is True,
+        ),
+        (
+            "prompt582_review_route_written",
+            payload.get("prompt582_review_route_written") is True,
+        ),
+        (
+            "prompt582_commit_plan_written",
+            payload.get("prompt582_commit_plan_written") is True,
+        ),
+        (
+            "prompt582_summary_written",
+            payload.get("prompt582_summary_written") is True,
+        ),
+        (
+            "prompt582_result_route_approve_commit_tag",
+            payload.get("prompt582_result_route") == "approve_commit_tag",
+        ),
+        (
+            "prompt582_approve_commit_tag",
+            payload.get("prompt582_approve_commit_tag") is True,
+        ),
+        (
+            "prompt582_reject_retry_required_false",
+            payload.get("prompt582_reject_retry_required") is False,
+        ),
+        (
+            "prompt582_manual_review_required_false",
+            payload.get("prompt582_manual_review_required") is False,
+        ),
+        (
+            "prompt582_no_changes_review_required_false",
+            payload.get("prompt582_no_changes_review_required") is False,
+        ),
+        (
+            "prompt582_commit_tag_allowed",
+            payload.get("prompt582_commit_tag_allowed") is True,
+        ),
+        (
+            "prompt582_codex_executed_during_runtime_false",
+            payload.get("prompt582_codex_executed_during_runtime") is False,
+        ),
+        (
+            "prompt582_tracked_files_modified_during_runtime_false",
+            payload.get("prompt582_tracked_files_modified_during_runtime")
+            is False,
+        ),
+        (
+            "prompt582_commit_performed_false",
+            payload.get("prompt582_commit_performed") is False,
+        ),
+        (
+            "prompt582_tag_performed_false",
+            payload.get("prompt582_tag_performed") is False,
+        ),
+        (
+            "prompt582_installation_performed_false",
+            payload.get("prompt582_installation_performed") is False,
+        ),
+        (
+            "prompt582_systemd_used_false",
+            payload.get("prompt582_systemd_used") is False,
+        ),
+        (
+            "prompt582_service_enable_performed_false",
+            payload.get("prompt582_service_enable_performed") is False,
+        ),
+        (
+            "prompt582_service_start_performed_false",
+            payload.get("prompt582_service_start_performed") is False,
+        ),
+        (
+            "prompt582_persistent_service_started_false",
+            payload.get("prompt582_persistent_service_started") is False,
+        ),
+        (
+            "prompt582_remote_workflow_included_false",
+            payload.get("prompt582_remote_workflow_included") is False,
+        ),
+        (
+            "prompt582_no_remote_mutation_verified",
+            payload.get("prompt582_no_remote_mutation_verified") is True,
+        ),
+        (
+            "prompt582_final_worktree_clean",
+            payload.get("prompt582_final_worktree_clean") is True,
+        ),
+        (
+            "prompt582_completion_claim_allowed",
+            payload.get("prompt582_completion_claim_allowed") is True,
+        ),
+        (
+            "prompt582_next_action_prepare_prompt583",
+            payload.get("prompt582_next_action")
+            == "prepare_prompt583_commit_tag_real_dev_changes",
+        ),
+        (
+            "prompt582_blocked_reasons_empty",
+            _prompt579_string_list(payload.get("prompt582_blocked_reasons"))
+            == [],
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{name}" for name, ready in required_checks if not ready
+    ]
+    return blocked_reasons == [], blocked_reasons
+
+
+def _prompt583_run_git(
+    *,
+    repo_path: Path,
+    args: Sequence[str],
+    timeout: int = 30,
+) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo_path), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "argv": ["git", "-C", str(repo_path), *args],
+            "returncode": None,
+            "stdout": _prompt579_text_excerpt(exc.stdout or ""),
+            "stderr": "git command timed out",
+            "timed_out": True,
+        }
+    except OSError as exc:
+        return {
+            "argv": ["git", "-C", str(repo_path), *args],
+            "returncode": None,
+            "stdout": "",
+            "stderr": str(exc),
+            "timed_out": False,
+        }
+    return {
+        "argv": ["git", "-C", str(repo_path), *args],
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "timed_out": False,
+    }
+
+
+def _prompt583_git_lines(
+    *,
+    repo_path: Path,
+    args: Sequence[str],
+) -> list[str]:
+    result = _prompt583_run_git(repo_path=repo_path, args=args)
+    if result.get("returncode") != 0:
+        return []
+    return [
+        line
+        for line in _normalize_text(result.get("stdout"), default="")
+        .splitlines()
+        if line
+    ]
+
+
+def _prompt583_git_status_snapshot(*, repo_path: Path) -> dict[str, Any]:
+    return {
+        "porcelain": _prompt583_git_lines(
+            repo_path=repo_path,
+            args=["status", "--porcelain=v1"],
+        ),
+        "tracked_porcelain": _prompt583_git_lines(
+            repo_path=repo_path,
+            args=["status", "--porcelain=v1", "--untracked-files=no"],
+        ),
+    }
+
+
+def _prompt583_tag_exists_at_head(
+    *,
+    repo_path: Path,
+    tag_name: str,
+) -> bool:
+    tags_at_head = _prompt583_git_lines(
+        repo_path=repo_path,
+        args=["tag", "--points-at", "HEAD"],
+    )
+    return tag_name in tags_at_head
+
+
+def run_prompt583_commit_tag_real_dev_changes_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    changed_files: Sequence[str] | str | None = None,
+    commit_message: str | None = None,
+    tag_name: str | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    commit_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT583_DEFAULT_ARTIFACT_DIR
+    )
+    if not commit_artifact_dir.is_absolute():
+        commit_artifact_dir = repo_path / commit_artifact_dir
+
+    input_path = commit_artifact_dir / "real_dev_changes_commit_tag_input.json"
+    git_status_before_path = (
+        commit_artifact_dir / "real_dev_changes_git_status_before.json"
+    )
+    plan_path = commit_artifact_dir / "real_dev_changes_commit_tag_plan.json"
+    result_path = commit_artifact_dir / "real_dev_changes_commit_tag_result.json"
+    summary_path = (
+        commit_artifact_dir / "real_dev_changes_commit_tag_summary.json"
+    )
+
+    prompt582_success_ready, prerequisite_blocked_reasons = (
+        _prompt583_prompt582_success_ready(payload)
+    )
+    prompt582_approve_commit_tag = (
+        payload.get("prompt582_approve_commit_tag") is True
+    )
+    prompt582_commit_tag_allowed = (
+        payload.get("prompt582_commit_tag_allowed") is True
+    )
+    prompt582_result_route = _normalize_text(
+        payload.get("prompt582_result_route"), default=""
+    )
+    prompt582_next_action = _normalize_text(
+        payload.get("prompt582_next_action"), default=""
+    )
+
+    commit_changed_files = _prompt579_string_list(changed_files)
+    if not commit_changed_files:
+        commit_changed_files = _prompt579_string_list(
+            payload.get("prompt582_changed_files")
+        )
+    prompt583_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt583_enabled") is True
+    )
+    token_text = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt583_enable_token"),
+        default="",
+    )
+    enable_token_valid = (
+        token_text == PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+    )
+    final_commit_message = _normalize_text(
+        commit_message
+        if commit_message is not None
+        else payload.get("prompt583_commit_message"),
+        default="Add real dev task changes",
+    )
+    final_tag_name = _normalize_text(
+        tag_name if tag_name is not None else payload.get("prompt583_tag_name"),
+        default="prompt583-real-dev-changes-commit",
+    )
+
+    commit_artifact_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(
+        input_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt583",
+            "prompt582_evidence": dict(payload),
+            "execution_repo_path": str(repo_path),
+            "changed_files": commit_changed_files,
+            "commit_message": final_commit_message,
+            "tag_name": final_tag_name,
+            "enabled": prompt583_enabled,
+            "enable_token_valid": enable_token_valid,
+        },
+    )
+    git_status_before = _prompt583_git_status_snapshot(repo_path=repo_path)
+    _write_json(git_status_before_path, git_status_before)
+    will_execute = bool(
+        prompt582_success_ready and prompt583_enabled and enable_token_valid
+    )
+    _write_json(
+        plan_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt583",
+            "prompt582_prerequisite_ready": prompt582_success_ready,
+            "prompt582_prerequisite_blocked_reasons": (
+                prerequisite_blocked_reasons
+            ),
+            "commit_changed_files_only": commit_changed_files,
+            "commit_message": final_commit_message,
+            "tag_name": final_tag_name,
+            "enabled": prompt583_enabled,
+            "enable_token_valid": enable_token_valid,
+            "will_commit_tag": will_execute,
+            "remote_operations_allowed": False,
+        },
+    )
+
+    commit_performed = False
+    tag_performed = False
+    commit_hash = ""
+    tag_exists_at_head = False
+    git_operations: list[dict[str, Any]] = []
+    commit_tag_failed = False
+    dispatch_not_run = not will_execute
+    blocked_reasons = list(prerequisite_blocked_reasons)
+
+    if will_execute:
+        add_result = _prompt583_run_git(
+            repo_path=repo_path,
+            args=["add", "--", *commit_changed_files],
+        )
+        git_operations.append(add_result)
+        if add_result.get("returncode") == 0:
+            commit_result = _prompt583_run_git(
+                repo_path=repo_path,
+                args=[
+                    "commit",
+                    "-m",
+                    final_commit_message,
+                    "--only",
+                    "--",
+                    *commit_changed_files,
+                ],
+            )
+            git_operations.append(commit_result)
+            commit_performed = commit_result.get("returncode") == 0
+        if commit_performed:
+            rev_parse_result = _prompt583_run_git(
+                repo_path=repo_path,
+                args=["rev-parse", "HEAD"],
+            )
+            git_operations.append(rev_parse_result)
+            if rev_parse_result.get("returncode") == 0:
+                commit_hash = _normalize_text(
+                    rev_parse_result.get("stdout"),
+                    default="",
+                )
+            tag_result = _prompt583_run_git(
+                repo_path=repo_path,
+                args=["tag", final_tag_name],
+            )
+            git_operations.append(tag_result)
+            tag_performed = tag_result.get("returncode") == 0
+            tag_exists_at_head = _prompt583_tag_exists_at_head(
+                repo_path=repo_path,
+                tag_name=final_tag_name,
+            )
+        commit_tag_failed = not (
+            commit_performed and tag_performed and commit_hash
+        )
+        if commit_tag_failed:
+            blocked_reasons.append("prompt583_git_commit_tag_failed")
+
+    tracked_status_after = _prompt583_git_lines(
+        repo_path=repo_path,
+        args=["status", "--porcelain=v1", "--untracked-files=no"],
+    )
+    final_worktree_clean = tracked_status_after == []
+    input_written = input_path.is_file()
+    git_status_before_written = git_status_before_path.is_file()
+    plan_written = plan_path.is_file()
+
+    codex_executed_during_runtime = False
+    installation_performed = False
+    systemd_used = False
+    service_enable_performed = False
+    service_start_performed = False
+    persistent_service_started = False
+    remote_workflow_included = False
+    no_remote_mutation_verified = True
+
+    if not prompt582_success_ready:
+        status = "blocked_real_dev_changes_commit_tag_missing_prerequisite"
+        success = False
+        result_route = "missing_prerequisite"
+        next_action = "manual_review_prompt583_commit_tag_prerequisite"
+    elif not will_execute:
+        status = "real_dev_changes_commit_tag_ready_not_run_local_only"
+        success = False
+        result_route = "not_run"
+        next_action = (
+            "provide_explicit_enable_token_for_real_dev_changes_commit_tag"
+        )
+    elif commit_tag_failed or not final_worktree_clean:
+        status = "blocked_real_dev_changes_commit_tag_failed"
+        success = False
+        result_route = "commit_tag_failed"
+        next_action = "manual_review_prompt583_commit_tag_failure"
+    else:
+        status = "real_dev_changes_commit_tag_completed_local_only"
+        success = True
+        result_route = "commit_tag_completed"
+        next_action = "prepare_prompt584_integrated_real_dev_one_cycle"
+
+    commit_tag_completed = bool(
+        success
+        and commit_performed
+        and tag_performed
+        and commit_hash
+        and tag_exists_at_head
+    )
+    result: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt583",
+        "prompt583_git_operations": git_operations,
+        "prompt583_tracked_status_after": tracked_status_after,
+        "prompt583_status": status,
+        "prompt583_success": success,
+        "prompt583_result_route": result_route,
+        "prompt583_next_action": next_action,
+    }
+    _write_json(result_path, result)
+    result_written = result_path.is_file()
+    completion_claim_allowed = bool(
+        commit_tag_completed
+        and prompt582_success_ready
+        and prompt582_approve_commit_tag
+        and prompt582_commit_tag_allowed
+        and prompt583_enabled
+        and enable_token_valid
+        and input_written
+        and git_status_before_written
+        and plan_written
+        and result_written
+        and not codex_executed_during_runtime
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and final_worktree_clean
+        and result_route == "commit_tag_completed"
+        and next_action == "prepare_prompt584_integrated_real_dev_one_cycle"
+        and blocked_reasons == []
+    )
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt583",
+        "prompt583_real_dev_changes_commit_tag_status": status,
+        "prompt583_real_dev_changes_commit_tag_ready": (
+            prompt582_success_ready
+        ),
+        "prompt583_real_dev_changes_commit_tag_success": success,
+        "prompt583_prompt582_success_ready": prompt582_success_ready,
+        "prompt583_prompt582_approve_commit_tag": prompt582_approve_commit_tag,
+        "prompt583_prompt582_commit_tag_allowed": (
+            prompt582_commit_tag_allowed
+        ),
+        "prompt583_prompt582_result_route": prompt582_result_route,
+        "prompt583_prompt582_next_action": prompt582_next_action,
+        "prompt583_changed_files": commit_changed_files,
+        "prompt583_enabled": prompt583_enabled,
+        "prompt583_enable_token_valid": enable_token_valid,
+        "prompt583_commit_message": final_commit_message,
+        "prompt583_tag_name": final_tag_name,
+        "prompt583_input_written": input_written,
+        "prompt583_git_status_before_written": git_status_before_written,
+        "prompt583_plan_written": plan_written,
+        "prompt583_result_written": result_written,
+        "prompt583_summary_written": False,
+        "prompt583_commit_performed": commit_performed,
+        "prompt583_tag_performed": tag_performed,
+        "prompt583_commit_hash": commit_hash,
+        "prompt583_tag_exists_at_head": tag_exists_at_head,
+        "prompt583_dispatch_not_run": dispatch_not_run,
+        "prompt583_commit_tag_completed": commit_tag_completed,
+        "prompt583_commit_tag_failed": commit_tag_failed,
+        "prompt583_codex_executed_during_runtime": (
+            codex_executed_during_runtime
+        ),
+        "prompt583_installation_performed": installation_performed,
+        "prompt583_systemd_used": systemd_used,
+        "prompt583_service_enable_performed": service_enable_performed,
+        "prompt583_service_start_performed": service_start_performed,
+        "prompt583_persistent_service_started": persistent_service_started,
+        "prompt583_remote_workflow_included": remote_workflow_included,
+        "prompt583_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt583_final_worktree_clean": final_worktree_clean,
+        "prompt583_completion_claim_allowed": completion_claim_allowed,
+        "prompt583_result_route": result_route,
+        "prompt583_next_action": next_action,
+        "prompt583_blocked_reasons": blocked_reasons,
+    }
+    _write_json(summary_path, summary)
+    summary_written = summary_path.is_file()
+    summary["prompt583_summary_written"] = summary_written
+    summary["prompt583_completion_claim_allowed"] = bool(
         completion_claim_allowed and summary_written
     )
     if summary_written:

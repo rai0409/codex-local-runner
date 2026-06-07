@@ -29722,6 +29722,406 @@ def _build_prompt582_review_and_commit_real_dev_changes_gate_state(
     }
 
 
+def _prompt583_prompt582_success_ready(
+    payload: Mapping[str, Any],
+) -> tuple[bool, list[str]]:
+    required_checks = (
+        (
+            "prompt582_real_dev_changes_review_success",
+            payload.get("prompt582_real_dev_changes_review_success")
+            is True,
+        ),
+        (
+            "prompt582_prompt581_success_ready",
+            payload.get("prompt582_prompt581_success_ready") is True,
+        ),
+        (
+            "prompt582_prompt581_changes_review_ready",
+            payload.get("prompt582_prompt581_changes_review_ready")
+            is True,
+        ),
+        (
+            "prompt582_prompt581_result_route_changes_review_ready",
+            payload.get("prompt582_prompt581_result_route")
+            == "changes_review_ready",
+        ),
+        (
+            "prompt582_prompt581_next_action_prepare_prompt582",
+            payload.get("prompt582_prompt581_next_action")
+            == "prepare_prompt582_review_and_commit_real_dev_changes",
+        ),
+        (
+            "prompt582_prompt581_changed_tracked_files_non_empty",
+            _normalize_string_list(
+                payload.get("prompt582_prompt581_changed_tracked_files")
+            )
+            != [],
+        ),
+        (
+            "prompt582_changed_files_non_empty",
+            _normalize_string_list(payload.get("prompt582_changed_files"))
+            != [],
+        ),
+        (
+            "prompt582_review_input_written",
+            payload.get("prompt582_review_input_written") is True,
+        ),
+        (
+            "prompt582_review_evaluation_written",
+            payload.get("prompt582_review_evaluation_written") is True,
+        ),
+        (
+            "prompt582_review_route_written",
+            payload.get("prompt582_review_route_written") is True,
+        ),
+        (
+            "prompt582_commit_plan_written",
+            payload.get("prompt582_commit_plan_written") is True,
+        ),
+        (
+            "prompt582_summary_written",
+            payload.get("prompt582_summary_written") is True,
+        ),
+        (
+            "prompt582_result_route_approve_commit_tag",
+            payload.get("prompt582_result_route") == "approve_commit_tag",
+        ),
+        (
+            "prompt582_approve_commit_tag",
+            payload.get("prompt582_approve_commit_tag") is True,
+        ),
+        (
+            "prompt582_reject_retry_required_false",
+            payload.get("prompt582_reject_retry_required") is False,
+        ),
+        (
+            "prompt582_manual_review_required_false",
+            payload.get("prompt582_manual_review_required") is False,
+        ),
+        (
+            "prompt582_no_changes_review_required_false",
+            payload.get("prompt582_no_changes_review_required") is False,
+        ),
+        (
+            "prompt582_commit_tag_allowed",
+            payload.get("prompt582_commit_tag_allowed") is True,
+        ),
+        (
+            "prompt582_codex_executed_during_runtime_false",
+            payload.get("prompt582_codex_executed_during_runtime") is False,
+        ),
+        (
+            "prompt582_tracked_files_modified_during_runtime_false",
+            payload.get("prompt582_tracked_files_modified_during_runtime")
+            is False,
+        ),
+        (
+            "prompt582_commit_performed_false",
+            payload.get("prompt582_commit_performed") is False,
+        ),
+        (
+            "prompt582_tag_performed_false",
+            payload.get("prompt582_tag_performed") is False,
+        ),
+        (
+            "prompt582_installation_performed_false",
+            payload.get("prompt582_installation_performed") is False,
+        ),
+        (
+            "prompt582_systemd_used_false",
+            payload.get("prompt582_systemd_used") is False,
+        ),
+        (
+            "prompt582_service_enable_performed_false",
+            payload.get("prompt582_service_enable_performed") is False,
+        ),
+        (
+            "prompt582_service_start_performed_false",
+            payload.get("prompt582_service_start_performed") is False,
+        ),
+        (
+            "prompt582_persistent_service_started_false",
+            payload.get("prompt582_persistent_service_started") is False,
+        ),
+        (
+            "prompt582_remote_workflow_included_false",
+            payload.get("prompt582_remote_workflow_included") is False,
+        ),
+        (
+            "prompt582_no_remote_mutation_verified",
+            payload.get("prompt582_no_remote_mutation_verified") is True,
+        ),
+        (
+            "prompt582_final_worktree_clean",
+            payload.get("prompt582_final_worktree_clean") is True,
+        ),
+        (
+            "prompt582_completion_claim_allowed",
+            payload.get("prompt582_completion_claim_allowed") is True,
+        ),
+        (
+            "prompt582_next_action_prepare_prompt583",
+            payload.get("prompt582_next_action")
+            == "prepare_prompt583_commit_tag_real_dev_changes",
+        ),
+        (
+            "prompt582_blocked_reasons_empty",
+            _normalize_string_list(payload.get("prompt582_blocked_reasons"))
+            == [],
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{name}" for name, ready in required_checks if not ready
+    ]
+    return blocked_reasons == [], blocked_reasons
+
+
+def _build_prompt583_commit_tag_real_dev_changes_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt582_success_ready, prerequisite_blocked_reasons = (
+        _prompt583_prompt582_success_ready(payload)
+    )
+    prompt582_approve_commit_tag = (
+        payload.get("prompt582_approve_commit_tag") is True
+    )
+    prompt582_commit_tag_allowed = (
+        payload.get("prompt582_commit_tag_allowed") is True
+    )
+    prompt582_result_route = _normalize_text(
+        payload.get("prompt582_result_route"), default=""
+    )
+    prompt582_next_action = _normalize_text(
+        payload.get("prompt582_next_action"), default=""
+    )
+    changed_files = _normalize_string_list(
+        payload.get("prompt583_changed_files")
+        or payload.get("prompt582_changed_files")
+    )
+    enabled = payload.get("prompt583_enabled") is True
+    enable_token_valid = (
+        payload.get("prompt583_enable_token_valid") is True
+    )
+    commit_message = _normalize_text(
+        payload.get("prompt583_commit_message"),
+        default="Add real dev task changes",
+    )
+    tag_name = _normalize_text(
+        payload.get("prompt583_tag_name"),
+        default="prompt583-real-dev-changes-commit",
+    )
+    input_written = payload.get("prompt583_input_written") is True
+    git_status_before_written = (
+        payload.get("prompt583_git_status_before_written") is True
+    )
+    plan_written = payload.get("prompt583_plan_written") is True
+    result_written = payload.get("prompt583_result_written") is True
+    summary_written = payload.get("prompt583_summary_written") is True
+    all_artifacts_written = all(
+        (
+            input_written,
+            git_status_before_written,
+            plan_written,
+            result_written,
+            summary_written,
+        )
+    )
+    commit_performed = payload.get("prompt583_commit_performed") is True
+    tag_performed = payload.get("prompt583_tag_performed") is True
+    commit_hash = _normalize_text(
+        payload.get("prompt583_commit_hash"), default=""
+    )
+    tag_exists_at_head = (
+        payload.get("prompt583_tag_exists_at_head") is True
+    )
+    dispatch_not_run = payload.get("prompt583_dispatch_not_run") is True
+    commit_tag_completed = (
+        payload.get("prompt583_commit_tag_completed") is True
+    )
+    commit_tag_failed = payload.get("prompt583_commit_tag_failed") is True
+    codex_executed_during_runtime = (
+        payload.get("prompt583_codex_executed_during_runtime") is True
+    )
+    installation_performed = (
+        payload.get("prompt583_installation_performed") is True
+    )
+    systemd_used = payload.get("prompt583_systemd_used") is True
+    service_enable_performed = (
+        payload.get("prompt583_service_enable_performed") is True
+    )
+    service_start_performed = (
+        payload.get("prompt583_service_start_performed") is True
+    )
+    persistent_service_started = (
+        payload.get("prompt583_persistent_service_started") is True
+    )
+    remote_workflow_included = (
+        payload.get("prompt583_remote_workflow_included") is True
+    )
+    no_remote_mutation_verified = (
+        payload.get("prompt583_no_remote_mutation_verified", True) is True
+    )
+    final_worktree_clean = (
+        payload.get("prompt583_final_worktree_clean", False) is True
+    )
+    blocked_reasons = sorted(
+        set(
+            list(prerequisite_blocked_reasons)
+            + _normalize_string_list(payload.get("prompt583_blocked_reasons"))
+        )
+    )
+
+    result_route = _normalize_text(
+        payload.get("prompt583_result_route"), default=""
+    )
+    if result_route not in {
+        "not_run",
+        "commit_tag_completed",
+        "missing_prerequisite",
+        "commit_tag_failed",
+    }:
+        if not prompt582_success_ready:
+            result_route = "missing_prerequisite"
+        elif not enabled or not enable_token_valid:
+            result_route = "not_run"
+        elif commit_tag_completed:
+            result_route = "commit_tag_completed"
+        else:
+            result_route = "commit_tag_failed"
+
+    next_action = _normalize_text(
+        payload.get("prompt583_next_action"), default=""
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_real_dev_changes_commit_tag"
+            ),
+            "commit_tag_completed": (
+                "prepare_prompt584_integrated_real_dev_one_cycle"
+            ),
+            "missing_prerequisite": (
+                "manual_review_prompt583_commit_tag_prerequisite"
+            ),
+            "commit_tag_failed": "manual_review_prompt583_commit_tag_failure",
+        }[result_route]
+
+    not_run_predicates = bool(
+        prompt582_success_ready
+        and (not enabled or not enable_token_valid)
+        and not commit_performed
+        and not tag_performed
+        and dispatch_not_run
+        and not commit_tag_completed
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_real_dev_changes_commit_tag"
+    )
+    executed_success_predicates = bool(
+        prompt582_success_ready
+        and prompt582_approve_commit_tag
+        and prompt582_commit_tag_allowed
+        and enabled
+        and enable_token_valid
+        and commit_performed
+        and tag_performed
+        and commit_hash
+        and tag_exists_at_head
+        and not dispatch_not_run
+        and commit_tag_completed
+        and not commit_tag_failed
+        and all_artifacts_written
+        and not codex_executed_during_runtime
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and final_worktree_clean
+        and result_route == "commit_tag_completed"
+        and next_action == "prepare_prompt584_integrated_real_dev_one_cycle"
+        and blocked_reasons == []
+    )
+
+    if not prompt582_success_ready:
+        status = "blocked_real_dev_changes_commit_tag_missing_prerequisite"
+        success = False
+        completion_claim_allowed = False
+    elif executed_success_predicates:
+        status = "real_dev_changes_commit_tag_completed_local_only"
+        success = True
+        completion_claim_allowed = True
+    elif not_run_predicates:
+        status = "real_dev_changes_commit_tag_ready_not_run_local_only"
+        success = False
+        completion_claim_allowed = False
+    else:
+        status = "blocked_real_dev_changes_commit_tag_failed"
+        success = False
+        completion_claim_allowed = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt583",
+        "prompt583_real_dev_changes_commit_tag_status": status,
+        "prompt583_real_dev_changes_commit_tag_ready": (
+            prompt582_success_ready
+        ),
+        "prompt583_real_dev_changes_commit_tag_success": success,
+        "prompt583_prompt582_success_ready": prompt582_success_ready,
+        "prompt583_prompt582_approve_commit_tag": prompt582_approve_commit_tag,
+        "prompt583_prompt582_commit_tag_allowed": (
+            prompt582_commit_tag_allowed
+        ),
+        "prompt583_prompt582_result_route": prompt582_result_route,
+        "prompt583_prompt582_next_action": prompt582_next_action,
+        "prompt583_changed_files": changed_files,
+        "prompt583_enabled": enabled,
+        "prompt583_enable_token_valid": enable_token_valid,
+        "prompt583_commit_message": commit_message,
+        "prompt583_tag_name": tag_name,
+        "prompt583_input_written": input_written,
+        "prompt583_git_status_before_written": git_status_before_written,
+        "prompt583_plan_written": plan_written,
+        "prompt583_result_written": result_written,
+        "prompt583_summary_written": summary_written,
+        "prompt583_commit_performed": commit_performed,
+        "prompt583_tag_performed": tag_performed,
+        "prompt583_commit_hash": commit_hash,
+        "prompt583_tag_exists_at_head": tag_exists_at_head,
+        "prompt583_dispatch_not_run": dispatch_not_run,
+        "prompt583_commit_tag_completed": commit_tag_completed,
+        "prompt583_commit_tag_failed": commit_tag_failed,
+        "prompt583_codex_executed_during_runtime": (
+            codex_executed_during_runtime
+        ),
+        "prompt583_installation_performed": installation_performed,
+        "prompt583_systemd_used": systemd_used,
+        "prompt583_service_enable_performed": service_enable_performed,
+        "prompt583_service_start_performed": service_start_performed,
+        "prompt583_persistent_service_started": persistent_service_started,
+        "prompt583_remote_workflow_included": remote_workflow_included,
+        "prompt583_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt583_final_worktree_clean": final_worktree_clean,
+        "prompt583_completion_claim_allowed": completion_claim_allowed,
+        "prompt583_result_route": result_route,
+        "prompt583_next_action": next_action,
+        "prompt583_blocked_reasons": blocked_reasons,
+        "prompt583_prompt_surface": (
+            "Real development changes commit/tag execution gate only; "
+            "requires Prompt582 approve_commit_tag evidence, can commit "
+            "and tag only with the exact Prompt583 enable token, uses local "
+            "git only for supplied changed files, does not execute Codex, "
+            "does not push, and excludes installs, systemd, systemctl, "
+            "sudo, persistent service starts, and remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -31615,4 +32015,5 @@ __all__ = [
     "_build_prompt580_real_dev_task_dispatch_gate_state",
     "_build_prompt581_verify_real_dev_task_changes_gate_state",
     "_build_prompt582_review_and_commit_real_dev_changes_gate_state",
+    "_build_prompt583_commit_tag_real_dev_changes_gate_state",
 ]
