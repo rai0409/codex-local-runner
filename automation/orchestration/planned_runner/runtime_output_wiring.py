@@ -158,6 +158,9 @@ PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN = (
 PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN = (
     "PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE"
 )
+PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN = (
+    "PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -300,6 +303,10 @@ _PROMPT587_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt587_daemon_resume_stop_cleanup"
 )
+_PROMPT588_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt588_minimal_failure_routes"
+)
 _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_input.json",
     "daemon_control_resume_state_before.json",
@@ -309,6 +316,14 @@ _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_resume_state_after.json",
     "daemon_control_route.json",
     "daemon_control_summary.json",
+)
+_PROMPT588_REQUIRED_ARTIFACT_NAMES = (
+    "minimal_failure_routes_input.json",
+    "minimal_failure_routes_invalid_resume.json",
+    "minimal_failure_routes_stop_file.json",
+    "minimal_failure_routes_success_run.json",
+    "minimal_failure_routes_route.json",
+    "minimal_failure_routes_summary.json",
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -9952,6 +9967,559 @@ def run_prompt587_daemon_resume_stop_cleanup_gate(
     summary["prompt587_completion_claim_allowed"] = bool(
         completion_claim_allowed and artifacts_written
     )
+    if summary_written:
+        _write_json(summary_path, summary)
+    return summary
+
+
+def _prompt588_route_payload(payload: Mapping[str, Any]) -> str:
+    if payload.get("prompt588_force_invalid_resume_state") is True:
+        return "invalid_resume"
+    if payload.get("prompt588_force_stop_file") is True:
+        return "stop_file"
+    return "success"
+
+
+def _prompt588_invalid_resume_state() -> dict[str, Any]:
+    return {
+        "local_only": True,
+        "source_prompt": "prompt586",
+        "soak_iterations": 1,
+        "max_cycles_per_iteration": 2,
+        "started_iterations": 2,
+        "completed_iterations": 0,
+        "failed_iterations": 0,
+        "total_started_cycles": 5,
+        "total_completed_cycles": 0,
+        "total_failed_cycles": 0,
+        "stop_reason": "prompt588_invalid_resume_state_simulation",
+        "next_action": "prompt587_validate_resume_stop_cleanup",
+    }
+
+
+def _prompt588_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _prompt588_call_prompt587(
+    *,
+    payload: Mapping[str, Any],
+    repo_path: Path,
+    artifact_dir: Path,
+    stop_file: bool,
+    invalid_resume: bool,
+    prompt580_timeout_seconds: int | None,
+) -> dict[str, Any]:
+    prompt587_payload = {
+        **payload,
+        "prompt587_stop_file_present": stop_file,
+    }
+    if invalid_resume:
+        prompt587_payload["prompt587_seed_resume_state"] = (
+            _prompt588_invalid_resume_state()
+        )
+    return run_prompt587_daemon_resume_stop_cleanup_gate(
+        run_state_payload=prompt587_payload,
+        execution_repo_path=repo_path,
+        artifact_dir=artifact_dir,
+        enabled=True,
+        enable_token=PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN,
+        prompt586_enable_token=(
+            PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+        ),
+        prompt585_enable_token=PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN,
+        prompt584_enable_token=(
+            PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+        ),
+        prompt580_enable_token=PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN,
+        prompt583_enable_token=(
+            PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+        ),
+        stop_file_path=artifact_dir / "prompt588_prompt587.stop",
+        prompt580_timeout_seconds=prompt580_timeout_seconds,
+    )
+
+
+def run_prompt588_minimal_failure_routes_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt587_enable_token: str | None = None,
+    prompt586_enable_token: str | None = None,
+    prompt585_enable_token: str | None = None,
+    prompt584_enable_token: str | None = None,
+    prompt580_enable_token: str | None = None,
+    prompt583_enable_token: str | None = None,
+    prompt580_timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    control_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT588_DEFAULT_ARTIFACT_DIR
+    )
+    if not control_artifact_dir.is_absolute():
+        control_artifact_dir = repo_path / control_artifact_dir
+    control_artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    input_path = control_artifact_dir / "minimal_failure_routes_input.json"
+    invalid_resume_path = (
+        control_artifact_dir / "minimal_failure_routes_invalid_resume.json"
+    )
+    stop_file_path = (
+        control_artifact_dir / "minimal_failure_routes_stop_file.json"
+    )
+    success_run_path = (
+        control_artifact_dir / "minimal_failure_routes_success_run.json"
+    )
+    route_path = control_artifact_dir / "minimal_failure_routes_route.json"
+    summary_path = control_artifact_dir / "minimal_failure_routes_summary.json"
+
+    prompt588_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt588_enabled") is True
+    )
+    prompt588_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt588_enable_token"),
+        default="",
+    )
+    prompt587_token = _normalize_text(
+        prompt587_enable_token
+        if prompt587_enable_token is not None
+        else payload.get("prompt587_enable_token"),
+        default="",
+    )
+    prompt586_token = _normalize_text(
+        prompt586_enable_token
+        if prompt586_enable_token is not None
+        else payload.get("prompt586_enable_token"),
+        default="",
+    )
+    prompt585_token = _normalize_text(
+        prompt585_enable_token
+        if prompt585_enable_token is not None
+        else payload.get("prompt585_enable_token"),
+        default="",
+    )
+    prompt584_token = _normalize_text(
+        prompt584_enable_token
+        if prompt584_enable_token is not None
+        else payload.get("prompt584_enable_token"),
+        default="",
+    )
+    prompt580_token = _normalize_text(
+        prompt580_enable_token
+        if prompt580_enable_token is not None
+        else payload.get("prompt580_enable_token"),
+        default="",
+    )
+    prompt583_token = _normalize_text(
+        prompt583_enable_token
+        if prompt583_enable_token is not None
+        else payload.get("prompt583_enable_token"),
+        default="",
+    )
+
+    prompt588_enable_token_valid = (
+        prompt588_token == PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN
+    )
+    prompt588_prompt587_enable_token_valid = (
+        prompt587_token == PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN
+    )
+    prompt588_prompt586_enable_token_valid = (
+        prompt586_token
+        == PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+    )
+    prompt588_prompt585_enable_token_valid = (
+        prompt585_token == PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN
+    )
+    prompt588_prompt584_enable_token_valid = (
+        prompt584_token == PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+    )
+    prompt588_prompt580_enable_token_valid = (
+        prompt580_token == PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN
+    )
+    prompt588_prompt583_enable_token_valid = (
+        prompt583_token == PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+    )
+    token_gate_open = bool(
+        prompt588_enabled
+        and prompt588_enable_token_valid
+        and prompt588_prompt587_enable_token_valid
+        and prompt588_prompt586_enable_token_valid
+        and prompt588_prompt585_enable_token_valid
+        and prompt588_prompt584_enable_token_valid
+        and prompt588_prompt580_enable_token_valid
+        and prompt588_prompt583_enable_token_valid
+    )
+    timeout = _prompt580_timeout_seconds(
+        prompt580_timeout_seconds
+        if prompt580_timeout_seconds is not None
+        else payload.get("prompt580_timeout_seconds", 180),
+        default=180,
+    )
+    selected_route = _prompt588_route_payload(payload)
+
+    input_written = _prompt585_write_artifact(
+        input_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt588",
+            "execution_repo_path": str(repo_path),
+            "artifact_dir": str(control_artifact_dir),
+            "selected_route": selected_route,
+            "enabled": prompt588_enabled,
+            "prompt588_enable_token_valid": prompt588_enable_token_valid,
+            "prompt587_enable_token_valid": (
+                prompt588_prompt587_enable_token_valid
+            ),
+            "prompt586_enable_token_valid": (
+                prompt588_prompt586_enable_token_valid
+            ),
+            "prompt585_enable_token_valid": (
+                prompt588_prompt585_enable_token_valid
+            ),
+            "prompt584_enable_token_valid": (
+                prompt588_prompt584_enable_token_valid
+            ),
+            "prompt580_enable_token_valid": (
+                prompt588_prompt580_enable_token_valid
+            ),
+            "prompt583_enable_token_valid": (
+                prompt588_prompt583_enable_token_valid
+            ),
+            "remote_operations_allowed": False,
+        },
+    )
+
+    invalid_resume_result: dict[str, Any] = {}
+    stop_file_result: dict[str, Any] = {}
+    success_run_result: dict[str, Any] = {}
+    prompt588_invalid_resume_route_checked = False
+    prompt588_stop_file_route_checked = False
+    prompt588_success_route_checked = False
+    if token_gate_open:
+        if selected_route == "invalid_resume":
+            prompt588_invalid_resume_route_checked = True
+            invalid_resume_result = _prompt588_call_prompt587(
+                payload=payload,
+                repo_path=repo_path,
+                artifact_dir=control_artifact_dir / "prompt587_invalid_resume",
+                stop_file=False,
+                invalid_resume=True,
+                prompt580_timeout_seconds=timeout,
+            )
+        elif selected_route == "stop_file":
+            prompt588_stop_file_route_checked = True
+            stop_file_result = _prompt588_call_prompt587(
+                payload=payload,
+                repo_path=repo_path,
+                artifact_dir=control_artifact_dir / "prompt587_stop_file",
+                stop_file=True,
+                invalid_resume=False,
+                prompt580_timeout_seconds=timeout,
+            )
+        else:
+            prompt588_success_route_checked = True
+            success_run_result = _prompt588_call_prompt587(
+                payload=payload,
+                repo_path=repo_path,
+                artifact_dir=control_artifact_dir / "prompt587_success_run",
+                stop_file=False,
+                invalid_resume=False,
+                prompt580_timeout_seconds=timeout,
+            )
+
+    invalid_resume_written = _prompt585_write_artifact(
+        invalid_resume_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt588",
+            "checked": prompt588_invalid_resume_route_checked,
+            "prompt587_result": invalid_resume_result,
+        },
+    )
+    stop_file_written = _prompt585_write_artifact(
+        stop_file_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt588",
+            "checked": prompt588_stop_file_route_checked,
+            "prompt587_result": stop_file_result,
+        },
+    )
+    success_run_written = _prompt585_write_artifact(
+        success_run_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt588",
+            "checked": prompt588_success_route_checked,
+            "prompt587_result": success_run_result,
+        },
+    )
+
+    selected_prompt587_result = {
+        "invalid_resume": invalid_resume_result,
+        "stop_file": stop_file_result,
+        "success": success_run_result,
+    }[selected_route]
+    prompt588_prompt587_executed = bool(
+        prompt588_invalid_resume_route_checked
+        or prompt588_stop_file_route_checked
+        or prompt588_success_route_checked
+    )
+    prompt588_prompt586_executed = bool(
+        selected_prompt587_result.get("prompt587_prompt586_executed") is True
+    )
+    prompt588_prompt586_total_completed_cycles = _prompt587_int(
+        selected_prompt587_result.get(
+            "prompt587_prompt586_total_completed_cycles"
+        )
+    )
+    prompt588_invalid_resume_route_success = bool(
+        prompt588_invalid_resume_route_checked
+        and selected_prompt587_result.get("prompt587_result_route")
+        == "control_failed"
+        and "prompt587_resume_state_invalid"
+        in _prompt588_string_list(
+            selected_prompt587_result.get("prompt587_blocked_reasons")
+        )
+        and selected_prompt587_result.get("prompt587_prompt586_executed")
+        is False
+    )
+    prompt588_stop_file_route_success = bool(
+        prompt588_stop_file_route_checked
+        and selected_prompt587_result.get("prompt587_daemon_control_success")
+        is True
+        and selected_prompt587_result.get("prompt587_stop_file_detected")
+        is True
+        and selected_prompt587_result.get(
+            "prompt587_clean_stop_without_execution"
+        )
+        is True
+        and selected_prompt587_result.get("prompt587_prompt586_executed")
+        is False
+    )
+    prompt588_success_route_success = bool(
+        prompt588_success_route_checked
+        and selected_prompt587_result.get("prompt587_daemon_control_success")
+        is True
+        and selected_prompt587_result.get("prompt587_prompt586_executed")
+        is True
+        and selected_prompt587_result.get("prompt587_prompt586_success")
+        is True
+        and prompt588_prompt586_total_completed_cycles == 2
+    )
+
+    prompt588_installation_performed = False
+    prompt588_systemd_used = False
+    prompt588_service_enable_performed = False
+    prompt588_service_start_performed = False
+    prompt588_persistent_service_started = False
+    prompt588_remote_workflow_included = False
+    prompt588_no_remote_mutation_verified = True
+    prompt588_codex_executed_during_runtime = bool(
+        prompt588_prompt586_executed
+        and selected_prompt587_result.get(
+            "prompt587_codex_executed_during_runtime"
+        )
+        is True
+    )
+    prompt588_tracked_files_modified_by_codex = bool(
+        prompt588_prompt586_executed
+        and selected_prompt587_result.get(
+            "prompt587_tracked_files_modified_by_codex"
+        )
+        is True
+    )
+    prompt588_commit_performed = bool(
+        prompt588_prompt586_executed
+        and selected_prompt587_result.get("prompt587_commit_performed") is True
+    )
+    prompt588_tag_performed = bool(
+        prompt588_prompt586_executed
+        and selected_prompt587_result.get("prompt587_tag_performed") is True
+    )
+    prompt588_final_worktree_clean = bool(
+        True
+        if not prompt588_prompt587_executed
+        else selected_prompt587_result.get("prompt587_final_worktree_clean")
+        is True
+    )
+
+    selected_route_success = bool(
+        prompt588_invalid_resume_route_success
+        or prompt588_stop_file_route_success
+        or prompt588_success_route_success
+    )
+    blocked_reasons: list[str] = []
+    if token_gate_open and not selected_route_success:
+        blocked_reasons.append("prompt588_selected_route_failed")
+
+    if not token_gate_open:
+        status = "minimal_failure_routes_ready_not_run_local_only"
+        ready = True
+        success = False
+        result_route = "not_run"
+        next_action = (
+            "provide_explicit_enable_token_for_minimal_failure_routes"
+        )
+    elif prompt588_invalid_resume_route_success:
+        status = "minimal_failure_routes_validated_local_only"
+        ready = True
+        success = True
+        result_route = "resume_state_invalid"
+        next_action = "manual_review_invalid_resume_state"
+    elif prompt588_stop_file_route_success:
+        status = "minimal_failure_routes_validated_local_only"
+        ready = True
+        success = True
+        result_route = "clean_stop_completed"
+        next_action = "prepare_prompt589_daemon_loop_entrypoint"
+    elif prompt588_success_route_success:
+        status = "minimal_failure_routes_validated_local_only"
+        ready = True
+        success = True
+        result_route = "failure_routes_validated"
+        next_action = "prepare_prompt589_daemon_loop_entrypoint"
+    else:
+        status = "blocked_minimal_failure_routes_failed"
+        ready = False
+        success = False
+        result_route = "minimal_failure_routes_failed"
+        next_action = "manual_review_prompt588_failure_route"
+
+    completion_claim_allowed = bool(
+        success
+        and result_route
+        in {"clean_stop_completed", "failure_routes_validated"}
+        and blocked_reasons == []
+    )
+    route_written = _prompt585_write_artifact(
+        route_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt588",
+            "prompt588_result_route": result_route,
+            "prompt588_next_action": next_action,
+            "prompt588_blocked_reasons": blocked_reasons,
+        },
+    )
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt588",
+        "prompt588_failure_routes_status": status,
+        "prompt588_failure_routes_ready": ready,
+        "prompt588_failure_routes_success": success,
+        "prompt588_enabled": prompt588_enabled,
+        "prompt588_enable_token_valid": prompt588_enable_token_valid,
+        "prompt588_prompt587_enable_token_valid": (
+            prompt588_prompt587_enable_token_valid
+        ),
+        "prompt588_prompt586_enable_token_valid": (
+            prompt588_prompt586_enable_token_valid
+        ),
+        "prompt588_prompt585_enable_token_valid": (
+            prompt588_prompt585_enable_token_valid
+        ),
+        "prompt588_prompt584_enable_token_valid": (
+            prompt588_prompt584_enable_token_valid
+        ),
+        "prompt588_prompt580_enable_token_valid": (
+            prompt588_prompt580_enable_token_valid
+        ),
+        "prompt588_prompt583_enable_token_valid": (
+            prompt588_prompt583_enable_token_valid
+        ),
+        "prompt588_invalid_resume_route_checked": (
+            prompt588_invalid_resume_route_checked
+        ),
+        "prompt588_invalid_resume_route_success": (
+            prompt588_invalid_resume_route_success
+        ),
+        "prompt588_stop_file_route_checked": prompt588_stop_file_route_checked,
+        "prompt588_stop_file_route_success": prompt588_stop_file_route_success,
+        "prompt588_success_route_checked": prompt588_success_route_checked,
+        "prompt588_success_route_success": prompt588_success_route_success,
+        "prompt588_prompt587_executed": prompt588_prompt587_executed,
+        "prompt588_prompt586_executed": prompt588_prompt586_executed,
+        "prompt588_prompt586_total_completed_cycles": (
+            prompt588_prompt586_total_completed_cycles
+        ),
+        "prompt588_codex_executed_during_runtime": (
+            prompt588_codex_executed_during_runtime
+        ),
+        "prompt588_tracked_files_modified_by_codex": (
+            prompt588_tracked_files_modified_by_codex
+        ),
+        "prompt588_commit_performed": prompt588_commit_performed,
+        "prompt588_tag_performed": prompt588_tag_performed,
+        "prompt588_installation_performed": prompt588_installation_performed,
+        "prompt588_systemd_used": prompt588_systemd_used,
+        "prompt588_service_enable_performed": (
+            prompt588_service_enable_performed
+        ),
+        "prompt588_service_start_performed": (
+            prompt588_service_start_performed
+        ),
+        "prompt588_persistent_service_started": (
+            prompt588_persistent_service_started
+        ),
+        "prompt588_remote_workflow_included": (
+            prompt588_remote_workflow_included
+        ),
+        "prompt588_no_remote_mutation_verified": (
+            prompt588_no_remote_mutation_verified
+        ),
+        "prompt588_final_worktree_clean": prompt588_final_worktree_clean,
+        "prompt588_completion_claim_allowed": completion_claim_allowed,
+        "prompt588_result_route": result_route,
+        "prompt588_next_action": next_action,
+        "prompt588_blocked_reasons": blocked_reasons,
+        "prompt588_input_written": input_written,
+        "prompt588_invalid_resume_artifact_written": invalid_resume_written,
+        "prompt588_stop_file_artifact_written": stop_file_written,
+        "prompt588_success_run_artifact_written": success_run_written,
+        "prompt588_route_written": route_written,
+        "prompt588_artifacts_written": False,
+    }
+    summary_written = _prompt585_write_artifact(summary_path, summary)
+    artifacts_written = bool(
+        summary_written
+        and all(
+            (control_artifact_dir / name).is_file()
+            for name in _PROMPT588_REQUIRED_ARTIFACT_NAMES
+        )
+    )
+    summary["prompt588_artifacts_written"] = artifacts_written
+    if not artifacts_written and token_gate_open:
+        summary["prompt588_failure_routes_status"] = (
+            "blocked_minimal_failure_routes_failed"
+        )
+        summary["prompt588_failure_routes_ready"] = False
+        summary["prompt588_failure_routes_success"] = False
+        summary["prompt588_completion_claim_allowed"] = False
+        summary["prompt588_result_route"] = "minimal_failure_routes_failed"
+        summary["prompt588_next_action"] = (
+            "manual_review_prompt588_failure_route"
+        )
+        summary["prompt588_blocked_reasons"] = [
+            *blocked_reasons,
+            "prompt588_required_artifacts_missing",
+        ]
     if summary_written:
         _write_json(summary_path, summary)
     return summary
