@@ -32507,6 +32507,417 @@ def _build_prompt591_role_execution_adapter_gate_state(
     }
 
 
+def _build_prompt592_role_evaluation_retry_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt592_enabled") is True
+    enable_token_valid = payload.get("prompt592_enable_token_valid") is True
+    prompt591_enable_token_valid = (
+        payload.get("prompt592_prompt591_enable_token_valid") is True
+    )
+    prompt590_enable_token_valid = (
+        payload.get("prompt592_prompt590_enable_token_valid") is True
+    )
+    prompt589_enable_token_valid = (
+        payload.get("prompt592_prompt589_enable_token_valid") is True
+    )
+    prompt588_enable_token_valid = (
+        payload.get("prompt592_prompt588_enable_token_valid") is True
+    )
+    prompt587_enable_token_valid = (
+        payload.get("prompt592_prompt587_enable_token_valid") is True
+    )
+    prompt586_enable_token_valid = (
+        payload.get("prompt592_prompt586_enable_token_valid") is True
+    )
+    prompt585_enable_token_valid = (
+        payload.get("prompt592_prompt585_enable_token_valid") is True
+    )
+    prompt584_enable_token_valid = (
+        payload.get("prompt592_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt592_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt592_prompt583_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt591_enable_token_valid
+        and prompt590_enable_token_valid
+        and prompt589_enable_token_valid
+        and prompt588_enable_token_valid
+        and prompt587_enable_token_valid
+        and prompt586_enable_token_valid
+        and prompt585_enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    project_goal_present = (
+        payload.get("prompt592_project_goal_present") is True
+    )
+    selected_role = _normalize_text(
+        payload.get("prompt592_selected_role"),
+        default="",
+    )
+    evaluation_request_valid = (
+        payload.get("prompt592_evaluation_request_valid") is True
+    )
+    execution_route = _normalize_text(
+        payload.get("prompt592_execution_route"),
+        default="",
+    )
+    execution_success = payload.get("prompt592_execution_success") is True
+    execution_codex = payload.get("prompt592_execution_codex") is True
+    execution_diff_present = (
+        payload.get("prompt592_execution_diff_present") is True
+    )
+    verification_passed = (
+        payload.get("prompt592_verification_passed") is True
+    )
+    review_passed = payload.get("prompt592_review_passed") is True
+    try:
+        retry_count = int(payload.get("prompt592_retry_count", 0))
+    except (TypeError, ValueError):
+        retry_count = 0
+    try:
+        max_retries = int(payload.get("prompt592_max_retries", 1))
+    except (TypeError, ValueError):
+        max_retries = 1
+    max_retries = max(0, min(max_retries, 3))
+    score = payload.get("prompt592_score")
+    if not isinstance(score, int):
+        score = 0
+    retry_required = payload.get("prompt592_retry_required") is True
+    fixer_prompt_required = (
+        payload.get("prompt592_fixer_prompt_required") is True
+    )
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt592_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt592_result_route"),
+        default="",
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif not evaluation_request_valid:
+            result_route = "role_evaluation_request_invalid"
+        elif verification_passed and review_passed:
+            result_route = "role_evaluation_passed"
+        elif retry_count < max_retries:
+            result_route = "role_evaluation_retry_prepared"
+        else:
+            result_route = "role_evaluation_retry_exhausted"
+    next_action = _normalize_text(
+        payload.get("prompt592_next_action"),
+        default="",
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_role_evaluation_retry"
+            ),
+            "role_evaluation_request_invalid": (
+                "manual_review_role_evaluation_request"
+            ),
+            "role_evaluation_passed": (
+                "prepare_prompt593_multi_role_autonomous_cycle"
+            ),
+            "role_evaluation_retry_prepared": (
+                "prepare_prompt591_retry_role_execution"
+            ),
+            "role_evaluation_retry_exhausted": (
+                "manual_review_role_evaluation_failure"
+            ),
+        }.get(result_route, "manual_review_role_evaluation_retry")
+
+    no_downstream_execution = bool(
+        payload.get("prompt592_prompt591_executed") is False
+        and payload.get("prompt592_prompt590_executed") is False
+        and payload.get("prompt592_prompt589_executed") is False
+        and payload.get("prompt592_prompt588_executed") is False
+        and payload.get("prompt592_prompt587_executed") is False
+        and payload.get("prompt592_prompt586_executed") is False
+    )
+    no_codex_commit_tag = bool(
+        payload.get("prompt592_codex_executed_during_runtime") is False
+        and payload.get("prompt592_tracked_files_modified_by_codex") is False
+        and payload.get("prompt592_commit_performed") is False
+        and payload.get("prompt592_tag_performed") is False
+    )
+    no_install_service_remote = bool(
+        payload.get("prompt592_installation_performed") is False
+        and payload.get("prompt592_systemd_used") is False
+        and payload.get("prompt592_service_enable_performed") is False
+        and payload.get("prompt592_service_start_performed") is False
+        and payload.get("prompt592_persistent_service_started") is False
+        and payload.get("prompt592_remote_workflow_included") is False
+        and payload.get("prompt592_no_remote_mutation_verified") is True
+    )
+    artifacts_written = payload.get("prompt592_artifacts_written") is True
+    artifacts_ready = bool(
+        payload.get("prompt592_role_evaluation_request_written") is True
+        and payload.get("prompt592_role_evaluation_score_written") is True
+        and payload.get("prompt592_role_evaluation_decision_written") is True
+        and payload.get("prompt592_role_retry_plan_written") is True
+        and payload.get("prompt592_role_fixer_prompt_written") is True
+        and payload.get("prompt592_role_review_summary_written") is True
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt592_final_worktree_clean") is True
+        and payload.get("prompt592_completion_claim_allowed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_role_evaluation_retry"
+        and blocked_reasons == []
+    )
+    invalid_request_predicates = bool(
+        token_gate_open
+        and not evaluation_request_valid
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and result_route == "role_evaluation_request_invalid"
+        and next_action == "manual_review_role_evaluation_request"
+        and "prompt592_role_evaluation_request_invalid" in blocked_reasons
+        and payload.get("prompt592_completion_claim_allowed") is False
+    )
+    pass_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and evaluation_request_valid
+        and verification_passed
+        and review_passed
+        and score >= 80
+        and not retry_required
+        and not fixer_prompt_required
+        and artifacts_ready
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt592_final_worktree_clean") is True
+        and payload.get("prompt592_completion_claim_allowed") is True
+        and result_route == "role_evaluation_passed"
+        and next_action == "prepare_prompt593_multi_role_autonomous_cycle"
+        and blocked_reasons == []
+    )
+    retry_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and evaluation_request_valid
+        and not (verification_passed and review_passed)
+        and retry_count < max_retries
+        and score < 80
+        and retry_required
+        and fixer_prompt_required
+        and artifacts_ready
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt592_final_worktree_clean") is True
+        and payload.get("prompt592_completion_claim_allowed") is True
+        and result_route == "role_evaluation_retry_prepared"
+        and next_action == "prepare_prompt591_retry_role_execution"
+        and blocked_reasons == []
+    )
+    exhausted_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and evaluation_request_valid
+        and not (verification_passed and review_passed)
+        and retry_count >= max_retries
+        and not retry_required
+        and not fixer_prompt_required
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and result_route == "role_evaluation_retry_exhausted"
+        and next_action == "manual_review_role_evaluation_failure"
+        and "prompt592_retry_limit_exhausted" in blocked_reasons
+        and payload.get("prompt592_completion_claim_allowed") is False
+    )
+    if artifacts_written and pass_predicates:
+        status = "role_evaluation_retry_ready_local_only"
+        ready = True
+        success = True
+    elif artifacts_written and retry_predicates:
+        status = "role_evaluation_retry_ready_local_only"
+        ready = True
+        success = True
+    elif artifacts_written and not_run_predicates:
+        status = "role_evaluation_retry_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif artifacts_written and invalid_request_predicates:
+        status = "blocked_role_evaluation_retry_invalid_request"
+        ready = False
+        success = False
+    elif artifacts_written and exhausted_predicates:
+        status = "blocked_role_evaluation_retry_exhausted"
+        ready = False
+        success = False
+    else:
+        status = "blocked_role_evaluation_retry_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt592",
+        "prompt592_role_evaluation_status": status,
+        "prompt592_role_evaluation_ready": ready,
+        "prompt592_role_evaluation_success": success,
+        "prompt592_enabled": enabled,
+        "prompt592_enable_token_valid": enable_token_valid,
+        "prompt592_prompt591_enable_token_valid": (
+            prompt591_enable_token_valid
+        ),
+        "prompt592_prompt590_enable_token_valid": (
+            prompt590_enable_token_valid
+        ),
+        "prompt592_prompt589_enable_token_valid": (
+            prompt589_enable_token_valid
+        ),
+        "prompt592_prompt588_enable_token_valid": (
+            prompt588_enable_token_valid
+        ),
+        "prompt592_prompt587_enable_token_valid": (
+            prompt587_enable_token_valid
+        ),
+        "prompt592_prompt586_enable_token_valid": (
+            prompt586_enable_token_valid
+        ),
+        "prompt592_prompt585_enable_token_valid": (
+            prompt585_enable_token_valid
+        ),
+        "prompt592_prompt584_enable_token_valid": (
+            prompt584_enable_token_valid
+        ),
+        "prompt592_prompt580_enable_token_valid": (
+            prompt580_enable_token_valid
+        ),
+        "prompt592_prompt583_enable_token_valid": (
+            prompt583_enable_token_valid
+        ),
+        "prompt592_project_goal_present": project_goal_present,
+        "prompt592_selected_role": selected_role,
+        "prompt592_evaluation_request_valid": evaluation_request_valid,
+        "prompt592_execution_route": execution_route,
+        "prompt592_execution_success": execution_success,
+        "prompt592_execution_codex": execution_codex,
+        "prompt592_execution_diff_present": execution_diff_present,
+        "prompt592_verification_passed": verification_passed,
+        "prompt592_review_passed": review_passed,
+        "prompt592_retry_count": retry_count,
+        "prompt592_max_retries": max_retries,
+        "prompt592_score": score,
+        "prompt592_retry_required": retry_required,
+        "prompt592_fixer_prompt_required": fixer_prompt_required,
+        "prompt592_role_evaluation_request_written": (
+            payload.get("prompt592_role_evaluation_request_written") is True
+        ),
+        "prompt592_role_evaluation_score_written": (
+            payload.get("prompt592_role_evaluation_score_written") is True
+        ),
+        "prompt592_role_evaluation_decision_written": (
+            payload.get("prompt592_role_evaluation_decision_written") is True
+        ),
+        "prompt592_role_retry_plan_written": (
+            payload.get("prompt592_role_retry_plan_written") is True
+        ),
+        "prompt592_role_fixer_prompt_written": (
+            payload.get("prompt592_role_fixer_prompt_written") is True
+        ),
+        "prompt592_role_review_summary_written": (
+            payload.get("prompt592_role_review_summary_written") is True
+        ),
+        "prompt592_prompt591_probe_executed": (
+            payload.get("prompt592_prompt591_probe_executed") is True
+        ),
+        "prompt592_prompt591_probe_success": (
+            payload.get("prompt592_prompt591_probe_success") is True
+        ),
+        "prompt592_prompt591_executed": (
+            payload.get("prompt592_prompt591_executed") is True
+        ),
+        "prompt592_prompt590_executed": (
+            payload.get("prompt592_prompt590_executed") is True
+        ),
+        "prompt592_prompt589_executed": (
+            payload.get("prompt592_prompt589_executed") is True
+        ),
+        "prompt592_prompt588_executed": (
+            payload.get("prompt592_prompt588_executed") is True
+        ),
+        "prompt592_prompt587_executed": (
+            payload.get("prompt592_prompt587_executed") is True
+        ),
+        "prompt592_prompt586_executed": (
+            payload.get("prompt592_prompt586_executed") is True
+        ),
+        "prompt592_codex_executed_during_runtime": (
+            payload.get("prompt592_codex_executed_during_runtime") is True
+        ),
+        "prompt592_tracked_files_modified_by_codex": (
+            payload.get("prompt592_tracked_files_modified_by_codex") is True
+        ),
+        "prompt592_commit_performed": (
+            payload.get("prompt592_commit_performed") is True
+        ),
+        "prompt592_tag_performed": (
+            payload.get("prompt592_tag_performed") is True
+        ),
+        "prompt592_installation_performed": (
+            payload.get("prompt592_installation_performed") is True
+        ),
+        "prompt592_systemd_used": payload.get("prompt592_systemd_used") is True,
+        "prompt592_service_enable_performed": (
+            payload.get("prompt592_service_enable_performed") is True
+        ),
+        "prompt592_service_start_performed": (
+            payload.get("prompt592_service_start_performed") is True
+        ),
+        "prompt592_persistent_service_started": (
+            payload.get("prompt592_persistent_service_started") is True
+        ),
+        "prompt592_remote_workflow_included": (
+            payload.get("prompt592_remote_workflow_included") is True
+        ),
+        "prompt592_no_remote_mutation_verified": (
+            payload.get("prompt592_no_remote_mutation_verified") is True
+        ),
+        "prompt592_final_worktree_clean": (
+            payload.get("prompt592_final_worktree_clean") is True
+        ),
+        "prompt592_completion_claim_allowed": (
+            payload.get("prompt592_completion_claim_allowed") is True
+        ),
+        "prompt592_result_route": result_route,
+        "prompt592_next_action": next_action,
+        "prompt592_blocked_reasons": blocked_reasons,
+        "prompt592_prompt_surface": (
+            "Local-only role evaluation and retry gate after Prompt591; "
+            "requires Prompt592 plus Prompt591, Prompt590, Prompt589, "
+            "Prompt588, Prompt587, Prompt586, Prompt585, Prompt584, "
+            "Prompt580, and Prompt583 tokens. It evaluates verification and "
+            "review inputs, writes retry/fixer artifacts, and routes to "
+            "Prompt593, Prompt591 retry, or manual review without Codex "
+            "execution, tracked-file mutation, commit/tag, install, systemd, "
+            "service start, persistent daemon, shell=True, or remote "
+            "operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -34409,4 +34820,5 @@ __all__ = [
     "_build_prompt589_daemon_loop_entrypoint_gate_state",
     "_build_prompt590_role_driven_task_entrypoint_gate_state",
     "_build_prompt591_role_execution_adapter_gate_state",
+    "_build_prompt592_role_evaluation_retry_gate_state",
 ]
