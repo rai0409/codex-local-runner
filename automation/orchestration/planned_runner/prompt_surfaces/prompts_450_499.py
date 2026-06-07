@@ -33320,6 +33320,380 @@ def _build_prompt593_multi_role_autonomous_cycle_gate_state(
     }
 
 
+def _build_prompt594_cli_dogfood_entrypoint_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt594_enabled") is True
+    enable_token_valid = payload.get("prompt594_enable_token_valid") is True
+    prompt593_enable_token_valid = (
+        payload.get("prompt594_prompt593_enable_token_valid") is True
+    )
+    prompt592_enable_token_valid = (
+        payload.get("prompt594_prompt592_enable_token_valid") is True
+    )
+    prompt591_enable_token_valid = (
+        payload.get("prompt594_prompt591_enable_token_valid") is True
+    )
+    prompt590_enable_token_valid = (
+        payload.get("prompt594_prompt590_enable_token_valid") is True
+    )
+    prompt589_enable_token_valid = (
+        payload.get("prompt594_prompt589_enable_token_valid") is True
+    )
+    prompt588_enable_token_valid = (
+        payload.get("prompt594_prompt588_enable_token_valid") is True
+    )
+    prompt587_enable_token_valid = (
+        payload.get("prompt594_prompt587_enable_token_valid") is True
+    )
+    prompt586_enable_token_valid = (
+        payload.get("prompt594_prompt586_enable_token_valid") is True
+    )
+    prompt585_enable_token_valid = (
+        payload.get("prompt594_prompt585_enable_token_valid") is True
+    )
+    prompt584_enable_token_valid = (
+        payload.get("prompt594_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt594_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt594_prompt583_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt593_enable_token_valid
+        and prompt592_enable_token_valid
+        and prompt591_enable_token_valid
+        and prompt590_enable_token_valid
+        and prompt589_enable_token_valid
+        and prompt588_enable_token_valid
+        and prompt587_enable_token_valid
+        and prompt586_enable_token_valid
+        and prompt585_enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    project_goal_present = (
+        payload.get("prompt594_project_goal_present") is True
+    )
+    entrypoint_request_valid = (
+        payload.get("prompt594_entrypoint_request_valid") is True
+    )
+    entrypoint_name = _normalize_text(
+        payload.get("prompt594_entrypoint_name"),
+        default="prompt594_cli_dogfood",
+    )
+    dry_run = payload.get("prompt594_dry_run", True) is not False
+    execute_cycle = payload.get("prompt594_execute_cycle") is True
+    command_written = payload.get("prompt594_command_written") is True
+    python_invocation_written = (
+        payload.get("prompt594_python_invocation_written") is True
+    )
+    prompt593_payload_written = (
+        payload.get("prompt594_prompt593_payload_written") is True
+    )
+    prompt593_executed = payload.get("prompt594_prompt593_executed") is True
+    prompt593_success = payload.get("prompt594_prompt593_success") is True
+    prompt593_route = _normalize_text(
+        payload.get("prompt594_prompt593_route"),
+        default="",
+    )
+    prompt593_next_action = _normalize_text(
+        payload.get("prompt594_prompt593_next_action"),
+        default="",
+    )
+    retry_required = payload.get("prompt594_retry_required") is True
+    cycle_exhausted = payload.get("prompt594_cycle_exhausted") is True
+    dogfood_entrypoint_usable = (
+        payload.get("prompt594_dogfood_entrypoint_usable") is True
+    )
+    artifacts_written = payload.get("prompt594_artifacts_written") is True
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt594_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt594_result_route"),
+        default="",
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif not entrypoint_request_valid:
+            result_route = "cli_dogfood_entrypoint_request_invalid"
+        elif cycle_exhausted:
+            result_route = "cli_dogfood_cycle_exhausted"
+        elif retry_required:
+            result_route = "cli_dogfood_retry_prepared"
+        elif prompt593_executed and prompt593_success:
+            result_route = "cli_dogfood_cycle_probe_completed"
+        else:
+            result_route = "cli_dogfood_entrypoint_ready"
+    next_action = _normalize_text(
+        payload.get("prompt594_next_action"),
+        default="",
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_cli_dogfood_entrypoint"
+            ),
+            "cli_dogfood_entrypoint_request_invalid": (
+                "manual_review_cli_dogfood_entrypoint_request"
+            ),
+            "cli_dogfood_cycle_exhausted": (
+                "manual_review_cli_dogfood_cycle_failure"
+            ),
+            "cli_dogfood_retry_prepared": (
+                "prepare_prompt591_retry_role_execution"
+            ),
+            "cli_dogfood_cycle_probe_completed": (
+                "prepare_prompt595_actual_local_dogfood_run"
+            ),
+            "cli_dogfood_entrypoint_ready": (
+                "prepare_prompt595_actual_local_dogfood_run"
+            ),
+        }.get(result_route, "manual_review_cli_dogfood_entrypoint_failure")
+
+    no_codex_commit_tag = bool(
+        payload.get("prompt594_codex_executed_during_runtime") is False
+        and payload.get("prompt594_tracked_files_modified_by_codex") is False
+        and payload.get("prompt594_commit_performed") is False
+        and payload.get("prompt594_tag_performed") is False
+    )
+    no_install_service_remote = bool(
+        payload.get("prompt594_installation_performed") is False
+        and payload.get("prompt594_systemd_used") is False
+        and payload.get("prompt594_service_enable_performed") is False
+        and payload.get("prompt594_service_start_performed") is False
+        and payload.get("prompt594_persistent_service_started") is False
+        and payload.get("prompt594_remote_workflow_included") is False
+        and payload.get("prompt594_no_remote_mutation_verified") is True
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and not prompt593_executed
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt594_final_worktree_clean") is True
+        and payload.get("prompt594_completion_claim_allowed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_cli_dogfood_entrypoint"
+        and blocked_reasons == []
+    )
+    invalid_request_predicates = bool(
+        token_gate_open
+        and not entrypoint_request_valid
+        and not prompt593_executed
+        and no_codex_commit_tag
+        and result_route == "cli_dogfood_entrypoint_request_invalid"
+        and next_action == "manual_review_cli_dogfood_entrypoint_request"
+        and "prompt594_cli_dogfood_entrypoint_request_invalid"
+        in blocked_reasons
+        and payload.get("prompt594_completion_claim_allowed") is False
+    )
+    ready_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and entrypoint_request_valid
+        and command_written
+        and python_invocation_written
+        and prompt593_payload_written
+        and dogfood_entrypoint_usable
+        and not prompt593_executed
+        and dry_run
+        and not execute_cycle
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt594_final_worktree_clean") is True
+        and payload.get("prompt594_completion_claim_allowed") is True
+        and result_route == "cli_dogfood_entrypoint_ready"
+        and next_action == "prepare_prompt595_actual_local_dogfood_run"
+        and blocked_reasons == []
+    )
+    probe_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and entrypoint_request_valid
+        and prompt593_executed
+        and prompt593_success
+        and prompt593_route == "multi_role_cycle_completed"
+        and command_written
+        and python_invocation_written
+        and prompt593_payload_written
+        and dogfood_entrypoint_usable
+        and dry_run
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt594_final_worktree_clean") is True
+        and payload.get("prompt594_completion_claim_allowed") is True
+        and result_route == "cli_dogfood_cycle_probe_completed"
+        and next_action == "prepare_prompt595_actual_local_dogfood_run"
+        and blocked_reasons == []
+    )
+    retry_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and entrypoint_request_valid
+        and retry_required
+        and not cycle_exhausted
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt594_completion_claim_allowed") is True
+        and result_route == "cli_dogfood_retry_prepared"
+        and next_action == "prepare_prompt591_retry_role_execution"
+        and blocked_reasons == []
+    )
+    exhausted_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and entrypoint_request_valid
+        and cycle_exhausted
+        and no_codex_commit_tag
+        and result_route == "cli_dogfood_cycle_exhausted"
+        and next_action == "manual_review_cli_dogfood_cycle_failure"
+        and "prompt594_cycle_retry_exhausted" in blocked_reasons
+        and payload.get("prompt594_completion_claim_allowed") is False
+    )
+    if artifacts_written and (ready_predicates or probe_predicates or retry_predicates):
+        status = "cli_dogfood_entrypoint_ready_local_only"
+        ready = True
+        success = True
+    elif artifacts_written and not_run_predicates:
+        status = "cli_dogfood_entrypoint_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif artifacts_written and invalid_request_predicates:
+        status = "blocked_cli_dogfood_entrypoint_invalid_request"
+        ready = False
+        success = False
+    elif artifacts_written and exhausted_predicates:
+        status = "blocked_cli_dogfood_entrypoint_cycle_exhausted"
+        ready = False
+        success = False
+    else:
+        status = "blocked_cli_dogfood_entrypoint_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt594",
+        "prompt594_cli_dogfood_status": status,
+        "prompt594_cli_dogfood_ready": ready,
+        "prompt594_cli_dogfood_success": success,
+        "prompt594_enabled": enabled,
+        "prompt594_enable_token_valid": enable_token_valid,
+        "prompt594_prompt593_enable_token_valid": (
+            prompt593_enable_token_valid
+        ),
+        "prompt594_prompt592_enable_token_valid": (
+            prompt592_enable_token_valid
+        ),
+        "prompt594_prompt591_enable_token_valid": (
+            prompt591_enable_token_valid
+        ),
+        "prompt594_prompt590_enable_token_valid": (
+            prompt590_enable_token_valid
+        ),
+        "prompt594_prompt589_enable_token_valid": (
+            prompt589_enable_token_valid
+        ),
+        "prompt594_prompt588_enable_token_valid": (
+            prompt588_enable_token_valid
+        ),
+        "prompt594_prompt587_enable_token_valid": (
+            prompt587_enable_token_valid
+        ),
+        "prompt594_prompt586_enable_token_valid": (
+            prompt586_enable_token_valid
+        ),
+        "prompt594_prompt585_enable_token_valid": (
+            prompt585_enable_token_valid
+        ),
+        "prompt594_prompt584_enable_token_valid": (
+            prompt584_enable_token_valid
+        ),
+        "prompt594_prompt580_enable_token_valid": (
+            prompt580_enable_token_valid
+        ),
+        "prompt594_prompt583_enable_token_valid": (
+            prompt583_enable_token_valid
+        ),
+        "prompt594_project_goal_present": project_goal_present,
+        "prompt594_entrypoint_request_valid": entrypoint_request_valid,
+        "prompt594_entrypoint_name": entrypoint_name,
+        "prompt594_dry_run": dry_run,
+        "prompt594_execute_cycle": execute_cycle,
+        "prompt594_command_written": command_written,
+        "prompt594_python_invocation_written": python_invocation_written,
+        "prompt594_prompt593_payload_written": prompt593_payload_written,
+        "prompt594_prompt593_executed": prompt593_executed,
+        "prompt594_prompt593_success": prompt593_success,
+        "prompt594_prompt593_route": prompt593_route,
+        "prompt594_prompt593_next_action": prompt593_next_action,
+        "prompt594_retry_required": retry_required,
+        "prompt594_cycle_exhausted": cycle_exhausted,
+        "prompt594_dogfood_entrypoint_usable": dogfood_entrypoint_usable,
+        "prompt594_codex_executed_during_runtime": (
+            payload.get("prompt594_codex_executed_during_runtime") is True
+        ),
+        "prompt594_tracked_files_modified_by_codex": (
+            payload.get("prompt594_tracked_files_modified_by_codex") is True
+        ),
+        "prompt594_commit_performed": (
+            payload.get("prompt594_commit_performed") is True
+        ),
+        "prompt594_tag_performed": (
+            payload.get("prompt594_tag_performed") is True
+        ),
+        "prompt594_installation_performed": (
+            payload.get("prompt594_installation_performed") is True
+        ),
+        "prompt594_systemd_used": payload.get("prompt594_systemd_used") is True,
+        "prompt594_service_enable_performed": (
+            payload.get("prompt594_service_enable_performed") is True
+        ),
+        "prompt594_service_start_performed": (
+            payload.get("prompt594_service_start_performed") is True
+        ),
+        "prompt594_persistent_service_started": (
+            payload.get("prompt594_persistent_service_started") is True
+        ),
+        "prompt594_remote_workflow_included": (
+            payload.get("prompt594_remote_workflow_included") is True
+        ),
+        "prompt594_no_remote_mutation_verified": (
+            payload.get("prompt594_no_remote_mutation_verified") is True
+        ),
+        "prompt594_final_worktree_clean": (
+            payload.get("prompt594_final_worktree_clean") is True
+        ),
+        "prompt594_completion_claim_allowed": (
+            payload.get("prompt594_completion_claim_allowed") is True
+        ),
+        "prompt594_result_route": result_route,
+        "prompt594_next_action": next_action,
+        "prompt594_blocked_reasons": blocked_reasons,
+        "prompt594_artifacts_written": artifacts_written,
+        "prompt594_prompt_surface": (
+            "Local-only CLI dogfood entrypoint gate that materializes a "
+            "runnable command, Python invocation, and Prompt593 request "
+            "payload for the bounded multi-role autonomous cycle. It may "
+            "probe Prompt593 only in enabled dry-run mode and never claims "
+            "Codex execution, tracked-file mutation, commit/tag, install, "
+            "systemd, service start, persistent daemon, shell=True, or "
+            "remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -35224,4 +35598,5 @@ __all__ = [
     "_build_prompt591_role_execution_adapter_gate_state",
     "_build_prompt592_role_evaluation_retry_gate_state",
     "_build_prompt593_multi_role_autonomous_cycle_gate_state",
+    "_build_prompt594_cli_dogfood_entrypoint_gate_state",
 ]
