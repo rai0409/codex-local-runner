@@ -34034,6 +34034,355 @@ def _build_prompt595_actual_local_dogfood_run_gate_state(
     }
 
 
+def _build_prompt596_repeat_dogfood_cycle_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt596_enabled") is True
+    enable_token_valid = payload.get("prompt596_enable_token_valid") is True
+    prompt595_enable_token_valid = (
+        payload.get("prompt596_prompt595_enable_token_valid") is True
+    )
+    prompt594_enable_token_valid = (
+        payload.get("prompt596_prompt594_enable_token_valid") is True
+    )
+    prompt593_enable_token_valid = (
+        payload.get("prompt596_prompt593_enable_token_valid") is True
+    )
+    prompt592_enable_token_valid = (
+        payload.get("prompt596_prompt592_enable_token_valid") is True
+    )
+    prompt591_enable_token_valid = (
+        payload.get("prompt596_prompt591_enable_token_valid") is True
+    )
+    prompt590_enable_token_valid = (
+        payload.get("prompt596_prompt590_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt595_enable_token_valid
+        and prompt594_enable_token_valid
+        and prompt593_enable_token_valid
+        and prompt592_enable_token_valid
+        and prompt591_enable_token_valid
+        and prompt590_enable_token_valid
+    )
+    project_goal_present = (
+        payload.get("prompt596_project_goal_present") is True
+    )
+    repeat_request_valid = (
+        payload.get("prompt596_repeat_request_valid") is True
+    )
+    repeat_count_requested = payload.get("prompt596_repeat_count_requested")
+    if not isinstance(repeat_count_requested, int):
+        repeat_count_requested = 2
+    repeat_count_completed = payload.get("prompt596_repeat_count_completed")
+    if not isinstance(repeat_count_completed, int):
+        repeat_count_completed = 0
+    entrypoint_name = _normalize_text(
+        payload.get("prompt596_entrypoint_name"),
+        default="prompt594_cli_dogfood",
+    )
+    dry_run = payload.get("prompt596_dry_run", True) is not False
+    execute_repeated_dogfood = (
+        payload.get("prompt596_execute_repeated_dogfood", True) is not False
+    )
+    iteration_results = payload.get("prompt596_iteration_results")
+    iteration_results = (
+        list(iteration_results) if isinstance(iteration_results, list) else []
+    )
+    iteration_routes = payload.get("prompt596_iteration_routes")
+    iteration_routes = (
+        list(iteration_routes) if isinstance(iteration_routes, list) else []
+    )
+    all_iterations_completed = (
+        payload.get("prompt596_all_iterations_completed") is True
+    )
+    all_prompt595_routes_completed = (
+        payload.get("prompt596_all_prompt595_routes_completed") is True
+    )
+    all_prompt594_routes_completed = (
+        payload.get("prompt596_all_prompt594_routes_completed") is True
+    )
+    all_prompt593_routes_completed = (
+        payload.get("prompt596_all_prompt593_routes_completed") is True
+    )
+    retry_required = payload.get("prompt596_retry_required") is True
+    cycle_exhausted = payload.get("prompt596_cycle_exhausted") is True
+    repeat_trace_written = (
+        payload.get("prompt596_repeat_trace_written") is True
+    )
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt596_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt596_result_route"),
+        default="",
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif not repeat_request_valid:
+            result_route = "repeat_dogfood_request_invalid"
+        elif not dry_run:
+            result_route = "repeat_dogfood_safe_execution_unavailable"
+        elif cycle_exhausted:
+            result_route = "repeat_dogfood_cycle_exhausted"
+        elif retry_required:
+            result_route = "repeat_dogfood_retry_prepared"
+        elif all_iterations_completed:
+            result_route = "repeat_dogfood_cycle_completed"
+        else:
+            result_route = "repeat_dogfood_cycle_exhausted"
+    next_action = _normalize_text(
+        payload.get("prompt596_next_action"),
+        default="",
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_repeat_dogfood_cycle"
+            ),
+            "repeat_dogfood_request_invalid": (
+                "manual_review_repeat_dogfood_request"
+            ),
+            "repeat_dogfood_safe_execution_unavailable": (
+                "prepare_prompt597_bounded_actual_role_execution_bridge"
+            ),
+            "repeat_dogfood_cycle_exhausted": (
+                "manual_review_repeat_dogfood_failure"
+            ),
+            "repeat_dogfood_retry_prepared": (
+                "prepare_prompt591_retry_role_execution"
+            ),
+            "repeat_dogfood_cycle_completed": (
+                "prepare_prompt597_bounded_actual_role_execution_bridge"
+            ),
+        }.get(result_route, "manual_review_repeat_dogfood_failure")
+
+    no_codex_commit_tag = bool(
+        payload.get("prompt596_codex_executed_during_runtime") is False
+        and payload.get("prompt596_tracked_files_modified_by_codex") is False
+        and payload.get("prompt596_commit_performed") is False
+        and payload.get("prompt596_tag_performed") is False
+    )
+    no_install_service_remote = bool(
+        payload.get("prompt596_installation_performed") is False
+        and payload.get("prompt596_systemd_used") is False
+        and payload.get("prompt596_service_enable_performed") is False
+        and payload.get("prompt596_service_start_performed") is False
+        and payload.get("prompt596_persistent_service_started") is False
+        and payload.get("prompt596_remote_workflow_included") is False
+        and payload.get("prompt596_no_remote_mutation_verified") is True
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and iteration_results == []
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt596_final_worktree_clean") is True
+        and payload.get("prompt596_completion_claim_allowed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_repeat_dogfood_cycle"
+        and blocked_reasons == []
+    )
+    invalid_request_predicates = bool(
+        token_gate_open
+        and not repeat_request_valid
+        and iteration_results == []
+        and no_codex_commit_tag
+        and result_route == "repeat_dogfood_request_invalid"
+        and next_action == "manual_review_repeat_dogfood_request"
+        and "prompt596_repeat_dogfood_request_invalid" in blocked_reasons
+        and payload.get("prompt596_completion_claim_allowed") is False
+    )
+    completed_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and repeat_request_valid
+        and 1 <= repeat_count_requested <= 5
+        and repeat_count_completed == repeat_count_requested
+        and dry_run
+        and execute_repeated_dogfood
+        and all_iterations_completed
+        and all_prompt595_routes_completed
+        and all_prompt594_routes_completed
+        and all_prompt593_routes_completed
+        and len(iteration_results) == repeat_count_requested
+        and len(iteration_routes) == repeat_count_requested
+        and not retry_required
+        and not cycle_exhausted
+        and repeat_trace_written
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt596_final_worktree_clean") is True
+        and payload.get("prompt596_completion_claim_allowed") is True
+        and result_route == "repeat_dogfood_cycle_completed"
+        and next_action == "prepare_prompt597_bounded_actual_role_execution_bridge"
+        and blocked_reasons == []
+    )
+    retry_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and repeat_request_valid
+        and retry_required
+        and not cycle_exhausted
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt596_completion_claim_allowed") is True
+        and result_route == "repeat_dogfood_retry_prepared"
+        and next_action == "prepare_prompt591_retry_role_execution"
+        and blocked_reasons == []
+    )
+    exhausted_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and repeat_request_valid
+        and cycle_exhausted
+        and no_codex_commit_tag
+        and result_route == "repeat_dogfood_cycle_exhausted"
+        and next_action == "manual_review_repeat_dogfood_failure"
+        and "prompt596_cycle_retry_exhausted" in blocked_reasons
+        and payload.get("prompt596_completion_claim_allowed") is False
+    )
+    safe_blocked_predicates = bool(
+        token_gate_open
+        and project_goal_present
+        and repeat_request_valid
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and result_route == "repeat_dogfood_safe_execution_unavailable"
+        and next_action == "prepare_prompt597_bounded_actual_role_execution_bridge"
+        and "prompt596_safe_execution_unavailable" in blocked_reasons
+        and payload.get("prompt596_completion_claim_allowed") is False
+    )
+    if completed_predicates or retry_predicates:
+        status = "repeat_dogfood_cycle_ready_local_only"
+        ready = True
+        success = True
+    elif not_run_predicates:
+        status = "repeat_dogfood_cycle_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif invalid_request_predicates:
+        status = "blocked_repeat_dogfood_cycle_invalid_request"
+        ready = False
+        success = False
+    elif exhausted_predicates:
+        status = "blocked_repeat_dogfood_cycle_exhausted"
+        ready = False
+        success = False
+    elif safe_blocked_predicates:
+        status = "blocked_repeat_dogfood_safe_execution_unavailable"
+        ready = False
+        success = False
+    else:
+        status = "blocked_repeat_dogfood_cycle_exhausted"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt596",
+        "prompt596_repeat_dogfood_status": status,
+        "prompt596_repeat_dogfood_ready": ready,
+        "prompt596_repeat_dogfood_success": success,
+        "prompt596_enabled": enabled,
+        "prompt596_enable_token_valid": enable_token_valid,
+        "prompt596_prompt595_enable_token_valid": (
+            prompt595_enable_token_valid
+        ),
+        "prompt596_prompt594_enable_token_valid": (
+            prompt594_enable_token_valid
+        ),
+        "prompt596_prompt593_enable_token_valid": (
+            prompt593_enable_token_valid
+        ),
+        "prompt596_prompt592_enable_token_valid": (
+            prompt592_enable_token_valid
+        ),
+        "prompt596_prompt591_enable_token_valid": (
+            prompt591_enable_token_valid
+        ),
+        "prompt596_prompt590_enable_token_valid": (
+            prompt590_enable_token_valid
+        ),
+        "prompt596_project_goal_present": project_goal_present,
+        "prompt596_repeat_request_valid": repeat_request_valid,
+        "prompt596_repeat_count_requested": repeat_count_requested,
+        "prompt596_repeat_count_completed": repeat_count_completed,
+        "prompt596_entrypoint_name": entrypoint_name,
+        "prompt596_dry_run": dry_run,
+        "prompt596_execute_repeated_dogfood": execute_repeated_dogfood,
+        "prompt596_iteration_results": iteration_results,
+        "prompt596_iteration_routes": iteration_routes,
+        "prompt596_all_iterations_completed": all_iterations_completed,
+        "prompt596_all_prompt595_routes_completed": (
+            all_prompt595_routes_completed
+        ),
+        "prompt596_all_prompt594_routes_completed": (
+            all_prompt594_routes_completed
+        ),
+        "prompt596_all_prompt593_routes_completed": (
+            all_prompt593_routes_completed
+        ),
+        "prompt596_retry_required": retry_required,
+        "prompt596_cycle_exhausted": cycle_exhausted,
+        "prompt596_repeat_trace_written": repeat_trace_written,
+        "prompt596_codex_executed_during_runtime": (
+            payload.get("prompt596_codex_executed_during_runtime") is True
+        ),
+        "prompt596_tracked_files_modified_by_codex": (
+            payload.get("prompt596_tracked_files_modified_by_codex") is True
+        ),
+        "prompt596_commit_performed": (
+            payload.get("prompt596_commit_performed") is True
+        ),
+        "prompt596_tag_performed": (
+            payload.get("prompt596_tag_performed") is True
+        ),
+        "prompt596_installation_performed": (
+            payload.get("prompt596_installation_performed") is True
+        ),
+        "prompt596_systemd_used": payload.get("prompt596_systemd_used") is True,
+        "prompt596_service_enable_performed": (
+            payload.get("prompt596_service_enable_performed") is True
+        ),
+        "prompt596_service_start_performed": (
+            payload.get("prompt596_service_start_performed") is True
+        ),
+        "prompt596_persistent_service_started": (
+            payload.get("prompt596_persistent_service_started") is True
+        ),
+        "prompt596_remote_workflow_included": (
+            payload.get("prompt596_remote_workflow_included") is True
+        ),
+        "prompt596_no_remote_mutation_verified": (
+            payload.get("prompt596_no_remote_mutation_verified") is True
+        ),
+        "prompt596_final_worktree_clean": (
+            payload.get("prompt596_final_worktree_clean") is True
+        ),
+        "prompt596_completion_claim_allowed": (
+            payload.get("prompt596_completion_claim_allowed") is True
+        ),
+        "prompt596_result_route": result_route,
+        "prompt596_next_action": next_action,
+        "prompt596_blocked_reasons": blocked_reasons,
+        "prompt596_prompt_surface": (
+            "Local-only bounded repeat dogfood cycle gate that invokes the "
+            "Prompt595 actual local dogfood path sequentially, requiring "
+            "stable Prompt595/Prompt594/Prompt593 completed routes while "
+            "excluding Codex execution, tracked-file mutation, commit/tag, "
+            "install, systemd, service start, persistent daemon, shell=True, "
+            "and remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -35940,4 +36289,5 @@ __all__ = [
     "_build_prompt593_multi_role_autonomous_cycle_gate_state",
     "_build_prompt594_cli_dogfood_entrypoint_gate_state",
     "_build_prompt595_actual_local_dogfood_run_gate_state",
+    "_build_prompt596_repeat_dogfood_cycle_gate_state",
 ]

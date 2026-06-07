@@ -183,6 +183,9 @@ PROMPT594_CLI_DOGFOOD_ENTRYPOINT_ENABLE_TOKEN = (
 PROMPT595_ACTUAL_LOCAL_DOGFOOD_RUN_ENABLE_TOKEN = (
     "PROMPT595_ACTUAL_LOCAL_DOGFOOD_RUN_ENABLE"
 )
+PROMPT596_REPEAT_DOGFOOD_CYCLE_ENABLE_TOKEN = (
+    "PROMPT596_REPEAT_DOGFOOD_CYCLE_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -357,6 +360,10 @@ _PROMPT595_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt595_actual_local_dogfood_run"
 )
+_PROMPT596_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt596_repeat_dogfood_cycle"
+)
 _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_input.json",
     "daemon_control_resume_state_before.json",
@@ -451,6 +458,15 @@ _PROMPT595_REQUIRED_ARTIFACT_NAMES = (
     "actual_local_dogfood_execution_trace.json",
     "actual_local_dogfood_route.json",
     "actual_local_dogfood_summary.json",
+)
+_PROMPT596_REQUIRED_ARTIFACT_NAMES = (
+    "repeat_dogfood_input.json",
+    "repeat_dogfood_request.json",
+    "repeat_dogfood_iterations.json",
+    "repeat_dogfood_iteration_routes.json",
+    "repeat_dogfood_execution_trace.json",
+    "repeat_dogfood_route.json",
+    "repeat_dogfood_summary.json",
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -15538,6 +15554,843 @@ def run_prompt595_actual_local_dogfood_run_gate(
     if summary_written:
         _write_json(
             control_artifact_dir / "actual_local_dogfood_summary.json",
+            summary,
+        )
+    return summary
+
+
+def _prompt596_artifact_clean_check(
+    *,
+    repo_path: Path,
+    artifact_roots: Sequence[Path],
+) -> bool:
+    completed = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=all"],
+        cwd=str(repo_path),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return False
+    artifact_prefixes: list[str] = []
+    for artifact_root in artifact_roots:
+        artifact_prefix = artifact_root
+        artifact_under_repo = True
+        if artifact_prefix.is_absolute():
+            try:
+                artifact_prefix = artifact_prefix.relative_to(repo_path)
+            except ValueError:
+                artifact_under_repo = False
+        if artifact_under_repo:
+            artifact_prefixes.append(artifact_prefix.as_posix().rstrip("/") + "/")
+    for raw_line in completed.stdout.splitlines():
+        path_text = raw_line[3:].strip()
+        if any(path_text.startswith(prefix) for prefix in artifact_prefixes):
+            continue
+        return False
+    return True
+
+
+def _prompt596_iteration_completed(result: Mapping[str, Any]) -> bool:
+    return bool(
+        result.get("prompt595_result_route")
+        == "actual_local_dogfood_run_completed"
+        and result.get("prompt595_prompt594_route")
+        == "cli_dogfood_cycle_probe_completed"
+        and result.get("prompt595_prompt593_route_from_dogfood")
+        == "multi_role_cycle_completed"
+        and result.get("prompt595_codex_executed_during_runtime") is False
+        and result.get("prompt595_tracked_files_modified_by_codex") is False
+        and result.get("prompt595_commit_performed") is False
+        and result.get("prompt595_tag_performed") is False
+        and result.get("prompt595_installation_performed") is False
+        and result.get("prompt595_systemd_used") is False
+        and result.get("prompt595_service_enable_performed") is False
+        and result.get("prompt595_service_start_performed") is False
+        and result.get("prompt595_persistent_service_started") is False
+        and result.get("prompt595_remote_workflow_included") is False
+        and result.get("prompt595_no_remote_mutation_verified") is True
+        and result.get("prompt595_final_worktree_clean") is True
+        and result.get("prompt595_completion_claim_allowed") is True
+    )
+
+
+def run_prompt596_repeat_dogfood_cycle_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt595_enable_token: str | None = None,
+    prompt594_enable_token: str | None = None,
+    prompt593_enable_token: str | None = None,
+    prompt592_enable_token: str | None = None,
+    prompt591_enable_token: str | None = None,
+    prompt590_enable_token: str | None = None,
+    prompt589_enable_token: str | None = None,
+    prompt588_enable_token: str | None = None,
+    prompt587_enable_token: str | None = None,
+    prompt586_enable_token: str | None = None,
+    prompt585_enable_token: str | None = None,
+    prompt584_enable_token: str | None = None,
+    prompt580_enable_token: str | None = None,
+    prompt583_enable_token: str | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        payload.get("prompt596_repo_path")
+        or execution_repo_path
+        or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    control_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT596_DEFAULT_ARTIFACT_DIR
+    )
+    if not control_artifact_dir.is_absolute():
+        control_artifact_dir = repo_path / control_artifact_dir
+    control_artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    prompt596_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt596_enabled") is True
+    )
+    prompt596_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt596_enable_token"),
+        default="",
+    )
+    prompt595_token = _normalize_text(
+        prompt595_enable_token
+        if prompt595_enable_token is not None
+        else payload.get("prompt595_enable_token"),
+        default="",
+    )
+    prompt594_token = _normalize_text(
+        prompt594_enable_token
+        if prompt594_enable_token is not None
+        else payload.get("prompt594_enable_token"),
+        default="",
+    )
+    prompt593_token = _normalize_text(
+        prompt593_enable_token
+        if prompt593_enable_token is not None
+        else payload.get("prompt593_enable_token"),
+        default="",
+    )
+    prompt592_token = _normalize_text(
+        prompt592_enable_token
+        if prompt592_enable_token is not None
+        else payload.get("prompt592_enable_token"),
+        default="",
+    )
+    prompt591_token = _normalize_text(
+        prompt591_enable_token
+        if prompt591_enable_token is not None
+        else payload.get("prompt591_enable_token"),
+        default="",
+    )
+    prompt590_token = _normalize_text(
+        prompt590_enable_token
+        if prompt590_enable_token is not None
+        else payload.get("prompt590_enable_token"),
+        default="",
+    )
+    prompt589_token = _normalize_text(
+        prompt589_enable_token
+        if prompt589_enable_token is not None
+        else payload.get("prompt589_enable_token"),
+        default="",
+    )
+    prompt588_token = _normalize_text(
+        prompt588_enable_token
+        if prompt588_enable_token is not None
+        else payload.get("prompt588_enable_token"),
+        default="",
+    )
+    prompt587_token = _normalize_text(
+        prompt587_enable_token
+        if prompt587_enable_token is not None
+        else payload.get("prompt587_enable_token"),
+        default="",
+    )
+    prompt586_token = _normalize_text(
+        prompt586_enable_token
+        if prompt586_enable_token is not None
+        else payload.get("prompt586_enable_token"),
+        default="",
+    )
+    prompt585_token = _normalize_text(
+        prompt585_enable_token
+        if prompt585_enable_token is not None
+        else payload.get("prompt585_enable_token"),
+        default="",
+    )
+    prompt584_token = _normalize_text(
+        prompt584_enable_token
+        if prompt584_enable_token is not None
+        else payload.get("prompt584_enable_token"),
+        default="",
+    )
+    prompt580_token = _normalize_text(
+        prompt580_enable_token
+        if prompt580_enable_token is not None
+        else payload.get("prompt580_enable_token"),
+        default="",
+    )
+    prompt583_token = _normalize_text(
+        prompt583_enable_token
+        if prompt583_enable_token is not None
+        else payload.get("prompt583_enable_token"),
+        default="",
+    )
+
+    prompt596_enable_token_valid = (
+        prompt596_token == PROMPT596_REPEAT_DOGFOOD_CYCLE_ENABLE_TOKEN
+    )
+    prompt596_prompt595_enable_token_valid = (
+        prompt595_token == PROMPT595_ACTUAL_LOCAL_DOGFOOD_RUN_ENABLE_TOKEN
+    )
+    prompt596_prompt594_enable_token_valid = (
+        prompt594_token == PROMPT594_CLI_DOGFOOD_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt596_prompt593_enable_token_valid = (
+        prompt593_token == PROMPT593_MULTI_ROLE_AUTONOMOUS_CYCLE_ENABLE_TOKEN
+    )
+    prompt596_prompt592_enable_token_valid = (
+        prompt592_token == PROMPT592_ROLE_EVALUATION_RETRY_ENABLE_TOKEN
+    )
+    prompt596_prompt591_enable_token_valid = (
+        prompt591_token == PROMPT591_ROLE_EXECUTION_ADAPTER_ENABLE_TOKEN
+    )
+    prompt596_prompt590_enable_token_valid = (
+        prompt590_token == PROMPT590_ROLE_DRIVEN_TASK_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt596_prompt589_enable_token_valid = (
+        prompt589_token == PROMPT589_DAEMON_LOOP_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt596_prompt588_enable_token_valid = (
+        prompt588_token == PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN
+    )
+    prompt596_prompt587_enable_token_valid = (
+        prompt587_token == PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN
+    )
+    prompt596_prompt586_enable_token_valid = (
+        prompt586_token
+        == PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+    )
+    prompt596_prompt585_enable_token_valid = (
+        prompt585_token == PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN
+    )
+    prompt596_prompt584_enable_token_valid = (
+        prompt584_token == PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+    )
+    prompt596_prompt580_enable_token_valid = (
+        prompt580_token == PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN
+    )
+    prompt596_prompt583_enable_token_valid = (
+        prompt583_token == PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+    )
+    token_gate_open = bool(
+        prompt596_enabled
+        and prompt596_enable_token_valid
+        and prompt596_prompt595_enable_token_valid
+        and prompt596_prompt594_enable_token_valid
+        and prompt596_prompt593_enable_token_valid
+        and prompt596_prompt592_enable_token_valid
+        and prompt596_prompt591_enable_token_valid
+        and prompt596_prompt590_enable_token_valid
+        and prompt596_prompt589_enable_token_valid
+        and prompt596_prompt588_enable_token_valid
+        and prompt596_prompt587_enable_token_valid
+        and prompt596_prompt586_enable_token_valid
+        and prompt596_prompt585_enable_token_valid
+        and prompt596_prompt584_enable_token_valid
+        and prompt596_prompt580_enable_token_valid
+        and prompt596_prompt583_enable_token_valid
+    )
+
+    project_goal = _normalize_text(
+        payload.get("prompt596_project_goal"),
+        default="",
+    )
+    user_request = _normalize_text(
+        payload.get("prompt596_user_request"),
+        default="",
+    )
+    target_files = _prompt579_string_list(
+        payload.get("prompt596_target_files")
+    )
+    acceptance_criteria = _prompt579_string_list(
+        payload.get("prompt596_acceptance_criteria")
+    )
+    entrypoint_name = _normalize_text(
+        payload.get("prompt596_entrypoint_name"),
+        default="prompt594_cli_dogfood",
+    )
+    raw_repeat_count = payload.get("prompt596_repeat_count", 2)
+    repeat_count_requested = (
+        raw_repeat_count
+        if isinstance(raw_repeat_count, int)
+        and not isinstance(raw_repeat_count, bool)
+        else 2
+    )
+    dry_run = payload.get("prompt596_dry_run", True) is not False
+    execute_repeated_dogfood = (
+        payload.get("prompt596_execute_repeated_dogfood", True) is not False
+    )
+    force_invalid_request = (
+        payload.get("prompt596_force_invalid_repeat_request") is True
+    )
+    force_retry_iteration = payload.get(
+        "prompt596_force_retry_path_at_iteration"
+    )
+    force_exhausted_iteration = payload.get(
+        "prompt596_force_exhausted_path_at_iteration"
+    )
+    force_execute_blocked_iteration = payload.get(
+        "prompt596_force_execute_blocked_path_at_iteration"
+    )
+    force_retry_iteration = (
+        force_retry_iteration
+        if isinstance(force_retry_iteration, int)
+        else None
+    )
+    force_exhausted_iteration = (
+        force_exhausted_iteration
+        if isinstance(force_exhausted_iteration, int)
+        else None
+    )
+    force_execute_blocked_iteration = (
+        force_execute_blocked_iteration
+        if isinstance(force_execute_blocked_iteration, int)
+        else None
+    )
+    execute_blocked_path = bool(
+        force_execute_blocked_iteration is not None or not dry_run
+    )
+    project_goal_present = bool(project_goal)
+    repeat_request_valid = bool(
+        project_goal_present
+        and entrypoint_name
+        and isinstance(repeat_count_requested, int)
+        and 1 <= repeat_count_requested <= 5
+        and not force_invalid_request
+    )
+
+    iteration_results: list[dict[str, Any]] = []
+    iteration_routes: list[dict[str, Any]] = []
+    repeat_count_completed = 0
+    retry_required = False
+    cycle_exhausted = False
+    child_artifact_dirs: list[Path] = []
+
+    if token_gate_open and repeat_request_valid and execute_repeated_dogfood:
+        for iteration_number in range(1, repeat_count_requested + 1):
+            iteration_artifact_dir = (
+                control_artifact_dir
+                / f"prompt595_iteration_{iteration_number:02d}"
+            )
+            child_artifact_dirs.append(iteration_artifact_dir)
+            child_payload: dict[str, Any] = {
+                "execution_repo_path": str(repo_path),
+                "prompt595_enabled": True,
+                "prompt595_project_goal": project_goal,
+                "prompt595_user_request": user_request,
+                "prompt595_target_files": target_files,
+                "prompt595_acceptance_criteria": acceptance_criteria,
+                "prompt595_entrypoint_name": entrypoint_name,
+                "prompt595_dry_run": False
+                if iteration_number == force_execute_blocked_iteration
+                or not dry_run
+                else True,
+                "prompt595_execute_dogfood": True,
+                "prompt595_force_retry_path": (
+                    iteration_number == force_retry_iteration
+                ),
+                "prompt595_force_exhausted_path": (
+                    iteration_number == force_exhausted_iteration
+                ),
+                "prompt595_force_execute_blocked_path": (
+                    iteration_number == force_execute_blocked_iteration
+                    or not dry_run
+                ),
+                "prompt595_enable_token": prompt595_token,
+                "prompt594_enable_token": prompt594_token,
+                "prompt593_enable_token": prompt593_token,
+                "prompt592_enable_token": prompt592_token,
+                "prompt591_enable_token": prompt591_token,
+                "prompt590_enable_token": prompt590_token,
+                "prompt589_enable_token": prompt589_token,
+                "prompt588_enable_token": prompt588_token,
+                "prompt587_enable_token": prompt587_token,
+                "prompt586_enable_token": prompt586_token,
+                "prompt585_enable_token": prompt585_token,
+                "prompt584_enable_token": prompt584_token,
+                "prompt580_enable_token": prompt580_token,
+                "prompt583_enable_token": prompt583_token,
+            }
+            child_result = run_prompt595_actual_local_dogfood_run_gate(
+                run_state_payload=child_payload,
+                execution_repo_path=repo_path,
+                artifact_dir=iteration_artifact_dir,
+                enabled=True,
+                enable_token=prompt595_token,
+                prompt594_enable_token=prompt594_token,
+                prompt593_enable_token=prompt593_token,
+                prompt592_enable_token=prompt592_token,
+                prompt591_enable_token=prompt591_token,
+                prompt590_enable_token=prompt590_token,
+                prompt589_enable_token=prompt589_token,
+                prompt588_enable_token=prompt588_token,
+                prompt587_enable_token=prompt587_token,
+                prompt586_enable_token=prompt586_token,
+                prompt585_enable_token=prompt585_token,
+                prompt584_enable_token=prompt584_token,
+                prompt580_enable_token=prompt580_token,
+                prompt583_enable_token=prompt583_token,
+            )
+            iteration_results.append(
+                {
+                    "iteration": iteration_number,
+                    "prompt595_result": child_result,
+                    "completed": _prompt596_iteration_completed(child_result),
+                }
+            )
+            iteration_routes.append(
+                {
+                    "iteration": iteration_number,
+                    "prompt595_route": child_result.get(
+                        "prompt595_result_route"
+                    ),
+                    "prompt594_route": child_result.get(
+                        "prompt595_prompt594_route"
+                    ),
+                    "prompt593_route_from_dogfood": child_result.get(
+                        "prompt595_prompt593_route_from_dogfood"
+                    ),
+                    "next_action": child_result.get("prompt595_next_action"),
+                    "blocked_reasons": child_result.get(
+                        "prompt595_blocked_reasons", []
+                    ),
+                }
+            )
+            if _prompt596_iteration_completed(child_result):
+                repeat_count_completed += 1
+            retry_required = bool(
+                child_result.get("prompt595_retry_required") is True
+                or child_result.get("prompt595_result_route")
+                == "actual_local_dogfood_retry_prepared"
+            )
+            cycle_exhausted = bool(
+                child_result.get("prompt595_cycle_exhausted") is True
+                or child_result.get("prompt595_result_route")
+                == "actual_local_dogfood_cycle_exhausted"
+            )
+            if (
+                iteration_number == force_retry_iteration
+                or iteration_number == force_exhausted_iteration
+                or iteration_number == force_execute_blocked_iteration
+                or not dry_run
+                or not _prompt596_iteration_completed(child_result)
+            ):
+                break
+
+    all_iterations_completed = bool(
+        repeat_request_valid
+        and repeat_count_completed == repeat_count_requested
+        and len(iteration_results) == repeat_count_requested
+    )
+    all_prompt595_routes_completed = bool(
+        iteration_results
+        and all(
+            item["prompt595_result"].get("prompt595_result_route")
+            == "actual_local_dogfood_run_completed"
+            for item in iteration_results
+        )
+    )
+    all_prompt594_routes_completed = bool(
+        iteration_results
+        and all(
+            item["prompt595_result"].get("prompt595_prompt594_route")
+            == "cli_dogfood_cycle_probe_completed"
+            for item in iteration_results
+        )
+    )
+    all_prompt593_routes_completed = bool(
+        iteration_results
+        and all(
+            item["prompt595_result"].get(
+                "prompt595_prompt593_route_from_dogfood"
+            )
+            == "multi_role_cycle_completed"
+            for item in iteration_results
+        )
+    )
+    prompt596_codex_executed_during_runtime = any(
+        item["prompt595_result"].get(
+            "prompt595_codex_executed_during_runtime"
+        )
+        is True
+        for item in iteration_results
+    )
+    prompt596_tracked_files_modified_by_codex = any(
+        item["prompt595_result"].get(
+            "prompt595_tracked_files_modified_by_codex"
+        )
+        is True
+        for item in iteration_results
+    )
+    prompt596_commit_performed = False
+    prompt596_tag_performed = False
+    prompt596_installation_performed = any(
+        item["prompt595_result"].get("prompt595_installation_performed")
+        is True
+        for item in iteration_results
+    )
+    prompt596_systemd_used = any(
+        item["prompt595_result"].get("prompt595_systemd_used") is True
+        for item in iteration_results
+    )
+    prompt596_service_enable_performed = any(
+        item["prompt595_result"].get("prompt595_service_enable_performed")
+        is True
+        for item in iteration_results
+    )
+    prompt596_service_start_performed = any(
+        item["prompt595_result"].get("prompt595_service_start_performed")
+        is True
+        for item in iteration_results
+    )
+    prompt596_persistent_service_started = any(
+        item["prompt595_result"].get("prompt595_persistent_service_started")
+        is True
+        for item in iteration_results
+    )
+    prompt596_remote_workflow_included = any(
+        item["prompt595_result"].get("prompt595_remote_workflow_included")
+        is True
+        for item in iteration_results
+    )
+    prompt596_no_remote_mutation_verified = (
+        bool(
+            not prompt596_remote_workflow_included
+            and all(
+                item["prompt595_result"].get(
+                    "prompt595_no_remote_mutation_verified"
+                )
+                is True
+                for item in iteration_results
+            )
+        )
+        if iteration_results
+        else True
+    )
+    prompt596_final_worktree_clean = _prompt596_artifact_clean_check(
+        repo_path=repo_path,
+        artifact_roots=[
+            control_artifact_dir,
+            *child_artifact_dirs,
+            repo_path / _PROMPT595_DEFAULT_ARTIFACT_DIR,
+            repo_path / _PROMPT594_DEFAULT_ARTIFACT_DIR,
+            repo_path / _PROMPT593_DEFAULT_ARTIFACT_DIR,
+        ],
+    )
+
+    blocked_reasons: list[str] = []
+    if not token_gate_open:
+        status = "repeat_dogfood_cycle_ready_not_run_local_only"
+        ready = True
+        success = False
+        result_route = "not_run"
+        next_action = (
+            "provide_explicit_enable_token_for_repeat_dogfood_cycle"
+        )
+        completion_claim_allowed = False
+    elif not repeat_request_valid:
+        status = "blocked_repeat_dogfood_cycle_invalid_request"
+        ready = False
+        success = False
+        result_route = "repeat_dogfood_request_invalid"
+        next_action = "manual_review_repeat_dogfood_request"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt596_repeat_dogfood_request_invalid")
+    elif not execute_repeated_dogfood:
+        status = "repeat_dogfood_cycle_ready_not_run_local_only"
+        ready = True
+        success = False
+        result_route = "not_run"
+        next_action = (
+            "provide_explicit_enable_token_for_repeat_dogfood_cycle"
+        )
+        completion_claim_allowed = False
+    elif execute_blocked_path:
+        status = "blocked_repeat_dogfood_safe_execution_unavailable"
+        ready = False
+        success = False
+        result_route = "repeat_dogfood_safe_execution_unavailable"
+        next_action = "prepare_prompt597_bounded_actual_role_execution_bridge"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt596_safe_execution_unavailable")
+    elif cycle_exhausted:
+        status = "blocked_repeat_dogfood_cycle_exhausted"
+        ready = False
+        success = False
+        result_route = "repeat_dogfood_cycle_exhausted"
+        next_action = "manual_review_repeat_dogfood_failure"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt596_cycle_retry_exhausted")
+    elif retry_required:
+        status = "repeat_dogfood_cycle_ready_local_only"
+        ready = True
+        success = True
+        result_route = "repeat_dogfood_retry_prepared"
+        next_action = "prepare_prompt591_retry_role_execution"
+        completion_claim_allowed = True
+    elif (
+        token_gate_open
+        and all_iterations_completed
+        and all_prompt595_routes_completed
+        and all_prompt594_routes_completed
+        and all_prompt593_routes_completed
+        and not prompt596_codex_executed_during_runtime
+        and not prompt596_tracked_files_modified_by_codex
+        and not prompt596_commit_performed
+        and not prompt596_tag_performed
+        and not prompt596_installation_performed
+        and not prompt596_systemd_used
+        and not prompt596_service_enable_performed
+        and not prompt596_service_start_performed
+        and not prompt596_persistent_service_started
+        and not prompt596_remote_workflow_included
+        and prompt596_no_remote_mutation_verified
+        and prompt596_final_worktree_clean
+    ):
+        status = "repeat_dogfood_cycle_ready_local_only"
+        ready = True
+        success = True
+        result_route = "repeat_dogfood_cycle_completed"
+        next_action = "prepare_prompt597_bounded_actual_role_execution_bridge"
+        completion_claim_allowed = True
+    else:
+        status = "blocked_repeat_dogfood_cycle_exhausted"
+        ready = False
+        success = False
+        result_route = "repeat_dogfood_cycle_exhausted"
+        next_action = "manual_review_repeat_dogfood_failure"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt596_cycle_retry_exhausted")
+
+    input_written = _prompt585_write_artifact(
+        control_artifact_dir / "repeat_dogfood_input.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt596",
+            "execution_repo_path": str(repo_path),
+            "artifact_dir": str(control_artifact_dir),
+            "enabled": prompt596_enabled,
+            "entrypoint_name": entrypoint_name,
+            "project_goal": project_goal,
+            "project_goal_present": project_goal_present,
+            "target_files": target_files,
+            "acceptance_criteria": acceptance_criteria,
+            "repeat_count_requested": repeat_count_requested,
+            "dry_run": dry_run,
+            "execute_repeated_dogfood": execute_repeated_dogfood,
+            "remote_operations_allowed": False,
+            "persistent_service_allowed": False,
+            "codex_execution_allowed": False,
+        },
+    )
+    request_written = _prompt585_write_artifact(
+        control_artifact_dir / "repeat_dogfood_request.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt596",
+            "entrypoint_name": entrypoint_name,
+            "project_goal": project_goal,
+            "user_request": user_request,
+            "repeat_request_valid": repeat_request_valid,
+            "force_invalid_repeat_request": force_invalid_request,
+            "force_retry_path_at_iteration": force_retry_iteration,
+            "force_exhausted_path_at_iteration": force_exhausted_iteration,
+            "force_execute_blocked_path_at_iteration": (
+                force_execute_blocked_iteration
+            ),
+        },
+    )
+    iterations_written = _prompt585_write_artifact(
+        control_artifact_dir / "repeat_dogfood_iterations.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt596",
+            "iterations": iteration_results,
+        },
+    )
+    iteration_routes_written = _prompt585_write_artifact(
+        control_artifact_dir / "repeat_dogfood_iteration_routes.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt596",
+            "routes": iteration_routes,
+        },
+    )
+    trace_written = _prompt585_write_artifact(
+        control_artifact_dir / "repeat_dogfood_execution_trace.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt596",
+            "iterations_attempted": len(iteration_results),
+            "repeat_count_completed": repeat_count_completed,
+            "sequential_iteration_numbers": [
+                item["iteration"] for item in iteration_results
+            ],
+            "codex_execution_allowed": False,
+            "remote_operations_allowed": False,
+            "shell_true_used": False,
+            "commit_performed": False,
+            "tag_performed": False,
+        },
+    )
+    route_written = _prompt585_write_artifact(
+        control_artifact_dir / "repeat_dogfood_route.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt596",
+            "prompt596_result_route": result_route,
+            "prompt596_next_action": next_action,
+            "prompt596_blocked_reasons": blocked_reasons,
+            "iteration_routes": iteration_routes,
+        },
+    )
+
+    prompt596_repeat_trace_written = bool(
+        trace_written
+        and iterations_written
+        and iteration_routes_written
+        and route_written
+    )
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt596",
+        "prompt596_repeat_dogfood_status": status,
+        "prompt596_repeat_dogfood_ready": ready,
+        "prompt596_repeat_dogfood_success": success,
+        "prompt596_enabled": prompt596_enabled,
+        "prompt596_enable_token_valid": prompt596_enable_token_valid,
+        "prompt596_prompt595_enable_token_valid": (
+            prompt596_prompt595_enable_token_valid
+        ),
+        "prompt596_prompt594_enable_token_valid": (
+            prompt596_prompt594_enable_token_valid
+        ),
+        "prompt596_prompt593_enable_token_valid": (
+            prompt596_prompt593_enable_token_valid
+        ),
+        "prompt596_prompt592_enable_token_valid": (
+            prompt596_prompt592_enable_token_valid
+        ),
+        "prompt596_prompt591_enable_token_valid": (
+            prompt596_prompt591_enable_token_valid
+        ),
+        "prompt596_prompt590_enable_token_valid": (
+            prompt596_prompt590_enable_token_valid
+        ),
+        "prompt596_project_goal_present": project_goal_present,
+        "prompt596_repeat_request_valid": repeat_request_valid,
+        "prompt596_repeat_count_requested": repeat_count_requested,
+        "prompt596_repeat_count_completed": repeat_count_completed,
+        "prompt596_entrypoint_name": entrypoint_name,
+        "prompt596_dry_run": dry_run,
+        "prompt596_execute_repeated_dogfood": execute_repeated_dogfood,
+        "prompt596_iteration_results": iteration_results,
+        "prompt596_iteration_routes": iteration_routes,
+        "prompt596_all_iterations_completed": all_iterations_completed,
+        "prompt596_all_prompt595_routes_completed": (
+            all_prompt595_routes_completed
+        ),
+        "prompt596_all_prompt594_routes_completed": (
+            all_prompt594_routes_completed
+        ),
+        "prompt596_all_prompt593_routes_completed": (
+            all_prompt593_routes_completed
+        ),
+        "prompt596_retry_required": retry_required,
+        "prompt596_cycle_exhausted": cycle_exhausted,
+        "prompt596_repeat_trace_written": prompt596_repeat_trace_written,
+        "prompt596_codex_executed_during_runtime": (
+            prompt596_codex_executed_during_runtime
+        ),
+        "prompt596_tracked_files_modified_by_codex": (
+            prompt596_tracked_files_modified_by_codex
+        ),
+        "prompt596_commit_performed": prompt596_commit_performed,
+        "prompt596_tag_performed": prompt596_tag_performed,
+        "prompt596_installation_performed": prompt596_installation_performed,
+        "prompt596_systemd_used": prompt596_systemd_used,
+        "prompt596_service_enable_performed": (
+            prompt596_service_enable_performed
+        ),
+        "prompt596_service_start_performed": (
+            prompt596_service_start_performed
+        ),
+        "prompt596_persistent_service_started": (
+            prompt596_persistent_service_started
+        ),
+        "prompt596_remote_workflow_included": (
+            prompt596_remote_workflow_included
+        ),
+        "prompt596_no_remote_mutation_verified": (
+            prompt596_no_remote_mutation_verified
+        ),
+        "prompt596_final_worktree_clean": prompt596_final_worktree_clean,
+        "prompt596_completion_claim_allowed": completion_claim_allowed,
+        "prompt596_result_route": result_route,
+        "prompt596_next_action": next_action,
+        "prompt596_blocked_reasons": blocked_reasons,
+        "prompt596_input_written": input_written,
+        "prompt596_request_written": request_written,
+        "prompt596_iterations_written": iterations_written,
+        "prompt596_iteration_routes_written": iteration_routes_written,
+        "prompt596_route_written": route_written,
+        "prompt596_artifacts_written": False,
+    }
+    summary_written = _prompt585_write_artifact(
+        control_artifact_dir / "repeat_dogfood_summary.json",
+        summary,
+    )
+    artifacts_written = bool(
+        summary_written
+        and all(
+            (control_artifact_dir / name).is_file()
+            for name in _PROMPT596_REQUIRED_ARTIFACT_NAMES
+        )
+    )
+    summary["prompt596_artifacts_written"] = artifacts_written
+    if not artifacts_written and token_gate_open:
+        summary["prompt596_repeat_dogfood_status"] = (
+            "blocked_repeat_dogfood_cycle_exhausted"
+        )
+        summary["prompt596_repeat_dogfood_ready"] = False
+        summary["prompt596_repeat_dogfood_success"] = False
+        summary["prompt596_completion_claim_allowed"] = False
+        summary["prompt596_result_route"] = "repeat_dogfood_cycle_exhausted"
+        summary["prompt596_next_action"] = (
+            "manual_review_repeat_dogfood_failure"
+        )
+        summary["prompt596_blocked_reasons"] = [
+            *blocked_reasons,
+            "prompt596_required_artifacts_missing",
+        ]
+    if summary_written:
+        _write_json(
+            control_artifact_dir / "repeat_dogfood_summary.json",
             summary,
         )
     return summary
