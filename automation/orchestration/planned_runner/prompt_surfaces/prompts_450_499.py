@@ -30711,6 +30711,305 @@ def _build_prompt585_success_only_multi_cycle_real_dev_runner_gate_state(
     }
 
 
+def _prompt586_iteration_result_succeeded(
+    iteration: Mapping[str, Any],
+    *,
+    max_cycles_per_iteration: int,
+) -> bool:
+    prompt585_result = iteration.get("prompt585_result")
+    if not isinstance(prompt585_result, Mapping):
+        return False
+    return bool(
+        iteration.get("iteration_succeeded") is True
+        and prompt585_result.get("prompt585_result_route")
+        == "multi_cycle_completed"
+        and prompt585_result.get("prompt585_completed_cycles")
+        == max_cycles_per_iteration
+        and prompt585_result.get("prompt585_failed_cycles") == 0
+        and prompt585_result.get("prompt585_completion_claim_allowed") is True
+        and _normalize_string_list(
+            prompt585_result.get("prompt585_blocked_reasons")
+        )
+        == []
+    )
+
+
+def _build_prompt586_success_multi_cycle_daemon_soak_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt586_enabled") is True
+    enable_token_valid = payload.get("prompt586_enable_token_valid") is True
+    prompt585_enable_token_valid = (
+        payload.get("prompt586_prompt585_enable_token_valid") is True
+    )
+    prompt584_enable_token_valid = (
+        payload.get("prompt586_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt586_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt586_prompt583_enable_token_valid") is True
+    )
+    soak_iterations = payload.get("prompt586_soak_iterations")
+    if not isinstance(soak_iterations, int):
+        soak_iterations = 2
+    soak_iterations = max(1, min(5, soak_iterations))
+    max_cycles_per_iteration = payload.get(
+        "prompt586_max_cycles_per_iteration"
+    )
+    if not isinstance(max_cycles_per_iteration, int):
+        max_cycles_per_iteration = 2
+    max_cycles_per_iteration = max(1, min(5, max_cycles_per_iteration))
+    started_iterations = payload.get("prompt586_started_iterations")
+    if not isinstance(started_iterations, int):
+        started_iterations = 0
+    completed_iterations = payload.get("prompt586_completed_iterations")
+    if not isinstance(completed_iterations, int):
+        completed_iterations = 0
+    failed_iterations = payload.get("prompt586_failed_iterations")
+    if not isinstance(failed_iterations, int):
+        failed_iterations = 0
+    total_started_cycles = payload.get("prompt586_total_started_cycles")
+    if not isinstance(total_started_cycles, int):
+        total_started_cycles = 0
+    total_completed_cycles = payload.get("prompt586_total_completed_cycles")
+    if not isinstance(total_completed_cycles, int):
+        total_completed_cycles = 0
+    total_failed_cycles = payload.get("prompt586_total_failed_cycles")
+    if not isinstance(total_failed_cycles, int):
+        total_failed_cycles = 0
+    raw_iteration_results = payload.get("prompt586_iteration_results")
+    iteration_results = (
+        list(raw_iteration_results)
+        if isinstance(raw_iteration_results, Sequence)
+        else []
+    )
+    iteration_successes = [
+        _prompt586_iteration_result_succeeded(
+            iteration,
+            max_cycles_per_iteration=max_cycles_per_iteration,
+        )
+        for iteration in iteration_results
+        if isinstance(iteration, Mapping)
+    ]
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt586_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt586_result_route"), default=""
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt585_enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif failed_iterations:
+            result_route = "iteration_failed"
+        elif completed_iterations == soak_iterations:
+            result_route = "daemon_soak_completed"
+        else:
+            result_route = "iteration_failed"
+    next_action = _normalize_text(
+        payload.get("prompt586_next_action"), default=""
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_success_multi_cycle_"
+                "daemon_soak"
+            ),
+            "daemon_soak_completed": (
+                "prepare_prompt587_failure_routes_or_resume_stop_controls"
+            ),
+            "iteration_failed": "manual_review_prompt586_failed_iteration",
+        }.get(result_route, "manual_review_prompt586_failed_iteration")
+    stop_reason = _normalize_text(
+        payload.get("prompt586_stop_reason"), default=""
+    )
+    if not stop_reason:
+        stop_reason = {
+            "not_run": "not_run",
+            "daemon_soak_completed": "soak_iterations_reached",
+            "iteration_failed": "iteration_failed",
+        }.get(result_route, "")
+
+    not_run_predicates = bool(
+        not token_gate_open
+        and started_iterations == 0
+        and completed_iterations == 0
+        and failed_iterations == 0
+        and total_started_cycles == 0
+        and total_completed_cycles == 0
+        and total_failed_cycles == 0
+        and payload.get("prompt586_codex_executed_during_runtime") is False
+        and payload.get("prompt586_tracked_files_modified_by_codex") is False
+        and payload.get("prompt586_commit_performed") is False
+        and payload.get("prompt586_tag_performed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_success_multi_cycle_daemon_soak"
+    )
+    success_predicates = bool(
+        token_gate_open
+        and started_iterations == soak_iterations
+        and completed_iterations == soak_iterations
+        and failed_iterations == 0
+        and total_started_cycles == soak_iterations * max_cycles_per_iteration
+        and total_completed_cycles
+        == soak_iterations * max_cycles_per_iteration
+        and total_failed_cycles == 0
+        and len(iteration_successes) == soak_iterations
+        and all(iteration_successes)
+        and stop_reason == "soak_iterations_reached"
+        and payload.get("prompt586_all_iterations_completed") is True
+        and payload.get("prompt586_heartbeat_written") is True
+        and payload.get("prompt586_resume_state_written") is True
+        and payload.get("prompt586_iterations_artifact_written") is True
+        and payload.get("prompt586_summary_written") is True
+        and payload.get("prompt586_route_written") is True
+        and payload.get("prompt586_codex_executed_during_runtime") is True
+        and payload.get("prompt586_tracked_files_modified_by_codex") is True
+        and payload.get("prompt586_commit_performed") is True
+        and payload.get("prompt586_tag_performed") is True
+        and payload.get("prompt586_installation_performed") is False
+        and payload.get("prompt586_systemd_used") is False
+        and payload.get("prompt586_service_enable_performed") is False
+        and payload.get("prompt586_service_start_performed") is False
+        and payload.get("prompt586_persistent_service_started") is False
+        and payload.get("prompt586_remote_workflow_included") is False
+        and payload.get("prompt586_no_remote_mutation_verified") is True
+        and payload.get("prompt586_final_worktree_clean") is True
+        and payload.get("prompt586_completion_claim_allowed") is True
+        and result_route == "daemon_soak_completed"
+        and next_action
+        == "prepare_prompt587_failure_routes_or_resume_stop_controls"
+        and blocked_reasons == []
+    )
+    failed_predicates = bool(
+        token_gate_open
+        and failed_iterations >= 1
+        and result_route == "iteration_failed"
+        and next_action == "manual_review_prompt586_failed_iteration"
+    )
+
+    if success_predicates:
+        status = "success_multi_cycle_daemon_soak_completed_local_only"
+        ready = True
+        success = True
+    elif not_run_predicates:
+        status = "success_multi_cycle_daemon_soak_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif failed_predicates:
+        status = "blocked_success_multi_cycle_daemon_soak_failed"
+        ready = False
+        success = False
+    else:
+        status = "blocked_success_multi_cycle_daemon_soak_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt586",
+        "prompt586_daemon_soak_status": status,
+        "prompt586_daemon_soak_ready": ready,
+        "prompt586_daemon_soak_success": success,
+        "prompt586_enabled": enabled,
+        "prompt586_enable_token_valid": enable_token_valid,
+        "prompt586_prompt585_enable_token_valid": prompt585_enable_token_valid,
+        "prompt586_prompt584_enable_token_valid": prompt584_enable_token_valid,
+        "prompt586_prompt580_enable_token_valid": prompt580_enable_token_valid,
+        "prompt586_prompt583_enable_token_valid": prompt583_enable_token_valid,
+        "prompt586_soak_iterations": soak_iterations,
+        "prompt586_max_cycles_per_iteration": max_cycles_per_iteration,
+        "prompt586_started_iterations": started_iterations,
+        "prompt586_completed_iterations": completed_iterations,
+        "prompt586_failed_iterations": failed_iterations,
+        "prompt586_total_started_cycles": total_started_cycles,
+        "prompt586_total_completed_cycles": total_completed_cycles,
+        "prompt586_total_failed_cycles": total_failed_cycles,
+        "prompt586_iteration_results": iteration_results,
+        "prompt586_heartbeat_written": (
+            payload.get("prompt586_heartbeat_written") is True
+        ),
+        "prompt586_resume_state_written": (
+            payload.get("prompt586_resume_state_written") is True
+        ),
+        "prompt586_iterations_artifact_written": (
+            payload.get("prompt586_iterations_artifact_written") is True
+        ),
+        "prompt586_summary_written": (
+            payload.get("prompt586_summary_written") is True
+        ),
+        "prompt586_route_written": (
+            payload.get("prompt586_route_written") is True
+        ),
+        "prompt586_stop_reason": stop_reason,
+        "prompt586_all_iterations_completed": (
+            payload.get("prompt586_all_iterations_completed") is True
+        ),
+        "prompt586_codex_executed_during_runtime": (
+            payload.get("prompt586_codex_executed_during_runtime") is True
+        ),
+        "prompt586_tracked_files_modified_by_codex": (
+            payload.get("prompt586_tracked_files_modified_by_codex") is True
+        ),
+        "prompt586_commit_performed": (
+            payload.get("prompt586_commit_performed") is True
+        ),
+        "prompt586_tag_performed": payload.get("prompt586_tag_performed") is True,
+        "prompt586_installation_performed": (
+            payload.get("prompt586_installation_performed") is True
+        ),
+        "prompt586_systemd_used": payload.get("prompt586_systemd_used") is True,
+        "prompt586_service_enable_performed": (
+            payload.get("prompt586_service_enable_performed") is True
+        ),
+        "prompt586_service_start_performed": (
+            payload.get("prompt586_service_start_performed") is True
+        ),
+        "prompt586_persistent_service_started": (
+            payload.get("prompt586_persistent_service_started") is True
+        ),
+        "prompt586_remote_workflow_included": (
+            payload.get("prompt586_remote_workflow_included") is True
+        ),
+        "prompt586_no_remote_mutation_verified": (
+            payload.get("prompt586_no_remote_mutation_verified") is True
+        ),
+        "prompt586_final_worktree_clean": (
+            payload.get("prompt586_final_worktree_clean") is True
+        ),
+        "prompt586_completion_claim_allowed": (
+            payload.get("prompt586_completion_claim_allowed") is True
+        ),
+        "prompt586_result_route": result_route,
+        "prompt586_next_action": next_action,
+        "prompt586_blocked_reasons": blocked_reasons,
+        "prompt586_prompt_surface": (
+            "Success-only bounded local daemon soak runner; requires the "
+            "exact Prompt586 token plus Prompt585, Prompt584, Prompt580, "
+            "and Prompt583 downstream tokens before calling Prompt585, "
+            "runs 1..5 bounded soak iterations with 1..5 Prompt585 cycles "
+            "per iteration, writes heartbeat and resume state after each "
+            "iteration, stops on the first failed iteration, and excludes "
+            "production service install, systemd, systemctl, sudo, "
+            "persistent services, background-forever execution, shell=True, "
+            "and remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -32607,4 +32906,5 @@ __all__ = [
     "_build_prompt583_commit_tag_real_dev_changes_gate_state",
     "_build_prompt584_integrated_real_dev_one_cycle_gate_state",
     "_build_prompt585_success_only_multi_cycle_real_dev_runner_gate_state",
+    "_build_prompt586_success_multi_cycle_daemon_soak_gate_state",
 ]

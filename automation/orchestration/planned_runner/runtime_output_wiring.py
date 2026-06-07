@@ -152,6 +152,9 @@ PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN = (
 PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN = (
     "PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE"
 )
+PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN = (
+    "PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -285,6 +288,10 @@ _PROMPT584_DEFAULT_ARTIFACT_DIR = Path(
 _PROMPT585_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt585_success_only_multi_cycle"
+)
+_PROMPT586_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt586_success_multi_cycle_daemon_soak"
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -8150,12 +8157,29 @@ def _prompt585_max_cycles(value: Any, *, default: int = 2) -> int:
     return max(1, min(5, parsed))
 
 
-def _prompt585_cycle_marker(cycle_number: int) -> str:
+def _prompt585_cycle_marker(
+    cycle_number: int,
+    *,
+    marker_context: str = "",
+) -> str:
+    context = _normalize_text(marker_context, default="")
+    if context:
+        return (
+            "# PROMPT585_SUCCESS_MULTI_CYCLE_"
+            f"{context}_MARKER_{cycle_number:03d}"
+        )
     return f"# PROMPT585_SUCCESS_MULTI_CYCLE_MARKER_{cycle_number:03d}"
 
 
-def _prompt585_default_dev_task_prompt_text(cycle_number: int) -> str:
-    marker = _prompt585_cycle_marker(cycle_number)
+def _prompt585_default_dev_task_prompt_text(
+    cycle_number: int,
+    *,
+    marker_context: str = "",
+) -> str:
+    marker = _prompt585_cycle_marker(
+        cycle_number,
+        marker_context=marker_context,
+    )
     return f"""Mode: Implement
 Goal:
 Append exactly one harmless local-only marker comment to automation/orchestration/planned_runner/runtime_output_wiring.py:
@@ -8212,6 +8236,9 @@ def run_prompt585_success_only_multi_cycle_real_dev_runner_gate(
     prompt580_enable_token: str | None = None,
     prompt583_enable_token: str | None = None,
     prompt580_timeout_seconds: int | None = None,
+    cycle_marker_context: str | None = None,
+    cycle_tag_prefix: str | None = None,
+    worktree_clean_exclusion_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
     repo_text = _normalize_text(
@@ -8226,6 +8253,13 @@ def run_prompt585_success_only_multi_cycle_real_dev_runner_gate(
     )
     if not multi_cycle_artifact_dir.is_absolute():
         multi_cycle_artifact_dir = repo_path / multi_cycle_artifact_dir
+    clean_exclusion_dir = (
+        Path(worktree_clean_exclusion_dir)
+        if worktree_clean_exclusion_dir is not None
+        else multi_cycle_artifact_dir
+    )
+    if not clean_exclusion_dir.is_absolute():
+        clean_exclusion_dir = repo_path / clean_exclusion_dir
 
     input_path = multi_cycle_artifact_dir / "success_multi_cycle_input.json"
     cycles_path = multi_cycle_artifact_dir / "success_multi_cycle_cycles.json"
@@ -8288,6 +8322,18 @@ def run_prompt585_success_only_multi_cycle_real_dev_runner_gate(
         else payload.get("prompt580_timeout_seconds", 180),
         default=180,
     )
+    marker_context = _normalize_text(
+        cycle_marker_context
+        if cycle_marker_context is not None
+        else payload.get("prompt585_cycle_marker_context"),
+        default="",
+    )
+    tag_prefix = _normalize_text(
+        cycle_tag_prefix
+        if cycle_tag_prefix is not None
+        else payload.get("prompt585_cycle_tag_prefix"),
+        default="prompt585-success-multi-cycle-result",
+    )
 
     multi_cycle_artifact_dir.mkdir(parents=True, exist_ok=True)
     input_written = _prompt585_write_artifact(
@@ -8346,16 +8392,14 @@ def run_prompt585_success_only_multi_cycle_real_dev_runner_gate(
                 enabled=True,
                 enable_token=prompt584_token,
                 dev_task_prompt=_prompt585_default_dev_task_prompt_text(
-                    cycle_number
+                    cycle_number,
+                    marker_context=marker_context,
                 ),
                 changed_files=list(_PROMPT584_DEFAULT_CHANGED_FILES),
                 commit_message=(
                     f"Prompt585 success multi-cycle result {cycle_number:03d}"
                 ),
-                tag_name=(
-                    "prompt585-success-multi-cycle-result-"
-                    f"{cycle_number:03d}"
-                ),
+                tag_name=f"{tag_prefix}-{cycle_number:03d}",
                 prompt580_timeout_seconds=timeout,
                 prompt580_enable_token=prompt580_token,
                 prompt583_enable_token=prompt583_token,
@@ -8378,14 +8422,14 @@ def run_prompt585_success_only_multi_cycle_real_dev_runner_gate(
                 "source_prompt": "prompt585",
                 "cycle_number": cycle_number,
                 "cycle_artifact_dir": str(cycle_artifact_dir),
-                "cycle_marker": _prompt585_cycle_marker(cycle_number),
+                "cycle_marker": _prompt585_cycle_marker(
+                    cycle_number,
+                    marker_context=marker_context,
+                ),
                 "cycle_commit_message": (
                     f"Prompt585 success multi-cycle result {cycle_number:03d}"
                 ),
-                "cycle_tag_name": (
-                    "prompt585-success-multi-cycle-result-"
-                    f"{cycle_number:03d}"
-                ),
+                "cycle_tag_name": f"{tag_prefix}-{cycle_number:03d}",
                 "cycle_succeeded": cycle_succeeded,
                 "prompt584_result": cycle_result,
             }
@@ -8514,7 +8558,7 @@ def run_prompt585_success_only_multi_cycle_real_dev_runner_gate(
     no_remote_mutation_verified = True
     final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
         repo_path=repo_path,
-        daemon_artifact_dir=multi_cycle_artifact_dir,
+        daemon_artifact_dir=clean_exclusion_dir,
     )
     cycle_success_results = [
         cycle.get("cycle_succeeded") is True for cycle in cycle_results
@@ -8608,6 +8652,562 @@ def run_prompt585_success_only_multi_cycle_real_dev_runner_gate(
     summary_written = _prompt585_write_artifact(summary_path, summary)
     summary["prompt585_summary_written"] = summary_written
     summary["prompt585_completion_claim_allowed"] = bool(
+        completion_claim_allowed and summary_written
+    )
+    if summary_written:
+        _write_json(summary_path, summary)
+    return summary
+
+
+def _prompt586_bounded_count(value: Any, *, default: int = 2) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(1, min(5, parsed))
+
+
+def _prompt586_iteration_succeeded(
+    iteration: Mapping[str, Any],
+    *,
+    max_cycles_per_iteration: int,
+) -> bool:
+    prompt585_result = iteration.get("prompt585_result")
+    if not isinstance(prompt585_result, Mapping):
+        return False
+    return bool(
+        iteration.get("iteration_succeeded") is True
+        and prompt585_result.get("prompt585_result_route")
+        == "multi_cycle_completed"
+        and prompt585_result.get("prompt585_completed_cycles")
+        == max_cycles_per_iteration
+        and prompt585_result.get("prompt585_failed_cycles") == 0
+        and prompt585_result.get("prompt585_completion_claim_allowed") is True
+        and _prompt579_string_list(
+            prompt585_result.get("prompt585_blocked_reasons")
+        )
+        == []
+    )
+
+
+def _prompt586_write_heartbeat(path: Path, payload: Mapping[str, Any]) -> bool:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    return path.is_file()
+
+
+def run_prompt586_success_multi_cycle_daemon_soak_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt585_enable_token: str | None = None,
+    prompt584_enable_token: str | None = None,
+    prompt580_enable_token: str | None = None,
+    prompt583_enable_token: str | None = None,
+    soak_iterations: int | None = None,
+    max_cycles_per_iteration: int | None = None,
+    prompt580_timeout_seconds: int | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        execution_repo_path or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    daemon_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT586_DEFAULT_ARTIFACT_DIR
+    )
+    if not daemon_artifact_dir.is_absolute():
+        daemon_artifact_dir = repo_path / daemon_artifact_dir
+
+    input_path = daemon_artifact_dir / "daemon_soak_input.json"
+    iterations_path = daemon_artifact_dir / "daemon_soak_iterations.json"
+    heartbeat_path = daemon_artifact_dir / "daemon_soak_heartbeat.jsonl"
+    resume_state_path = daemon_artifact_dir / "daemon_soak_resume_state.json"
+    route_path = daemon_artifact_dir / "daemon_soak_route.json"
+    summary_path = daemon_artifact_dir / "daemon_soak_summary.json"
+
+    prompt586_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt586_enabled") is True
+    )
+    prompt586_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt586_enable_token"),
+        default="",
+    )
+    prompt585_token = _normalize_text(
+        prompt585_enable_token
+        if prompt585_enable_token is not None
+        else payload.get("prompt585_enable_token"),
+        default="",
+    )
+    prompt584_token = _normalize_text(
+        prompt584_enable_token
+        if prompt584_enable_token is not None
+        else payload.get("prompt584_enable_token"),
+        default="",
+    )
+    prompt580_token = _normalize_text(
+        prompt580_enable_token
+        if prompt580_enable_token is not None
+        else payload.get("prompt580_enable_token"),
+        default="",
+    )
+    prompt583_token = _normalize_text(
+        prompt583_enable_token
+        if prompt583_enable_token is not None
+        else payload.get("prompt583_enable_token"),
+        default="",
+    )
+    prompt586_enable_token_valid = (
+        prompt586_token
+        == PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+    )
+    prompt586_prompt585_enable_token_valid = (
+        prompt585_token == PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN
+    )
+    prompt586_prompt584_enable_token_valid = (
+        prompt584_token == PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+    )
+    prompt586_prompt580_enable_token_valid = (
+        prompt580_token == PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN
+    )
+    prompt586_prompt583_enable_token_valid = (
+        prompt583_token == PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+    )
+    resolved_soak_iterations = _prompt586_bounded_count(
+        soak_iterations
+        if soak_iterations is not None
+        else payload.get("prompt586_soak_iterations", 2),
+        default=2,
+    )
+    resolved_max_cycles_per_iteration = _prompt586_bounded_count(
+        max_cycles_per_iteration
+        if max_cycles_per_iteration is not None
+        else payload.get("prompt586_max_cycles_per_iteration", 2),
+        default=2,
+    )
+    timeout = _prompt580_timeout_seconds(
+        prompt580_timeout_seconds
+        if prompt580_timeout_seconds is not None
+        else payload.get("prompt580_timeout_seconds", 180),
+        default=180,
+    )
+
+    daemon_artifact_dir.mkdir(parents=True, exist_ok=True)
+    heartbeat_path.write_text("", encoding="utf-8")
+    input_written = _prompt585_write_artifact(
+        input_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt586",
+            "execution_repo_path": str(repo_path),
+            "artifact_dir": str(daemon_artifact_dir),
+            "enabled": prompt586_enabled,
+            "prompt586_enable_token_valid": prompt586_enable_token_valid,
+            "prompt585_enable_token_valid": (
+                prompt586_prompt585_enable_token_valid
+            ),
+            "prompt584_enable_token_valid": (
+                prompt586_prompt584_enable_token_valid
+            ),
+            "prompt580_enable_token_valid": (
+                prompt586_prompt580_enable_token_valid
+            ),
+            "prompt583_enable_token_valid": (
+                prompt586_prompt583_enable_token_valid
+            ),
+            "soak_iterations": resolved_soak_iterations,
+            "max_cycles_per_iteration": resolved_max_cycles_per_iteration,
+            "prompt580_timeout_seconds": timeout,
+            "remote_operations_allowed": False,
+        },
+    )
+
+    can_run = bool(
+        prompt586_enabled
+        and prompt586_enable_token_valid
+        and prompt586_prompt585_enable_token_valid
+        and prompt586_prompt584_enable_token_valid
+        and prompt586_prompt580_enable_token_valid
+        and prompt586_prompt583_enable_token_valid
+    )
+    iteration_results: list[dict[str, Any]] = []
+    started_iterations = 0
+    completed_iterations = 0
+    failed_iterations = 0
+    total_started_cycles = 0
+    total_completed_cycles = 0
+    total_failed_cycles = 0
+    heartbeat_written = False
+    stop_reason = "not_run"
+    result_route = "not_run"
+    next_action = (
+        "provide_explicit_enable_token_for_success_multi_cycle_daemon_soak"
+    )
+    status = "success_multi_cycle_daemon_soak_ready_not_run_local_only"
+    ready = True
+    success = False
+    blocked_reasons: list[str] = []
+
+    if can_run:
+        stop_reason = ""
+        for iteration_number in range(1, resolved_soak_iterations + 1):
+            started_iterations += 1
+            iteration_artifact_dir = (
+                daemon_artifact_dir / f"iteration_{iteration_number:03d}"
+            )
+            prompt585_result = (
+                run_prompt585_success_only_multi_cycle_real_dev_runner_gate(
+                    run_state_payload=payload,
+                    execution_repo_path=repo_path,
+                    artifact_dir=iteration_artifact_dir,
+                    enabled=True,
+                    enable_token=prompt585_token,
+                    max_cycles=resolved_max_cycles_per_iteration,
+                    prompt584_enable_token=prompt584_token,
+                    prompt580_enable_token=prompt580_token,
+                    prompt583_enable_token=prompt583_token,
+                    prompt580_timeout_seconds=timeout,
+                    cycle_marker_context=f"SOAK_{iteration_number:03d}",
+                    cycle_tag_prefix=(
+                        "prompt586-soak-"
+                        f"{iteration_number:03d}-success-multi-cycle-result"
+                    ),
+                    worktree_clean_exclusion_dir=daemon_artifact_dir,
+                )
+            )
+            total_started_cycles += int(
+                prompt585_result.get("prompt585_started_cycles") or 0
+            )
+            total_completed_cycles += int(
+                prompt585_result.get("prompt585_completed_cycles") or 0
+            )
+            total_failed_cycles += int(
+                prompt585_result.get("prompt585_failed_cycles") or 0
+            )
+            iteration_succeeded = bool(
+                prompt585_result.get("prompt585_result_route")
+                == "multi_cycle_completed"
+                and prompt585_result.get("prompt585_completed_cycles")
+                == resolved_max_cycles_per_iteration
+                and prompt585_result.get("prompt585_failed_cycles") == 0
+                and prompt585_result.get("prompt585_completion_claim_allowed")
+                is True
+            )
+            if iteration_succeeded:
+                completed_iterations += 1
+            else:
+                failed_iterations += 1
+                stop_reason = "iteration_failed"
+                result_route = "iteration_failed"
+                next_action = "manual_review_prompt586_failed_iteration"
+                status = "blocked_success_multi_cycle_daemon_soak_failed"
+                ready = False
+                blocked_reasons.append(
+                    f"prompt585_iteration_{iteration_number:03d}_not_completed"
+                )
+            iteration_payload = {
+                "local_only": True,
+                "source_prompt": "prompt586",
+                "iteration_number": iteration_number,
+                "iteration_artifact_dir": str(iteration_artifact_dir),
+                "iteration_succeeded": iteration_succeeded,
+                "prompt585_result": prompt585_result,
+            }
+            iteration_artifact_path = (
+                daemon_artifact_dir
+                / f"daemon_soak_iteration_{iteration_number:03d}.json"
+            )
+            iteration_payload["iteration_artifact_written"] = (
+                _prompt585_write_artifact(
+                    iteration_artifact_path,
+                    iteration_payload,
+                )
+            )
+            iteration_results.append(iteration_payload)
+            heartbeat_written = (
+                _prompt586_write_heartbeat(
+                    heartbeat_path,
+                    {
+                        "local_only": True,
+                        "source_prompt": "prompt586",
+                        "iteration_number": iteration_number,
+                        "iteration_succeeded": iteration_succeeded,
+                        "started_iterations": started_iterations,
+                        "completed_iterations": completed_iterations,
+                        "failed_iterations": failed_iterations,
+                        "total_started_cycles": total_started_cycles,
+                        "total_completed_cycles": total_completed_cycles,
+                        "total_failed_cycles": total_failed_cycles,
+                    },
+                )
+                or heartbeat_written
+            )
+            _prompt585_write_artifact(
+                resume_state_path,
+                {
+                    "local_only": True,
+                    "source_prompt": "prompt586",
+                    "soak_iterations": resolved_soak_iterations,
+                    "max_cycles_per_iteration": (
+                        resolved_max_cycles_per_iteration
+                    ),
+                    "started_iterations": started_iterations,
+                    "completed_iterations": completed_iterations,
+                    "failed_iterations": failed_iterations,
+                    "total_started_cycles": total_started_cycles,
+                    "total_completed_cycles": total_completed_cycles,
+                    "total_failed_cycles": total_failed_cycles,
+                    "stop_reason": stop_reason,
+                    "next_action": next_action,
+                },
+            )
+            if not iteration_succeeded:
+                break
+        if (
+            completed_iterations == resolved_soak_iterations
+            and failed_iterations == 0
+        ):
+            stop_reason = "soak_iterations_reached"
+            result_route = "daemon_soak_completed"
+            next_action = "prepare_prompt587_failure_routes_or_resume_stop_controls"
+            status = "success_multi_cycle_daemon_soak_completed_local_only"
+            ready = True
+            success = True
+
+    all_iterations_completed = bool(
+        can_run
+        and started_iterations == resolved_soak_iterations
+        and completed_iterations == resolved_soak_iterations
+        and failed_iterations == 0
+        and stop_reason == "soak_iterations_reached"
+    )
+    iteration_success_results = [
+        _prompt586_iteration_succeeded(
+            iteration,
+            max_cycles_per_iteration=resolved_max_cycles_per_iteration,
+        )
+        for iteration in iteration_results
+    ]
+    iterations_artifact_written = _prompt585_write_artifact(
+        iterations_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt586",
+            "iteration_results": iteration_results,
+        },
+    )
+    resume_state_written = _prompt585_write_artifact(
+        resume_state_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt586",
+            "soak_iterations": resolved_soak_iterations,
+            "max_cycles_per_iteration": resolved_max_cycles_per_iteration,
+            "started_iterations": started_iterations,
+            "completed_iterations": completed_iterations,
+            "failed_iterations": failed_iterations,
+            "total_started_cycles": total_started_cycles,
+            "total_completed_cycles": total_completed_cycles,
+            "total_failed_cycles": total_failed_cycles,
+            "stop_reason": stop_reason,
+            "next_action": next_action,
+        },
+    )
+    route_written = _prompt585_write_artifact(
+        route_path,
+        {
+            "local_only": True,
+            "source_prompt": "prompt586",
+            "prompt586_result_route": result_route,
+            "prompt586_next_action": next_action,
+            "prompt586_blocked_reasons": blocked_reasons,
+        },
+    )
+
+    codex_executed_during_runtime = any(
+        iteration.get("prompt585_result", {}).get(
+            "prompt585_codex_executed_during_runtime"
+        )
+        is True
+        for iteration in iteration_results
+    )
+    tracked_files_modified_by_codex = any(
+        iteration.get("prompt585_result", {}).get(
+            "prompt585_tracked_files_modified_by_codex"
+        )
+        is True
+        for iteration in iteration_results
+    )
+    commit_performed = any(
+        iteration.get("prompt585_result", {}).get("prompt585_commit_performed")
+        is True
+        for iteration in iteration_results
+    )
+    tag_performed = any(
+        iteration.get("prompt585_result", {}).get("prompt585_tag_performed")
+        is True
+        for iteration in iteration_results
+    )
+    installation_performed = any(
+        iteration.get("prompt585_result", {}).get(
+            "prompt585_installation_performed"
+        )
+        is True
+        for iteration in iteration_results
+    )
+    systemd_used = any(
+        iteration.get("prompt585_result", {}).get("prompt585_systemd_used")
+        is True
+        for iteration in iteration_results
+    )
+    service_enable_performed = any(
+        iteration.get("prompt585_result", {}).get(
+            "prompt585_service_enable_performed"
+        )
+        is True
+        for iteration in iteration_results
+    )
+    service_start_performed = any(
+        iteration.get("prompt585_result", {}).get(
+            "prompt585_service_start_performed"
+        )
+        is True
+        for iteration in iteration_results
+    )
+    persistent_service_started = any(
+        iteration.get("prompt585_result", {}).get(
+            "prompt585_persistent_service_started"
+        )
+        is True
+        for iteration in iteration_results
+    )
+    remote_workflow_included = any(
+        iteration.get("prompt585_result", {}).get(
+            "prompt585_remote_workflow_included"
+        )
+        is True
+        for iteration in iteration_results
+    )
+    no_remote_mutation_verified = True
+    final_worktree_clean = _prompt565_worktree_clean_excluding_daemon_artifacts(
+        repo_path=repo_path,
+        daemon_artifact_dir=daemon_artifact_dir,
+    )
+    completion_claim_allowed = bool(
+        success
+        and prompt586_enabled
+        and prompt586_enable_token_valid
+        and prompt586_prompt585_enable_token_valid
+        and prompt586_prompt584_enable_token_valid
+        and prompt586_prompt580_enable_token_valid
+        and prompt586_prompt583_enable_token_valid
+        and started_iterations == resolved_soak_iterations
+        and completed_iterations == resolved_soak_iterations
+        and failed_iterations == 0
+        and total_started_cycles
+        == resolved_soak_iterations * resolved_max_cycles_per_iteration
+        and total_completed_cycles
+        == resolved_soak_iterations * resolved_max_cycles_per_iteration
+        and total_failed_cycles == 0
+        and len(iteration_success_results) == resolved_soak_iterations
+        and all(iteration_success_results)
+        and stop_reason == "soak_iterations_reached"
+        and all_iterations_completed
+        and heartbeat_written
+        and resume_state_written
+        and iterations_artifact_written
+        and route_written
+        and codex_executed_during_runtime
+        and tracked_files_modified_by_codex
+        and commit_performed
+        and tag_performed
+        and not installation_performed
+        and not systemd_used
+        and not service_enable_performed
+        and not service_start_performed
+        and not persistent_service_started
+        and not remote_workflow_included
+        and no_remote_mutation_verified
+        and final_worktree_clean
+        and result_route == "daemon_soak_completed"
+        and next_action
+        == "prepare_prompt587_failure_routes_or_resume_stop_controls"
+        and blocked_reasons == []
+    )
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt586",
+        "prompt586_daemon_soak_status": status,
+        "prompt586_daemon_soak_ready": ready,
+        "prompt586_daemon_soak_success": success,
+        "prompt586_enabled": prompt586_enabled,
+        "prompt586_enable_token_valid": prompt586_enable_token_valid,
+        "prompt586_prompt585_enable_token_valid": (
+            prompt586_prompt585_enable_token_valid
+        ),
+        "prompt586_prompt584_enable_token_valid": (
+            prompt586_prompt584_enable_token_valid
+        ),
+        "prompt586_prompt580_enable_token_valid": (
+            prompt586_prompt580_enable_token_valid
+        ),
+        "prompt586_prompt583_enable_token_valid": (
+            prompt586_prompt583_enable_token_valid
+        ),
+        "prompt586_soak_iterations": resolved_soak_iterations,
+        "prompt586_max_cycles_per_iteration": (
+            resolved_max_cycles_per_iteration
+        ),
+        "prompt586_started_iterations": started_iterations,
+        "prompt586_completed_iterations": completed_iterations,
+        "prompt586_failed_iterations": failed_iterations,
+        "prompt586_total_started_cycles": total_started_cycles,
+        "prompt586_total_completed_cycles": total_completed_cycles,
+        "prompt586_total_failed_cycles": total_failed_cycles,
+        "prompt586_iteration_results": iteration_results,
+        "prompt586_heartbeat_written": heartbeat_written,
+        "prompt586_resume_state_written": resume_state_written,
+        "prompt586_iterations_artifact_written": iterations_artifact_written,
+        "prompt586_summary_written": False,
+        "prompt586_route_written": route_written,
+        "prompt586_stop_reason": stop_reason,
+        "prompt586_all_iterations_completed": all_iterations_completed,
+        "prompt586_codex_executed_during_runtime": (
+            codex_executed_during_runtime
+        ),
+        "prompt586_tracked_files_modified_by_codex": (
+            tracked_files_modified_by_codex
+        ),
+        "prompt586_commit_performed": commit_performed,
+        "prompt586_tag_performed": tag_performed,
+        "prompt586_installation_performed": installation_performed,
+        "prompt586_systemd_used": systemd_used,
+        "prompt586_service_enable_performed": service_enable_performed,
+        "prompt586_service_start_performed": service_start_performed,
+        "prompt586_persistent_service_started": persistent_service_started,
+        "prompt586_remote_workflow_included": remote_workflow_included,
+        "prompt586_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt586_final_worktree_clean": final_worktree_clean,
+        "prompt586_completion_claim_allowed": completion_claim_allowed,
+        "prompt586_result_route": result_route,
+        "prompt586_next_action": next_action,
+        "prompt586_blocked_reasons": blocked_reasons,
+        "prompt586_input_written": input_written,
+    }
+    summary_written = _prompt585_write_artifact(summary_path, summary)
+    summary["prompt586_summary_written"] = summary_written
+    summary["prompt586_completion_claim_allowed"] = bool(
         completion_claim_allowed and summary_written
     )
     if summary_written:
