@@ -167,6 +167,9 @@ PROMPT589_DAEMON_LOOP_ENTRYPOINT_ENABLE_TOKEN = (
 PROMPT590_ROLE_DRIVEN_TASK_ENTRYPOINT_ENABLE_TOKEN = (
     "PROMPT590_ROLE_DRIVEN_TASK_ENTRYPOINT_ENABLE"
 )
+PROMPT591_ROLE_EXECUTION_ADAPTER_ENABLE_TOKEN = (
+    "PROMPT591_ROLE_EXECUTION_ADAPTER_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -321,6 +324,10 @@ _PROMPT590_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt590_role_driven_task_entrypoint"
 )
+_PROMPT591_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt591_role_execution_adapter"
+)
 _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_input.json",
     "daemon_control_resume_state_before.json",
@@ -362,6 +369,17 @@ _PROMPT590_REQUIRED_ARTIFACT_NAMES = (
     "prompt589_probe.json",
     "role_task_entrypoint_route.json",
     "role_task_entrypoint_summary.json",
+)
+_PROMPT591_REQUIRED_ARTIFACT_NAMES = (
+    "role_execution_adapter_input.json",
+    "role_execution_request.json",
+    "selected_role_execution_prompt.json",
+    "role_execution_result.json",
+    "role_execution_diff_summary.json",
+    "role_execution_verification_handoff.json",
+    "prompt590_probe.json",
+    "role_execution_adapter_route.json",
+    "role_execution_adapter_summary.json",
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -11963,6 +11981,646 @@ def run_prompt590_role_driven_task_entrypoint_gate(
         ]
     if summary_written:
         _write_json(control_artifact_dir / "role_task_entrypoint_summary.json", summary)
+    return summary
+
+
+def run_prompt591_role_execution_adapter_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt590_enable_token: str | None = None,
+    prompt589_enable_token: str | None = None,
+    prompt588_enable_token: str | None = None,
+    prompt587_enable_token: str | None = None,
+    prompt586_enable_token: str | None = None,
+    prompt585_enable_token: str | None = None,
+    prompt584_enable_token: str | None = None,
+    prompt580_enable_token: str | None = None,
+    prompt583_enable_token: str | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        payload.get("prompt591_repo_path")
+        or execution_repo_path
+        or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    control_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT591_DEFAULT_ARTIFACT_DIR
+    )
+    if not control_artifact_dir.is_absolute():
+        control_artifact_dir = repo_path / control_artifact_dir
+    control_artifact_dir.mkdir(parents=True, exist_ok=True)
+    prompt590_artifact_dir = repo_path / _PROMPT590_DEFAULT_ARTIFACT_DIR
+    prompt590_execution_prompt_artifact = _read_json_object_if_exists(
+        prompt590_artifact_dir / "execution_prompt.json"
+    ) or {}
+    prompt590_selected_role_artifact = _read_json_object_if_exists(
+        prompt590_artifact_dir / "selected_role.json"
+    ) or {}
+
+    prompt591_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt591_enabled") is True
+    )
+    prompt591_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt591_enable_token"),
+        default="",
+    )
+    prompt590_token = _normalize_text(
+        prompt590_enable_token
+        if prompt590_enable_token is not None
+        else payload.get("prompt590_enable_token"),
+        default="",
+    )
+    prompt589_token = _normalize_text(
+        prompt589_enable_token
+        if prompt589_enable_token is not None
+        else payload.get("prompt589_enable_token"),
+        default="",
+    )
+    prompt588_token = _normalize_text(
+        prompt588_enable_token
+        if prompt588_enable_token is not None
+        else payload.get("prompt588_enable_token"),
+        default="",
+    )
+    prompt587_token = _normalize_text(
+        prompt587_enable_token
+        if prompt587_enable_token is not None
+        else payload.get("prompt587_enable_token"),
+        default="",
+    )
+    prompt586_token = _normalize_text(
+        prompt586_enable_token
+        if prompt586_enable_token is not None
+        else payload.get("prompt586_enable_token"),
+        default="",
+    )
+    prompt585_token = _normalize_text(
+        prompt585_enable_token
+        if prompt585_enable_token is not None
+        else payload.get("prompt585_enable_token"),
+        default="",
+    )
+    prompt584_token = _normalize_text(
+        prompt584_enable_token
+        if prompt584_enable_token is not None
+        else payload.get("prompt584_enable_token"),
+        default="",
+    )
+    prompt580_token = _normalize_text(
+        prompt580_enable_token
+        if prompt580_enable_token is not None
+        else payload.get("prompt580_enable_token"),
+        default="",
+    )
+    prompt583_token = _normalize_text(
+        prompt583_enable_token
+        if prompt583_enable_token is not None
+        else payload.get("prompt583_enable_token"),
+        default="",
+    )
+
+    prompt591_enable_token_valid = (
+        prompt591_token == PROMPT591_ROLE_EXECUTION_ADAPTER_ENABLE_TOKEN
+    )
+    prompt591_prompt590_enable_token_valid = (
+        prompt590_token == PROMPT590_ROLE_DRIVEN_TASK_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt591_prompt589_enable_token_valid = (
+        prompt589_token == PROMPT589_DAEMON_LOOP_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt591_prompt588_enable_token_valid = (
+        prompt588_token == PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN
+    )
+    prompt591_prompt587_enable_token_valid = (
+        prompt587_token == PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN
+    )
+    prompt591_prompt586_enable_token_valid = (
+        prompt586_token
+        == PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+    )
+    prompt591_prompt585_enable_token_valid = (
+        prompt585_token == PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN
+    )
+    prompt591_prompt584_enable_token_valid = (
+        prompt584_token == PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+    )
+    prompt591_prompt580_enable_token_valid = (
+        prompt580_token == PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN
+    )
+    prompt591_prompt583_enable_token_valid = (
+        prompt583_token == PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+    )
+    token_gate_open = bool(
+        prompt591_enabled
+        and prompt591_enable_token_valid
+        and prompt591_prompt590_enable_token_valid
+        and prompt591_prompt589_enable_token_valid
+        and prompt591_prompt588_enable_token_valid
+        and prompt591_prompt587_enable_token_valid
+        and prompt591_prompt586_enable_token_valid
+        and prompt591_prompt585_enable_token_valid
+        and prompt591_prompt584_enable_token_valid
+        and prompt591_prompt580_enable_token_valid
+        and prompt591_prompt583_enable_token_valid
+    )
+
+    project_goal = _normalize_text(
+        payload.get("prompt591_project_goal")
+        or prompt590_execution_prompt_artifact.get("project_goal"),
+        default="",
+    )
+    selected_role = _normalize_text(
+        payload.get("prompt591_selected_role")
+        or payload.get("prompt590_selected_role")
+        or prompt590_selected_role_artifact.get("selected_role")
+        or prompt590_execution_prompt_artifact.get("selected_role"),
+        default="",
+    )
+    execution_prompt = _normalize_text(
+        payload.get("prompt591_execution_prompt"),
+        default="",
+    )
+    if not execution_prompt and prompt590_execution_prompt_artifact:
+        execution_prompt = json.dumps(
+            prompt590_execution_prompt_artifact,
+            indent=2,
+            sort_keys=True,
+        )
+    target_files = _prompt579_string_list(
+        payload.get("prompt591_target_files")
+        or prompt590_execution_prompt_artifact.get("prompt_contract", {}).get(
+            "allowed_files"
+        )
+    )
+    acceptance_criteria = _prompt579_string_list(
+        payload.get("prompt591_acceptance_criteria")
+        or prompt590_execution_prompt_artifact.get("prompt_contract", {}).get(
+            "acceptance_criteria"
+        )
+    )
+    dry_run = payload.get("prompt591_dry_run", True) is not False
+    execute_selected_role = (
+        payload.get("prompt591_execute_selected_role") is True
+    )
+    force_invalid_request = (
+        payload.get("prompt591_force_invalid_execution_request") is True
+    )
+    force_prompt590_probe = (
+        payload.get("prompt591_force_prompt590_probe") is True
+    )
+    project_goal_present = bool(project_goal)
+    selected_role_valid = selected_role in _PROMPT590_ROLE_DEFINITIONS
+    execution_prompt_present = bool(execution_prompt)
+    execution_request_valid = bool(
+        project_goal_present
+        and selected_role_valid
+        and execution_prompt_present
+        and not force_invalid_request
+    )
+
+    prompt590_probe_executed = False
+    prompt590_probe_success = False
+    prompt590_probe: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt591",
+        "prompt590_probe_requested": force_prompt590_probe,
+        "prompt590_probe_executed": False,
+        "prompt590_probe_success": False,
+    }
+    if token_gate_open and force_prompt590_probe:
+        prompt590_probe_result = run_prompt590_role_driven_task_entrypoint_gate(
+            run_state_payload={
+                "execution_repo_path": str(repo_path),
+                "prompt590_enabled": False,
+                "prompt590_project_goal": project_goal,
+                "prompt590_roles_enabled": [selected_role] if selected_role else [],
+                "prompt590_target_files": target_files,
+                "prompt590_acceptance_criteria": acceptance_criteria,
+            },
+            execution_repo_path=repo_path,
+            artifact_dir=control_artifact_dir / "prompt590_probe",
+            enabled=False,
+        )
+        prompt590_probe_executed = True
+        prompt590_probe_success = bool(
+            prompt590_probe_result.get("prompt590_result_route") == "not_run"
+            and prompt590_probe_result.get("prompt590_prompt589_executed")
+            is False
+            and prompt590_probe_result.get(
+                "prompt590_codex_executed_during_runtime"
+            )
+            is False
+            and prompt590_probe_result.get("prompt590_commit_performed")
+            is False
+            and prompt590_probe_result.get("prompt590_tag_performed") is False
+        )
+        prompt590_probe = {
+            "local_only": True,
+            "source_prompt": "prompt591",
+            "prompt590_probe_requested": True,
+            "prompt590_probe_executed": True,
+            "prompt590_probe_success": prompt590_probe_success,
+            "prompt590_result_route": prompt590_probe_result.get(
+                "prompt590_result_route"
+            ),
+            "prompt590_next_action": prompt590_probe_result.get(
+                "prompt590_next_action"
+            ),
+            "prompt590_prompt589_executed": prompt590_probe_result.get(
+                "prompt590_prompt589_executed"
+            ),
+            "prompt590_codex_executed_during_runtime": (
+                prompt590_probe_result.get(
+                    "prompt590_codex_executed_during_runtime"
+                )
+            ),
+            "prompt590_commit_performed": prompt590_probe_result.get(
+                "prompt590_commit_performed"
+            ),
+            "prompt590_tag_performed": prompt590_probe_result.get(
+                "prompt590_tag_performed"
+            ),
+        }
+
+    role_execution_request = {
+        "local_only": True,
+        "source_prompt": "prompt591",
+        "project_goal": project_goal,
+        "selected_role": selected_role,
+        "selected_role_valid": selected_role_valid,
+        "target_files": target_files,
+        "acceptance_criteria": acceptance_criteria,
+        "dry_run": dry_run,
+        "execute_selected_role": execute_selected_role,
+        "execution_request_valid": execution_request_valid,
+        "remote_operations_allowed": False,
+        "commit_allowed": False,
+        "tag_allowed": False,
+    }
+    selected_role_execution_prompt = {
+        "local_only": True,
+        "source_prompt": "prompt591",
+        "selected_role": selected_role,
+        "role_purpose": _PROMPT590_ROLE_DEFINITIONS.get(
+            selected_role, {}
+        ).get("purpose", ""),
+        "execution_prompt": execution_prompt,
+        "command": {
+            "adapter": "prompt591_role_execution_adapter",
+            "mode": "dry_run" if dry_run else "execute_requested",
+            "shell": False,
+            "bounded_local_only": True,
+        },
+    }
+    prompt591_prompt590_executed = False
+    prompt591_prompt589_executed = False
+    prompt591_prompt588_executed = False
+    prompt591_prompt587_executed = False
+    prompt591_prompt586_executed = False
+    prompt591_codex_executed_during_runtime = False
+    prompt591_tracked_files_modified_by_codex = False
+    prompt591_commit_performed = False
+    prompt591_tag_performed = False
+    prompt591_installation_performed = False
+    prompt591_systemd_used = False
+    prompt591_service_enable_performed = False
+    prompt591_service_start_performed = False
+    prompt591_persistent_service_started = False
+    prompt591_remote_workflow_included = False
+    prompt591_no_remote_mutation_verified = True
+
+    blocked_reasons: list[str] = []
+    if not token_gate_open:
+        status = "role_execution_adapter_ready_not_run_local_only"
+        ready = True
+        success = False
+        result_route = "not_run"
+        next_action = (
+            "provide_explicit_enable_token_for_role_execution_adapter"
+        )
+        completion_claim_allowed = False
+    elif not execution_request_valid:
+        status = "blocked_role_execution_adapter_invalid_request"
+        ready = False
+        success = False
+        result_route = "role_execution_request_invalid"
+        next_action = "manual_review_role_execution_request"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt591_role_execution_request_invalid")
+    elif execute_selected_role and not dry_run:
+        status = "blocked_role_execution_adapter_execute_not_available"
+        ready = False
+        success = False
+        result_route = "role_execution_execute_blocked"
+        next_action = "manual_review_safe_role_execution_api"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt591_safe_codex_execution_api_unavailable")
+    else:
+        status = "role_execution_adapter_ready_local_only"
+        ready = True
+        success = True
+        result_route = "role_execution_dry_run_ready"
+        next_action = "prepare_prompt592_role_evaluation_retry"
+        completion_claim_allowed = True
+
+    role_execution_result = {
+        "local_only": True,
+        "source_prompt": "prompt591",
+        "status": status,
+        "ready": ready,
+        "success": success,
+        "result_route": result_route,
+        "next_action": next_action,
+        "blocked_reasons": blocked_reasons,
+        "codex_executed": prompt591_codex_executed_during_runtime,
+        "execution_intent_recorded": bool(
+            token_gate_open and execution_request_valid
+        ),
+    }
+    role_execution_diff_summary = {
+        "local_only": True,
+        "source_prompt": "prompt591",
+        "tracked_files_modified_by_codex": (
+            prompt591_tracked_files_modified_by_codex
+        ),
+        "expected_diff": "none in Prompt591 dry-run",
+        "target_files": target_files,
+    }
+    role_execution_verification_handoff = {
+        "local_only": True,
+        "source_prompt": "prompt591",
+        "next_prompt": "Prompt592",
+        "selected_role": selected_role,
+        "acceptance_criteria": acceptance_criteria,
+        "requires_actual_execution_result": bool(execute_selected_role),
+        "completion_claim_allowed": completion_claim_allowed,
+    }
+
+    input_written = _prompt585_write_artifact(
+        control_artifact_dir / "role_execution_adapter_input.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt591",
+            "execution_repo_path": str(repo_path),
+            "artifact_dir": str(control_artifact_dir),
+            "enabled": prompt591_enabled,
+            "project_goal": project_goal,
+            "selected_role": selected_role,
+            "dry_run": dry_run,
+            "execute_selected_role": execute_selected_role,
+            "remote_operations_allowed": False,
+            "persistent_service_allowed": False,
+        },
+    )
+    role_execution_request_written = _prompt585_write_artifact(
+        control_artifact_dir / "role_execution_request.json",
+        role_execution_request,
+    )
+    selected_role_execution_prompt_written = _prompt585_write_artifact(
+        control_artifact_dir / "selected_role_execution_prompt.json",
+        selected_role_execution_prompt,
+    )
+    role_execution_result_written = _prompt585_write_artifact(
+        control_artifact_dir / "role_execution_result.json",
+        role_execution_result,
+    )
+    role_execution_diff_summary_written = _prompt585_write_artifact(
+        control_artifact_dir / "role_execution_diff_summary.json",
+        role_execution_diff_summary,
+    )
+    role_execution_verification_handoff_written = _prompt585_write_artifact(
+        control_artifact_dir / "role_execution_verification_handoff.json",
+        role_execution_verification_handoff,
+    )
+    prompt590_probe_written = _prompt585_write_artifact(
+        control_artifact_dir / "prompt590_probe.json",
+        prompt590_probe,
+    )
+    route_written = _prompt585_write_artifact(
+        control_artifact_dir / "role_execution_adapter_route.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt591",
+            "prompt591_result_route": result_route,
+            "prompt591_next_action": next_action,
+            "prompt591_blocked_reasons": blocked_reasons,
+        },
+    )
+
+    completed = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=all"],
+        cwd=str(repo_path),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    prompt591_final_worktree_clean = completed.returncode == 0
+    artifact_prefixes: list[str] = []
+    for artifact_root in (control_artifact_dir, prompt590_artifact_dir):
+        artifact_prefix = artifact_root
+        artifact_under_repo = True
+        if artifact_prefix.is_absolute():
+            try:
+                artifact_prefix = artifact_prefix.relative_to(repo_path)
+            except ValueError:
+                artifact_under_repo = False
+        if artifact_under_repo:
+            artifact_prefixes.append(artifact_prefix.as_posix().rstrip("/") + "/")
+    if prompt591_final_worktree_clean:
+        for raw_line in completed.stdout.splitlines():
+            path_text = raw_line[3:].strip()
+            if any(
+                path_text.startswith(prefix) for prefix in artifact_prefixes
+            ):
+                continue
+            prompt591_final_worktree_clean = False
+            break
+    if success and not prompt591_final_worktree_clean:
+        status = "blocked_role_execution_adapter_failed"
+        ready = False
+        success = False
+        result_route = "role_execution_adapter_failed"
+        next_action = "manual_review_role_execution_adapter"
+        completion_claim_allowed = False
+        blocked_reasons = [*blocked_reasons, "prompt591_final_worktree_dirty"]
+        role_execution_result.update(
+            {
+                "status": status,
+                "ready": ready,
+                "success": success,
+                "result_route": result_route,
+                "next_action": next_action,
+                "blocked_reasons": blocked_reasons,
+            }
+        )
+        role_execution_verification_handoff[
+            "completion_claim_allowed"
+        ] = completion_claim_allowed
+        role_execution_result_written = _prompt585_write_artifact(
+            control_artifact_dir / "role_execution_result.json",
+            role_execution_result,
+        )
+        role_execution_verification_handoff_written = (
+            _prompt585_write_artifact(
+                control_artifact_dir
+                / "role_execution_verification_handoff.json",
+                role_execution_verification_handoff,
+            )
+        )
+        route_written = _prompt585_write_artifact(
+            control_artifact_dir / "role_execution_adapter_route.json",
+            {
+                "local_only": True,
+                "source_prompt": "prompt591",
+                "prompt591_result_route": result_route,
+                "prompt591_next_action": next_action,
+                "prompt591_blocked_reasons": blocked_reasons,
+            },
+        )
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt591",
+        "prompt591_role_execution_status": status,
+        "prompt591_role_execution_ready": ready,
+        "prompt591_role_execution_success": success,
+        "prompt591_enabled": prompt591_enabled,
+        "prompt591_enable_token_valid": prompt591_enable_token_valid,
+        "prompt591_prompt590_enable_token_valid": (
+            prompt591_prompt590_enable_token_valid
+        ),
+        "prompt591_prompt589_enable_token_valid": (
+            prompt591_prompt589_enable_token_valid
+        ),
+        "prompt591_prompt588_enable_token_valid": (
+            prompt591_prompt588_enable_token_valid
+        ),
+        "prompt591_prompt587_enable_token_valid": (
+            prompt591_prompt587_enable_token_valid
+        ),
+        "prompt591_prompt586_enable_token_valid": (
+            prompt591_prompt586_enable_token_valid
+        ),
+        "prompt591_prompt585_enable_token_valid": (
+            prompt591_prompt585_enable_token_valid
+        ),
+        "prompt591_prompt584_enable_token_valid": (
+            prompt591_prompt584_enable_token_valid
+        ),
+        "prompt591_prompt580_enable_token_valid": (
+            prompt591_prompt580_enable_token_valid
+        ),
+        "prompt591_prompt583_enable_token_valid": (
+            prompt591_prompt583_enable_token_valid
+        ),
+        "prompt591_project_goal_present": project_goal_present,
+        "prompt591_selected_role": selected_role,
+        "prompt591_selected_role_valid": selected_role_valid,
+        "prompt591_execution_prompt_present": execution_prompt_present,
+        "prompt591_execution_request_valid": execution_request_valid,
+        "prompt591_dry_run": dry_run,
+        "prompt591_execute_selected_role": execute_selected_role,
+        "prompt591_role_execution_request_written": (
+            role_execution_request_written
+        ),
+        "prompt591_selected_role_execution_prompt_written": (
+            selected_role_execution_prompt_written
+        ),
+        "prompt591_role_execution_result_written": (
+            role_execution_result_written
+        ),
+        "prompt591_role_execution_diff_summary_written": (
+            role_execution_diff_summary_written
+        ),
+        "prompt591_role_execution_verification_handoff_written": (
+            role_execution_verification_handoff_written
+        ),
+        "prompt591_prompt590_probe_executed": prompt590_probe_executed,
+        "prompt591_prompt590_probe_success": prompt590_probe_success,
+        "prompt591_prompt590_executed": prompt591_prompt590_executed,
+        "prompt591_prompt589_executed": prompt591_prompt589_executed,
+        "prompt591_prompt588_executed": prompt591_prompt588_executed,
+        "prompt591_prompt587_executed": prompt591_prompt587_executed,
+        "prompt591_prompt586_executed": prompt591_prompt586_executed,
+        "prompt591_codex_executed_during_runtime": (
+            prompt591_codex_executed_during_runtime
+        ),
+        "prompt591_tracked_files_modified_by_codex": (
+            prompt591_tracked_files_modified_by_codex
+        ),
+        "prompt591_commit_performed": prompt591_commit_performed,
+        "prompt591_tag_performed": prompt591_tag_performed,
+        "prompt591_installation_performed": prompt591_installation_performed,
+        "prompt591_systemd_used": prompt591_systemd_used,
+        "prompt591_service_enable_performed": (
+            prompt591_service_enable_performed
+        ),
+        "prompt591_service_start_performed": (
+            prompt591_service_start_performed
+        ),
+        "prompt591_persistent_service_started": (
+            prompt591_persistent_service_started
+        ),
+        "prompt591_remote_workflow_included": (
+            prompt591_remote_workflow_included
+        ),
+        "prompt591_no_remote_mutation_verified": (
+            prompt591_no_remote_mutation_verified
+        ),
+        "prompt591_final_worktree_clean": prompt591_final_worktree_clean,
+        "prompt591_completion_claim_allowed": completion_claim_allowed,
+        "prompt591_result_route": result_route,
+        "prompt591_next_action": next_action,
+        "prompt591_blocked_reasons": blocked_reasons,
+        "prompt591_input_written": input_written,
+        "prompt591_prompt590_probe_written": prompt590_probe_written,
+        "prompt591_route_written": route_written,
+        "prompt591_artifacts_written": False,
+    }
+    summary_written = _prompt585_write_artifact(
+        control_artifact_dir / "role_execution_adapter_summary.json",
+        summary,
+    )
+    artifacts_written = bool(
+        summary_written
+        and all(
+            (control_artifact_dir / name).is_file()
+            for name in _PROMPT591_REQUIRED_ARTIFACT_NAMES
+        )
+    )
+    summary["prompt591_artifacts_written"] = artifacts_written
+    if not artifacts_written and token_gate_open:
+        summary["prompt591_role_execution_status"] = (
+            "blocked_role_execution_adapter_failed"
+        )
+        summary["prompt591_role_execution_ready"] = False
+        summary["prompt591_role_execution_success"] = False
+        summary["prompt591_completion_claim_allowed"] = False
+        summary["prompt591_result_route"] = "role_execution_adapter_failed"
+        summary["prompt591_next_action"] = (
+            "manual_review_role_execution_adapter"
+        )
+        summary["prompt591_blocked_reasons"] = [
+            *blocked_reasons,
+            "prompt591_required_artifacts_missing",
+        ]
+    if summary_written:
+        _write_json(
+            control_artifact_dir / "role_execution_adapter_summary.json",
+            summary,
+        )
     return summary
 
 

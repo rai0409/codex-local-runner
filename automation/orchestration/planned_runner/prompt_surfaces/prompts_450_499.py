@@ -32159,6 +32159,354 @@ def _build_prompt590_role_driven_task_entrypoint_gate_state(
     }
 
 
+def _build_prompt591_role_execution_adapter_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt591_enabled") is True
+    enable_token_valid = payload.get("prompt591_enable_token_valid") is True
+    prompt590_enable_token_valid = (
+        payload.get("prompt591_prompt590_enable_token_valid") is True
+    )
+    prompt589_enable_token_valid = (
+        payload.get("prompt591_prompt589_enable_token_valid") is True
+    )
+    prompt588_enable_token_valid = (
+        payload.get("prompt591_prompt588_enable_token_valid") is True
+    )
+    prompt587_enable_token_valid = (
+        payload.get("prompt591_prompt587_enable_token_valid") is True
+    )
+    prompt586_enable_token_valid = (
+        payload.get("prompt591_prompt586_enable_token_valid") is True
+    )
+    prompt585_enable_token_valid = (
+        payload.get("prompt591_prompt585_enable_token_valid") is True
+    )
+    prompt584_enable_token_valid = (
+        payload.get("prompt591_prompt584_enable_token_valid") is True
+    )
+    prompt580_enable_token_valid = (
+        payload.get("prompt591_prompt580_enable_token_valid") is True
+    )
+    prompt583_enable_token_valid = (
+        payload.get("prompt591_prompt583_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt590_enable_token_valid
+        and prompt589_enable_token_valid
+        and prompt588_enable_token_valid
+        and prompt587_enable_token_valid
+        and prompt586_enable_token_valid
+        and prompt585_enable_token_valid
+        and prompt584_enable_token_valid
+        and prompt580_enable_token_valid
+        and prompt583_enable_token_valid
+    )
+    project_goal_present = (
+        payload.get("prompt591_project_goal_present") is True
+    )
+    selected_role = _normalize_text(
+        payload.get("prompt591_selected_role"),
+        default="",
+    )
+    selected_role_valid = (
+        payload.get("prompt591_selected_role_valid") is True
+    )
+    execution_prompt_present = (
+        payload.get("prompt591_execution_prompt_present") is True
+    )
+    execution_request_valid = (
+        payload.get("prompt591_execution_request_valid") is True
+    )
+    dry_run = payload.get("prompt591_dry_run") is True
+    execute_selected_role = (
+        payload.get("prompt591_execute_selected_role") is True
+    )
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt591_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt591_result_route"),
+        default="",
+    )
+    if not result_route:
+        if not token_gate_open:
+            result_route = "not_run"
+        elif not execution_request_valid:
+            result_route = "role_execution_request_invalid"
+        elif execute_selected_role and not dry_run:
+            result_route = "role_execution_execute_blocked"
+        else:
+            result_route = "role_execution_dry_run_ready"
+    next_action = _normalize_text(
+        payload.get("prompt591_next_action"),
+        default="",
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_role_execution_adapter"
+            ),
+            "role_execution_request_invalid": (
+                "manual_review_role_execution_request"
+            ),
+            "role_execution_execute_blocked": (
+                "manual_review_safe_role_execution_api"
+            ),
+            "role_execution_dry_run_ready": (
+                "prepare_prompt592_role_evaluation_retry"
+            ),
+        }.get(result_route, "manual_review_role_execution_adapter")
+
+    no_downstream_execution = bool(
+        payload.get("prompt591_prompt590_executed") is False
+        and payload.get("prompt591_prompt589_executed") is False
+        and payload.get("prompt591_prompt588_executed") is False
+        and payload.get("prompt591_prompt587_executed") is False
+        and payload.get("prompt591_prompt586_executed") is False
+    )
+    no_codex_commit_tag = bool(
+        payload.get("prompt591_codex_executed_during_runtime") is False
+        and payload.get("prompt591_tracked_files_modified_by_codex") is False
+        and payload.get("prompt591_commit_performed") is False
+        and payload.get("prompt591_tag_performed") is False
+    )
+    no_install_service_remote = bool(
+        payload.get("prompt591_installation_performed") is False
+        and payload.get("prompt591_systemd_used") is False
+        and payload.get("prompt591_service_enable_performed") is False
+        and payload.get("prompt591_service_start_performed") is False
+        and payload.get("prompt591_persistent_service_started") is False
+        and payload.get("prompt591_remote_workflow_included") is False
+        and payload.get("prompt591_no_remote_mutation_verified") is True
+    )
+    artifacts_written = payload.get("prompt591_artifacts_written") is True
+    artifacts_ready = bool(
+        payload.get("prompt591_role_execution_request_written") is True
+        and payload.get("prompt591_selected_role_execution_prompt_written")
+        is True
+        and payload.get("prompt591_role_execution_result_written") is True
+        and payload.get("prompt591_role_execution_diff_summary_written")
+        is True
+        and payload.get(
+            "prompt591_role_execution_verification_handoff_written"
+        )
+        is True
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt591_final_worktree_clean") is True
+        and payload.get("prompt591_completion_claim_allowed") is False
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_role_execution_adapter"
+        and blocked_reasons == []
+    )
+    invalid_request_predicates = bool(
+        token_gate_open
+        and not execution_request_valid
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and result_route == "role_execution_request_invalid"
+        and next_action == "manual_review_role_execution_request"
+        and "prompt591_role_execution_request_invalid" in blocked_reasons
+        and payload.get("prompt591_completion_claim_allowed") is False
+    )
+    execute_blocked_predicates = bool(
+        token_gate_open
+        and execution_request_valid
+        and execute_selected_role
+        and not dry_run
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and result_route == "role_execution_execute_blocked"
+        and "prompt591_safe_codex_execution_api_unavailable"
+        in blocked_reasons
+        and payload.get("prompt591_completion_claim_allowed") is False
+    )
+    success_predicates = bool(
+        token_gate_open
+        and enable_token_valid
+        and project_goal_present
+        and selected_role_valid
+        and execution_prompt_present
+        and execution_request_valid
+        and dry_run
+        and artifacts_ready
+        and no_downstream_execution
+        and no_codex_commit_tag
+        and no_install_service_remote
+        and payload.get("prompt591_final_worktree_clean") is True
+        and payload.get("prompt591_completion_claim_allowed") is True
+        and result_route == "role_execution_dry_run_ready"
+        and next_action == "prepare_prompt592_role_evaluation_retry"
+        and blocked_reasons == []
+    )
+    if artifacts_written and success_predicates:
+        status = "role_execution_adapter_ready_local_only"
+        ready = True
+        success = True
+    elif artifacts_written and not_run_predicates:
+        status = "role_execution_adapter_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif artifacts_written and invalid_request_predicates:
+        status = "blocked_role_execution_adapter_invalid_request"
+        ready = False
+        success = False
+    elif artifacts_written and execute_blocked_predicates:
+        status = "blocked_role_execution_adapter_execute_not_available"
+        ready = False
+        success = False
+    else:
+        status = "blocked_role_execution_adapter_failed"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt591",
+        "prompt591_role_execution_status": status,
+        "prompt591_role_execution_ready": ready,
+        "prompt591_role_execution_success": success,
+        "prompt591_enabled": enabled,
+        "prompt591_enable_token_valid": enable_token_valid,
+        "prompt591_prompt590_enable_token_valid": (
+            prompt590_enable_token_valid
+        ),
+        "prompt591_prompt589_enable_token_valid": (
+            prompt589_enable_token_valid
+        ),
+        "prompt591_prompt588_enable_token_valid": (
+            prompt588_enable_token_valid
+        ),
+        "prompt591_prompt587_enable_token_valid": (
+            prompt587_enable_token_valid
+        ),
+        "prompt591_prompt586_enable_token_valid": (
+            prompt586_enable_token_valid
+        ),
+        "prompt591_prompt585_enable_token_valid": (
+            prompt585_enable_token_valid
+        ),
+        "prompt591_prompt584_enable_token_valid": (
+            prompt584_enable_token_valid
+        ),
+        "prompt591_prompt580_enable_token_valid": (
+            prompt580_enable_token_valid
+        ),
+        "prompt591_prompt583_enable_token_valid": (
+            prompt583_enable_token_valid
+        ),
+        "prompt591_project_goal_present": project_goal_present,
+        "prompt591_selected_role": selected_role,
+        "prompt591_selected_role_valid": selected_role_valid,
+        "prompt591_execution_prompt_present": execution_prompt_present,
+        "prompt591_execution_request_valid": execution_request_valid,
+        "prompt591_dry_run": dry_run,
+        "prompt591_execute_selected_role": execute_selected_role,
+        "prompt591_role_execution_request_written": (
+            payload.get("prompt591_role_execution_request_written") is True
+        ),
+        "prompt591_selected_role_execution_prompt_written": (
+            payload.get("prompt591_selected_role_execution_prompt_written")
+            is True
+        ),
+        "prompt591_role_execution_result_written": (
+            payload.get("prompt591_role_execution_result_written") is True
+        ),
+        "prompt591_role_execution_diff_summary_written": (
+            payload.get("prompt591_role_execution_diff_summary_written")
+            is True
+        ),
+        "prompt591_role_execution_verification_handoff_written": (
+            payload.get(
+                "prompt591_role_execution_verification_handoff_written"
+            )
+            is True
+        ),
+        "prompt591_prompt590_probe_executed": (
+            payload.get("prompt591_prompt590_probe_executed") is True
+        ),
+        "prompt591_prompt590_probe_success": (
+            payload.get("prompt591_prompt590_probe_success") is True
+        ),
+        "prompt591_prompt590_executed": (
+            payload.get("prompt591_prompt590_executed") is True
+        ),
+        "prompt591_prompt589_executed": (
+            payload.get("prompt591_prompt589_executed") is True
+        ),
+        "prompt591_prompt588_executed": (
+            payload.get("prompt591_prompt588_executed") is True
+        ),
+        "prompt591_prompt587_executed": (
+            payload.get("prompt591_prompt587_executed") is True
+        ),
+        "prompt591_prompt586_executed": (
+            payload.get("prompt591_prompt586_executed") is True
+        ),
+        "prompt591_codex_executed_during_runtime": (
+            payload.get("prompt591_codex_executed_during_runtime") is True
+        ),
+        "prompt591_tracked_files_modified_by_codex": (
+            payload.get("prompt591_tracked_files_modified_by_codex") is True
+        ),
+        "prompt591_commit_performed": (
+            payload.get("prompt591_commit_performed") is True
+        ),
+        "prompt591_tag_performed": (
+            payload.get("prompt591_tag_performed") is True
+        ),
+        "prompt591_installation_performed": (
+            payload.get("prompt591_installation_performed") is True
+        ),
+        "prompt591_systemd_used": payload.get("prompt591_systemd_used") is True,
+        "prompt591_service_enable_performed": (
+            payload.get("prompt591_service_enable_performed") is True
+        ),
+        "prompt591_service_start_performed": (
+            payload.get("prompt591_service_start_performed") is True
+        ),
+        "prompt591_persistent_service_started": (
+            payload.get("prompt591_persistent_service_started") is True
+        ),
+        "prompt591_remote_workflow_included": (
+            payload.get("prompt591_remote_workflow_included") is True
+        ),
+        "prompt591_no_remote_mutation_verified": (
+            payload.get("prompt591_no_remote_mutation_verified") is True
+        ),
+        "prompt591_final_worktree_clean": (
+            payload.get("prompt591_final_worktree_clean") is True
+        ),
+        "prompt591_completion_claim_allowed": (
+            payload.get("prompt591_completion_claim_allowed") is True
+        ),
+        "prompt591_result_route": result_route,
+        "prompt591_next_action": next_action,
+        "prompt591_blocked_reasons": blocked_reasons,
+        "prompt591_prompt_surface": (
+            "Local-only role execution adapter after Prompt590; requires "
+            "the exact Prompt591 enable token plus Prompt590, Prompt589, "
+            "Prompt588, Prompt587, Prompt586, Prompt585, Prompt584, "
+            "Prompt580, and Prompt583 tokens. Dry-run builds role execution "
+            "request, prompt, diff, result, and verification handoff "
+            "artifacts without Codex execution, tracked-file mutation, "
+            "commit/tag, install, systemd, service start, persistent daemon, "
+            "shell=True, or remote operations. Execute requests are blocked "
+            "unless a safe bounded local execution API is wired."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -34060,4 +34408,5 @@ __all__ = [
     "_build_prompt588_minimal_failure_routes_gate_state",
     "_build_prompt589_daemon_loop_entrypoint_gate_state",
     "_build_prompt590_role_driven_task_entrypoint_gate_state",
+    "_build_prompt591_role_execution_adapter_gate_state",
 ]
