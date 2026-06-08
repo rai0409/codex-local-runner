@@ -36615,6 +36615,458 @@ def _build_prompt601_one_autonomous_role_cycle_closure_state(
     }
 
 
+def _build_prompt602_multi_cycle_unattended_role_cycle_loop_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    enabled = payload.get("prompt602_enabled") is True
+    enable_token_valid = payload.get("prompt602_enable_token_valid") is True
+    prompt601_enable_token_valid = (
+        payload.get("prompt602_prompt601_enable_token_valid") is True
+    )
+    prompt600_enable_token_valid = (
+        payload.get("prompt602_prompt600_enable_token_valid") is True
+    )
+    prompt599_enable_token_valid = (
+        payload.get("prompt602_prompt599_enable_token_valid") is True
+    )
+    prompt598_enable_token_valid = (
+        payload.get("prompt602_prompt598_enable_token_valid") is True
+    )
+    token_gate_open = bool(
+        enabled
+        and enable_token_valid
+        and prompt601_enable_token_valid
+        and prompt600_enable_token_valid
+        and prompt599_enable_token_valid
+        and prompt598_enable_token_valid
+        and payload.get("prompt602_prompt597_enable_token_valid") is True
+        and payload.get("prompt602_prompt596_enable_token_valid") is True
+        and payload.get("prompt602_prompt595_enable_token_valid") is True
+        and payload.get("prompt602_prompt594_enable_token_valid") is True
+        and payload.get("prompt602_prompt593_enable_token_valid") is True
+        and payload.get("prompt602_prompt592_enable_token_valid") is True
+        and payload.get("prompt602_prompt591_enable_token_valid") is True
+        and payload.get("prompt602_prompt590_enable_token_valid") is True
+    )
+    loop_request_valid = (
+        payload.get("prompt602_loop_request_valid") is True
+    )
+    project_goal_present = (
+        payload.get("prompt602_project_goal_present") is True
+    )
+    role_task_present = payload.get("prompt602_role_task_present") is True
+    selected_role = _normalize_text(
+        payload.get("prompt602_selected_role"),
+        default="implementer",
+    )
+    selected_role_valid = (
+        payload.get("prompt602_selected_role_valid") is True
+    )
+    cycle_id_prefix = _normalize_text(
+        payload.get("prompt602_cycle_id_prefix"),
+        default="prompt602-cycle",
+    )
+    start_cycle_index = payload.get("prompt602_start_cycle_index")
+    if not isinstance(start_cycle_index, int):
+        start_cycle_index = 1
+    final_cycle_index = payload.get("prompt602_final_cycle_index")
+    if not isinstance(final_cycle_index, int):
+        final_cycle_index = start_cycle_index
+    max_cycles = payload.get("prompt602_max_cycles")
+    if not isinstance(max_cycles, int):
+        max_cycles = 3
+    retry_index = payload.get("prompt602_retry_index")
+    if not isinstance(retry_index, int):
+        retry_index = 0
+    retry_limit = payload.get("prompt602_retry_limit")
+    if not isinstance(retry_limit, int):
+        retry_limit = 1
+    stop_condition = _normalize_text(
+        payload.get("prompt602_stop_condition"),
+        default="stop_after_max_cycles",
+    )
+    loop_mode = _normalize_text(
+        payload.get("prompt602_loop_mode"),
+        default="deterministic_unattended_cycle_loop",
+    )
+    loop_started = payload.get("prompt602_loop_started") is True
+    loop_completed = payload.get("prompt602_loop_completed") is True
+    unattended_loop_confirmed = (
+        payload.get("prompt602_unattended_loop_confirmed") is True
+    )
+    human_step_required_between_cycles = (
+        payload.get("prompt602_human_step_required_between_cycles") is True
+    )
+    cycles_attempted = payload.get("prompt602_cycles_attempted")
+    if not isinstance(cycles_attempted, int):
+        cycles_attempted = 0
+    cycles_closed = payload.get("prompt602_cycles_closed")
+    if not isinstance(cycles_closed, int):
+        cycles_closed = 0
+    raw_cycle_results = payload.get("prompt602_cycle_results")
+    cycle_results = []
+    if isinstance(raw_cycle_results, list):
+        for cycle_result in raw_cycle_results:
+            if isinstance(cycle_result, Mapping):
+                cycle_result = dict(cycle_result)
+                cycle_result["human_step_required_before_next_cycle"] = False
+            cycle_results.append(cycle_result)
+    else:
+        cycle_results = []
+    retry_required = payload.get("prompt602_retry_required") is True
+    retry_exhausted = payload.get("prompt602_retry_exhausted") is True
+    stop_condition_met = (
+        payload.get("prompt602_stop_condition_met") is True
+    )
+    stop_reason = _normalize_text(
+        payload.get("prompt602_stop_reason"),
+        default="",
+    )
+    safety_violation = payload.get("prompt602_safety_violation") is True
+    minimum_line_completed = (
+        payload.get(
+            "prompt602_minimum_autonomous_development_line_completed"
+        )
+        is True
+    )
+    multi_cycle_completed = (
+        payload.get("prompt602_multi_cycle_unattended_loop_completed") is True
+    )
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt602_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt602_result_route"),
+        default="",
+    )
+    if not result_route:
+        if safety_violation:
+            result_route = "multi_cycle_unattended_loop_safety_violation"
+        elif not loop_request_valid:
+            result_route = "multi_cycle_unattended_loop_request_invalid"
+        elif not token_gate_open:
+            result_route = "not_run"
+        elif retry_required and retry_exhausted:
+            result_route = "multi_cycle_unattended_loop_retry_exhausted"
+        elif retry_required:
+            result_route = "multi_cycle_unattended_loop_retry_prepared"
+        elif loop_completed:
+            result_route = "multi_cycle_unattended_loop_completed"
+        else:
+            result_route = "multi_cycle_unattended_loop_cycle_incomplete"
+    next_action = _normalize_text(
+        payload.get("prompt602_next_action"),
+        default="",
+    )
+    if not next_action:
+        next_action = {
+            "not_run": (
+                "provide_explicit_enable_token_for_multi_cycle_unattended_loop"
+            ),
+            "multi_cycle_unattended_loop_request_invalid": (
+                "manual_review_multi_cycle_unattended_loop_request"
+            ),
+            "multi_cycle_unattended_loop_completed": (
+                "complete_minimum_autonomous_development_line"
+            ),
+            "multi_cycle_unattended_loop_retry_prepared": (
+                "continue_bounded_retry_cycle_without_human_step"
+            ),
+            "multi_cycle_unattended_loop_retry_exhausted": (
+                "manual_review_multi_cycle_unattended_loop_retry_exhausted"
+            ),
+            "multi_cycle_unattended_loop_cycle_incomplete": (
+                "manual_review_multi_cycle_unattended_loop_cycle_incomplete"
+            ),
+            "multi_cycle_unattended_loop_prompt601_invalid": (
+                "manual_review_multi_cycle_unattended_loop_prompt601"
+            ),
+            "multi_cycle_unattended_loop_safety_violation": (
+                "manual_review_multi_cycle_unattended_loop_safety_violation"
+            ),
+        }.get(result_route, "manual_review_multi_cycle_unattended_loop")
+
+    clean_and_safe = bool(
+        payload.get("prompt602_codex_executed_during_runtime") is False
+        and payload.get("prompt602_tracked_files_modified_by_runtime") is False
+        and payload.get("prompt602_commit_performed") is False
+        and payload.get("prompt602_tag_performed") is False
+        and payload.get("prompt602_installation_performed") is False
+        and payload.get("prompt602_systemd_used") is False
+        and payload.get("prompt602_service_enable_performed") is False
+        and payload.get("prompt602_service_start_performed") is False
+        and payload.get("prompt602_persistent_service_started") is False
+        and payload.get("prompt602_remote_workflow_included") is False
+        and payload.get("prompt602_no_remote_mutation_verified") is True
+        and payload.get("prompt602_final_worktree_clean") is True
+    )
+    request_shape_valid = bool(
+        project_goal_present
+        and role_task_present
+        and selected_role_valid
+        and start_cycle_index >= 1
+        and 2 <= max_cycles <= 5
+        and start_cycle_index <= max_cycles
+        and retry_index >= 0
+        and 0 <= retry_limit <= 3
+        and retry_index <= retry_limit
+        and bool(stop_condition)
+        and loop_mode == "deterministic_unattended_cycle_loop"
+    )
+    completed_predicates = bool(
+        token_gate_open
+        and loop_request_valid
+        and request_shape_valid
+        and loop_started
+        and loop_completed
+        and unattended_loop_confirmed
+        and not human_step_required_between_cycles
+        and cycles_attempted >= 2
+        and cycles_closed >= 2
+        and final_cycle_index <= max_cycles
+        and stop_condition_met
+        and stop_reason in {"max_cycles_reached", "prompt601_stop_condition_met"}
+        and not retry_required
+        and not retry_exhausted
+        and not safety_violation
+        and minimum_line_completed
+        and multi_cycle_completed
+        and clean_and_safe
+        and result_route == "multi_cycle_unattended_loop_completed"
+        and next_action == "complete_minimum_autonomous_development_line"
+        and blocked_reasons == []
+        and payload.get("prompt602_completion_claim_allowed") is True
+    )
+    retry_prepared_predicates = bool(
+        token_gate_open
+        and loop_request_valid
+        and loop_started
+        and not loop_completed
+        and retry_required
+        and not retry_exhausted
+        and clean_and_safe
+        and result_route == "multi_cycle_unattended_loop_retry_prepared"
+        and next_action == "continue_bounded_retry_cycle_without_human_step"
+        and blocked_reasons == []
+        and payload.get("prompt602_completion_claim_allowed") is True
+    )
+    retry_exhausted_predicates = bool(
+        token_gate_open
+        and loop_request_valid
+        and loop_started
+        and not loop_completed
+        and retry_required
+        and retry_exhausted
+        and clean_and_safe
+        and result_route == "multi_cycle_unattended_loop_retry_exhausted"
+        and next_action
+        == "manual_review_multi_cycle_unattended_loop_retry_exhausted"
+        and "prompt602_retry_exhausted" in blocked_reasons
+        and payload.get("prompt602_completion_claim_allowed") is False
+    )
+    incomplete_predicates = bool(
+        token_gate_open
+        and loop_request_valid
+        and loop_started
+        and not loop_completed
+        and clean_and_safe
+        and result_route == "multi_cycle_unattended_loop_cycle_incomplete"
+        and next_action
+        == "manual_review_multi_cycle_unattended_loop_cycle_incomplete"
+        and "prompt602_cycle_incomplete" in blocked_reasons
+        and payload.get("prompt602_completion_claim_allowed") is False
+    )
+    prompt601_invalid_predicates = bool(
+        token_gate_open
+        and loop_request_valid
+        and loop_started
+        and not loop_completed
+        and clean_and_safe
+        and result_route == "multi_cycle_unattended_loop_prompt601_invalid"
+        and next_action == "manual_review_multi_cycle_unattended_loop_prompt601"
+        and "prompt602_prompt601_invalid" in blocked_reasons
+        and payload.get("prompt602_completion_claim_allowed") is False
+    )
+    invalid_request_predicates = bool(
+        not loop_request_valid
+        and not loop_started
+        and not loop_completed
+        and clean_and_safe
+        and result_route == "multi_cycle_unattended_loop_request_invalid"
+        and next_action == "manual_review_multi_cycle_unattended_loop_request"
+        and "prompt602_multi_cycle_unattended_loop_request_invalid"
+        in blocked_reasons
+        and payload.get("prompt602_completion_claim_allowed") is False
+    )
+    not_run_predicates = bool(
+        not token_gate_open
+        and not loop_request_valid
+        and not loop_started
+        and not loop_completed
+        and clean_and_safe
+        and result_route == "not_run"
+        and next_action
+        == "provide_explicit_enable_token_for_multi_cycle_unattended_loop"
+        and blocked_reasons == []
+        and payload.get("prompt602_completion_claim_allowed") is False
+    )
+    safety_violation_predicates = bool(
+        safety_violation
+        and not loop_started
+        and not loop_completed
+        and clean_and_safe
+        and result_route == "multi_cycle_unattended_loop_safety_violation"
+        and next_action
+        == "manual_review_multi_cycle_unattended_loop_safety_violation"
+        and "prompt602_safety_violation" in blocked_reasons
+        and payload.get("prompt602_completion_claim_allowed") is False
+    )
+
+    if completed_predicates:
+        status = "multi_cycle_unattended_loop_completed_local_only"
+        ready = True
+        success = True
+    elif retry_prepared_predicates:
+        status = "multi_cycle_unattended_loop_retry_prepared_local_only"
+        ready = True
+        success = True
+    elif retry_exhausted_predicates:
+        status = "blocked_multi_cycle_unattended_loop_retry_exhausted"
+        ready = False
+        success = False
+    elif incomplete_predicates:
+        status = "blocked_multi_cycle_unattended_loop_cycle_incomplete"
+        ready = False
+        success = False
+    elif prompt601_invalid_predicates:
+        status = "blocked_multi_cycle_unattended_loop_prompt601_invalid"
+        ready = False
+        success = False
+    elif invalid_request_predicates:
+        status = "blocked_multi_cycle_unattended_loop_invalid_request"
+        ready = False
+        success = False
+    elif not_run_predicates:
+        status = "multi_cycle_unattended_loop_ready_not_run_local_only"
+        ready = True
+        success = False
+    elif safety_violation_predicates:
+        status = "blocked_multi_cycle_unattended_loop_safety_violation"
+        ready = False
+        success = False
+    else:
+        status = "blocked_multi_cycle_unattended_loop_prompt601_invalid"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt602",
+        "prompt602_multi_cycle_loop_status": status,
+        "prompt602_multi_cycle_loop_ready": ready,
+        "prompt602_multi_cycle_loop_success": success,
+        "prompt602_enabled": enabled,
+        "prompt602_enable_token_valid": enable_token_valid,
+        "prompt602_prompt601_enable_token_valid": (
+            prompt601_enable_token_valid
+        ),
+        "prompt602_prompt600_enable_token_valid": (
+            prompt600_enable_token_valid
+        ),
+        "prompt602_prompt599_enable_token_valid": (
+            prompt599_enable_token_valid
+        ),
+        "prompt602_prompt598_enable_token_valid": (
+            prompt598_enable_token_valid
+        ),
+        "prompt602_loop_request_valid": loop_request_valid,
+        "prompt602_project_goal_present": project_goal_present,
+        "prompt602_role_task_present": role_task_present,
+        "prompt602_selected_role": selected_role,
+        "prompt602_selected_role_valid": selected_role_valid,
+        "prompt602_cycle_id_prefix": cycle_id_prefix,
+        "prompt602_start_cycle_index": start_cycle_index,
+        "prompt602_final_cycle_index": final_cycle_index,
+        "prompt602_max_cycles": max_cycles,
+        "prompt602_retry_index": retry_index,
+        "prompt602_retry_limit": retry_limit,
+        "prompt602_stop_condition": stop_condition,
+        "prompt602_loop_mode": loop_mode,
+        "prompt602_loop_started": loop_started,
+        "prompt602_loop_completed": loop_completed,
+        "prompt602_unattended_loop_confirmed": unattended_loop_confirmed,
+        "prompt602_human_step_required_between_cycles": (
+            human_step_required_between_cycles
+        ),
+        "prompt602_cycles_attempted": cycles_attempted,
+        "prompt602_cycles_closed": cycles_closed,
+        "prompt602_cycle_results": cycle_results,
+        "prompt602_retry_required": retry_required,
+        "prompt602_retry_exhausted": retry_exhausted,
+        "prompt602_stop_condition_met": stop_condition_met,
+        "prompt602_stop_reason": stop_reason,
+        "prompt602_safety_violation": safety_violation,
+        "prompt602_minimum_autonomous_development_line_completed": (
+            minimum_line_completed
+        ),
+        "prompt602_multi_cycle_unattended_loop_completed": (
+            multi_cycle_completed
+        ),
+        "prompt602_codex_executed_during_runtime": (
+            payload.get("prompt602_codex_executed_during_runtime") is True
+        ),
+        "prompt602_tracked_files_modified_by_runtime": (
+            payload.get("prompt602_tracked_files_modified_by_runtime") is True
+        ),
+        "prompt602_commit_performed": (
+            payload.get("prompt602_commit_performed") is True
+        ),
+        "prompt602_tag_performed": (
+            payload.get("prompt602_tag_performed") is True
+        ),
+        "prompt602_installation_performed": (
+            payload.get("prompt602_installation_performed") is True
+        ),
+        "prompt602_systemd_used": payload.get("prompt602_systemd_used") is True,
+        "prompt602_service_enable_performed": (
+            payload.get("prompt602_service_enable_performed") is True
+        ),
+        "prompt602_service_start_performed": (
+            payload.get("prompt602_service_start_performed") is True
+        ),
+        "prompt602_persistent_service_started": (
+            payload.get("prompt602_persistent_service_started") is True
+        ),
+        "prompt602_remote_workflow_included": (
+            payload.get("prompt602_remote_workflow_included") is True
+        ),
+        "prompt602_no_remote_mutation_verified": (
+            payload.get("prompt602_no_remote_mutation_verified") is True
+        ),
+        "prompt602_final_worktree_clean": (
+            payload.get("prompt602_final_worktree_clean") is True
+        ),
+        "prompt602_completion_claim_allowed": (
+            payload.get("prompt602_completion_claim_allowed") is True
+        ),
+        "prompt602_result_route": result_route,
+        "prompt602_next_action": next_action,
+        "prompt602_blocked_reasons": blocked_reasons,
+        "prompt602_prompt_surface": (
+            "Local-only multi-cycle unattended autonomous role cycle loop. "
+            "Prompt602 composes Prompt601 one-cycle closure per cycle, "
+            "advances cycle indexes without human steps, enforces bounded "
+            "max_cycles, stop conditions, retry/exhausted/incomplete/invalid "
+            "routes, writes per-cycle artifacts, and excludes external Codex "
+            "execution, tracked-file mutation, commit/tag, install, systemd, "
+            "service start, persistent daemon, shell=True, privilege "
+            "escalation, and remote operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -38527,4 +38979,5 @@ __all__ = [
     "_build_prompt599_bounded_actual_role_execution_run_state",
     "_build_prompt600_actual_role_execution_evaluation_retry_state",
     "_build_prompt601_one_autonomous_role_cycle_closure_state",
+    "_build_prompt602_multi_cycle_unattended_role_cycle_loop_state",
 ]

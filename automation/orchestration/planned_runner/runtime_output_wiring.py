@@ -201,6 +201,9 @@ PROMPT600_ACTUAL_ROLE_EXECUTION_EVALUATION_RETRY_ENABLE_TOKEN = (
 PROMPT601_ONE_AUTONOMOUS_ROLE_CYCLE_CLOSURE_ENABLE_TOKEN = (
     "PROMPT601_ONE_AUTONOMOUS_ROLE_CYCLE_CLOSURE_ENABLE"
 )
+PROMPT602_MULTI_CYCLE_UNATTENDED_ROLE_CYCLE_LOOP_ENABLE_TOKEN = (
+    "PROMPT602_MULTI_CYCLE_UNATTENDED_ROLE_CYCLE_LOOP_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -399,6 +402,10 @@ _PROMPT601_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt601_one_autonomous_role_cycle_closure"
 )
+_PROMPT602_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt602_multi_cycle_unattended_role_cycle_loop"
+)
 _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_input.json",
     "daemon_control_resume_state_before.json",
@@ -560,6 +567,19 @@ _PROMPT601_REQUIRED_ARTIFACT_NAMES = (
     "one_role_cycle_closure_prompt602_contract.json",
     "one_role_cycle_closure_route.json",
     "one_role_cycle_closure_summary.json",
+)
+_PROMPT602_REQUIRED_ARTIFACT_NAMES = (
+    "multi_cycle_unattended_loop_input.json",
+    "multi_cycle_unattended_loop_request.json",
+    "multi_cycle_unattended_loop_result.json",
+    "multi_cycle_unattended_loop_trace.json",
+    "multi_cycle_unattended_loop_safety_contract.json",
+    "multi_cycle_unattended_loop_cycle_log.json",
+    "multi_cycle_unattended_loop_cycle_results.json",
+    "multi_cycle_unattended_loop_stop_contract.json",
+    "multi_cycle_unattended_loop_route.json",
+    "multi_cycle_unattended_loop_summary.json",
+    "multi_cycle_unattended_loop_completion_contract.json",
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -20262,6 +20282,7 @@ def run_prompt601_one_autonomous_role_cycle_closure(
             "prompt600_force_invalid_evaluation_request": (
                 force_prompt600_invalid_path
             ),
+            "prompt600_repeat_count": payload.get("prompt601_repeat_count", 1),
             "prompt600_enable_token": prompt600_token,
             "prompt599_enable_token": prompt599_token,
             "prompt598_enable_token": prompt598_token,
@@ -20784,6 +20805,1011 @@ def run_prompt601_one_autonomous_role_cycle_closure(
     if summary_written:
         _write_json(
             control_artifact_dir / "one_role_cycle_closure_summary.json",
+            summary,
+        )
+    return summary
+
+
+def run_prompt602_multi_cycle_unattended_role_cycle_loop(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt601_enable_token: str | None = None,
+    prompt600_enable_token: str | None = None,
+    prompt599_enable_token: str | None = None,
+    prompt598_enable_token: str | None = None,
+    prompt597_enable_token: str | None = None,
+    prompt596_enable_token: str | None = None,
+    prompt595_enable_token: str | None = None,
+    prompt594_enable_token: str | None = None,
+    prompt593_enable_token: str | None = None,
+    prompt592_enable_token: str | None = None,
+    prompt591_enable_token: str | None = None,
+    prompt590_enable_token: str | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        payload.get("prompt602_repo_path")
+        or execution_repo_path
+        or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    control_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT602_DEFAULT_ARTIFACT_DIR
+    )
+    if not control_artifact_dir.is_absolute():
+        control_artifact_dir = repo_path / control_artifact_dir
+    control_artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    prompt602_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt602_enabled") is True
+    )
+    prompt602_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt602_enable_token"),
+        default="",
+    )
+    prompt601_token = _normalize_text(
+        prompt601_enable_token
+        if prompt601_enable_token is not None
+        else payload.get("prompt601_enable_token"),
+        default="",
+    )
+    prompt600_token = _normalize_text(
+        prompt600_enable_token
+        if prompt600_enable_token is not None
+        else payload.get("prompt600_enable_token"),
+        default="",
+    )
+    prompt599_token = _normalize_text(
+        prompt599_enable_token
+        if prompt599_enable_token is not None
+        else payload.get("prompt599_enable_token"),
+        default="",
+    )
+    prompt598_token = _normalize_text(
+        prompt598_enable_token
+        if prompt598_enable_token is not None
+        else payload.get("prompt598_enable_token"),
+        default="",
+    )
+    prompt597_token = _normalize_text(
+        prompt597_enable_token
+        if prompt597_enable_token is not None
+        else payload.get("prompt597_enable_token"),
+        default="",
+    )
+    prompt596_token = _normalize_text(
+        prompt596_enable_token
+        if prompt596_enable_token is not None
+        else payload.get("prompt596_enable_token"),
+        default="",
+    )
+    prompt595_token = _normalize_text(
+        prompt595_enable_token
+        if prompt595_enable_token is not None
+        else payload.get("prompt595_enable_token"),
+        default="",
+    )
+    prompt594_token = _normalize_text(
+        prompt594_enable_token
+        if prompt594_enable_token is not None
+        else payload.get("prompt594_enable_token"),
+        default="",
+    )
+    prompt593_token = _normalize_text(
+        prompt593_enable_token
+        if prompt593_enable_token is not None
+        else payload.get("prompt593_enable_token"),
+        default="",
+    )
+    prompt592_token = _normalize_text(
+        prompt592_enable_token
+        if prompt592_enable_token is not None
+        else payload.get("prompt592_enable_token"),
+        default="",
+    )
+    prompt591_token = _normalize_text(
+        prompt591_enable_token
+        if prompt591_enable_token is not None
+        else payload.get("prompt591_enable_token"),
+        default="",
+    )
+    prompt590_token = _normalize_text(
+        prompt590_enable_token
+        if prompt590_enable_token is not None
+        else payload.get("prompt590_enable_token"),
+        default="",
+    )
+
+    prompt602_enable_token_valid = (
+        prompt602_token
+        == PROMPT602_MULTI_CYCLE_UNATTENDED_ROLE_CYCLE_LOOP_ENABLE_TOKEN
+    )
+    prompt602_prompt601_enable_token_valid = (
+        prompt601_token
+        == PROMPT601_ONE_AUTONOMOUS_ROLE_CYCLE_CLOSURE_ENABLE_TOKEN
+    )
+    prompt602_prompt600_enable_token_valid = (
+        prompt600_token
+        == PROMPT600_ACTUAL_ROLE_EXECUTION_EVALUATION_RETRY_ENABLE_TOKEN
+    )
+    prompt602_prompt599_enable_token_valid = (
+        prompt599_token
+        == PROMPT599_BOUNDED_ACTUAL_ROLE_EXECUTION_RUN_ENABLE_TOKEN
+    )
+    prompt602_prompt598_enable_token_valid = (
+        prompt598_token
+        == PROMPT598_EXPLICIT_ACTUAL_ROLE_EXECUTION_ENABLE_TOKEN
+    )
+    prompt602_prompt597_enable_token_valid = (
+        prompt597_token
+        == PROMPT597_BOUNDED_ACTUAL_ROLE_EXECUTION_BRIDGE_ENABLE_TOKEN
+    )
+    prompt602_prompt596_enable_token_valid = (
+        prompt596_token == PROMPT596_REPEAT_DOGFOOD_CYCLE_ENABLE_TOKEN
+    )
+    prompt602_prompt595_enable_token_valid = (
+        prompt595_token == PROMPT595_ACTUAL_LOCAL_DOGFOOD_RUN_ENABLE_TOKEN
+    )
+    prompt602_prompt594_enable_token_valid = (
+        prompt594_token == PROMPT594_CLI_DOGFOOD_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt602_prompt593_enable_token_valid = (
+        prompt593_token == PROMPT593_MULTI_ROLE_AUTONOMOUS_CYCLE_ENABLE_TOKEN
+    )
+    prompt602_prompt592_enable_token_valid = (
+        prompt592_token == PROMPT592_ROLE_EVALUATION_RETRY_ENABLE_TOKEN
+    )
+    prompt602_prompt591_enable_token_valid = (
+        prompt591_token == PROMPT591_ROLE_EXECUTION_ADAPTER_ENABLE_TOKEN
+    )
+    prompt602_prompt590_enable_token_valid = (
+        prompt590_token == PROMPT590_ROLE_DRIVEN_TASK_ENTRYPOINT_ENABLE_TOKEN
+    )
+    token_gate_open = bool(
+        prompt602_enabled
+        and prompt602_enable_token_valid
+        and prompt602_prompt601_enable_token_valid
+        and prompt602_prompt600_enable_token_valid
+        and prompt602_prompt599_enable_token_valid
+        and prompt602_prompt598_enable_token_valid
+        and prompt602_prompt597_enable_token_valid
+        and prompt602_prompt596_enable_token_valid
+        and prompt602_prompt595_enable_token_valid
+        and prompt602_prompt594_enable_token_valid
+        and prompt602_prompt593_enable_token_valid
+        and prompt602_prompt592_enable_token_valid
+        and prompt602_prompt591_enable_token_valid
+        and prompt602_prompt590_enable_token_valid
+    )
+
+    allowed_roles = {
+        "planner",
+        "implementer",
+        "verifier",
+        "reviewer",
+        "fixer",
+        "committer",
+    }
+    project_goal = _normalize_text(
+        payload.get("prompt602_project_goal"),
+        default="",
+    )
+    user_request = _normalize_text(
+        payload.get("prompt602_user_request"),
+        default="",
+    )
+    target_files = _prompt579_string_list(
+        payload.get("prompt602_target_files")
+    )
+    acceptance_criteria = _prompt579_string_list(
+        payload.get("prompt602_acceptance_criteria")
+    )
+    selected_role = _normalize_text(
+        payload.get("prompt602_selected_role"),
+        default="implementer",
+    )
+    role_task = _normalize_text(
+        payload.get("prompt602_role_task"),
+        default="",
+    )
+    cycle_id_prefix = _normalize_text(
+        payload.get("prompt602_cycle_id_prefix"),
+        default="prompt602-cycle",
+    )
+    raw_start_cycle_index = payload.get("prompt602_start_cycle_index", 1)
+    start_cycle_index = (
+        raw_start_cycle_index
+        if isinstance(raw_start_cycle_index, int)
+        and not isinstance(raw_start_cycle_index, bool)
+        else 0
+    )
+    raw_max_cycles = payload.get("prompt602_max_cycles", 3)
+    max_cycles = (
+        raw_max_cycles
+        if isinstance(raw_max_cycles, int)
+        and not isinstance(raw_max_cycles, bool)
+        else 0
+    )
+    raw_retry_index = payload.get("prompt602_retry_index", 0)
+    retry_index = (
+        raw_retry_index
+        if isinstance(raw_retry_index, int)
+        and not isinstance(raw_retry_index, bool)
+        else -1
+    )
+    raw_retry_limit = payload.get("prompt602_retry_limit", 1)
+    retry_limit = (
+        raw_retry_limit
+        if isinstance(raw_retry_limit, int)
+        and not isinstance(raw_retry_limit, bool)
+        else -1
+    )
+    stop_condition_key_present = "prompt602_stop_condition" in payload
+    raw_stop_condition = payload.get("prompt602_stop_condition")
+    explicit_empty_stop_condition = bool(
+        stop_condition_key_present
+        and (
+            raw_stop_condition is None
+            or (
+                isinstance(raw_stop_condition, str)
+                and not raw_stop_condition.strip()
+            )
+            or (
+                not isinstance(raw_stop_condition, str)
+                and not raw_stop_condition
+            )
+        )
+    )
+    stop_condition = _normalize_text(
+        raw_stop_condition,
+        default=(
+            "" if stop_condition_key_present else "stop_after_max_cycles"
+        ),
+    )
+    loop_mode = _normalize_text(
+        payload.get("prompt602_loop_mode"),
+        default="deterministic_unattended_cycle_loop",
+    )
+    force_cycle_incomplete_at = payload.get(
+        "prompt602_force_cycle_incomplete_at"
+    )
+    force_retry_prepared_at = payload.get(
+        "prompt602_force_retry_prepared_at"
+    )
+    force_retry_exhausted_at = payload.get(
+        "prompt602_force_retry_exhausted_at"
+    )
+    force_invalid_at = payload.get("prompt602_force_invalid_at")
+    force_stop_condition_met_at = payload.get(
+        "prompt602_force_stop_condition_met_at"
+    )
+    force_invalid_loop_request = (
+        payload.get("prompt602_force_invalid_loop_request") is True
+    )
+    safety_violation = (
+        payload.get("prompt602_force_safety_violation") is True
+    )
+
+    project_goal_present = bool(project_goal)
+    role_task_present = bool(role_task)
+    selected_role_valid = selected_role in allowed_roles
+    loop_mode_valid = loop_mode == "deterministic_unattended_cycle_loop"
+    loop_request_valid = bool(
+        project_goal_present
+        and role_task_present
+        and selected_role_valid
+        and start_cycle_index >= 1
+        and 2 <= max_cycles <= 5
+        and start_cycle_index <= max_cycles
+        and retry_index >= 0
+        and 0 <= retry_limit <= 3
+        and retry_index <= retry_limit
+        and bool(stop_condition)
+        and not explicit_empty_stop_condition
+        and loop_mode_valid
+        and not force_invalid_loop_request
+    )
+
+    blocked_reasons: list[str] = []
+    loop_started = False
+    loop_completed = False
+    unattended_loop_confirmed = False
+    human_step_required_between_cycles = False
+    cycles_attempted = 0
+    cycles_closed = 0
+    cycle_results: list[dict[str, Any]] = []
+    cycle_log: list[dict[str, Any]] = []
+    retry_required = False
+    retry_exhausted = False
+    stop_condition_met = False
+    stop_reason = ""
+    final_cycle_index = start_cycle_index
+    result_summary = ""
+
+    if safety_violation:
+        status = "blocked_multi_cycle_unattended_loop_safety_violation"
+        ready = False
+        success = False
+        loop_request_valid = bool(loop_request_valid)
+        result_route = "multi_cycle_unattended_loop_safety_violation"
+        next_action = "manual_review_multi_cycle_unattended_loop_safety_violation"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt602_safety_violation")
+        result_summary = "Prompt602 safety gate blocked loop startup."
+    elif not loop_request_valid:
+        status = "blocked_multi_cycle_unattended_loop_invalid_request"
+        ready = False
+        success = False
+        loop_started = False
+        loop_completed = False
+        result_route = "multi_cycle_unattended_loop_request_invalid"
+        next_action = "manual_review_multi_cycle_unattended_loop_request"
+        completion_claim_allowed = False
+        blocked_reasons.append(
+            "prompt602_multi_cycle_unattended_loop_request_invalid"
+        )
+        result_summary = "Prompt602 request validation failed before loop start."
+    elif not token_gate_open:
+        status = "multi_cycle_unattended_loop_ready_not_run_local_only"
+        ready = True
+        success = False
+        loop_request_valid = False
+        result_route = "not_run"
+        next_action = (
+            "provide_explicit_enable_token_for_multi_cycle_unattended_loop"
+        )
+        completion_claim_allowed = False
+        result_summary = "Prompt602 did not run because enable tokens were missing."
+    else:
+        current_cycle_index = start_cycle_index
+        loop_started = True
+        while current_cycle_index <= max_cycles:
+            cycle_id = f"{cycle_id_prefix}-{current_cycle_index:03d}"
+            prompt601_payload: dict[str, Any] = {
+                "execution_repo_path": str(repo_path),
+                "prompt601_enabled": True,
+                "prompt601_project_goal": project_goal,
+                "prompt601_user_request": user_request,
+                "prompt601_target_files": target_files,
+                "prompt601_acceptance_criteria": acceptance_criteria,
+                "prompt601_selected_role": selected_role,
+                "prompt601_role_task": role_task,
+                "prompt601_cycle_id": cycle_id,
+                "prompt601_cycle_index": current_cycle_index,
+                "prompt601_max_cycles": max_cycles,
+                "prompt601_retry_index": retry_index,
+                "prompt601_retry_limit": retry_limit,
+                "prompt601_repeat_count": 1,
+                "prompt601_stop_condition": stop_condition,
+                "prompt601_closure_mode": "deterministic_cycle_closure",
+                "prompt601_force_cycle_incomplete": (
+                    force_cycle_incomplete_at == current_cycle_index
+                ),
+                "prompt601_force_prompt600_retry_prepared_path": (
+                    force_retry_prepared_at == current_cycle_index
+                ),
+                "prompt601_force_prompt600_retry_exhausted_path": (
+                    force_retry_exhausted_at == current_cycle_index
+                ),
+                "prompt601_force_prompt600_invalid_path": (
+                    force_invalid_at == current_cycle_index
+                ),
+                "prompt601_force_stop_condition_met": (
+                    force_stop_condition_met_at == current_cycle_index
+                ),
+                "prompt601_enable_token": prompt601_token,
+                "prompt600_enable_token": prompt600_token,
+                "prompt599_enable_token": prompt599_token,
+                "prompt598_enable_token": prompt598_token,
+                "prompt597_enable_token": prompt597_token,
+                "prompt596_enable_token": prompt596_token,
+                "prompt595_enable_token": prompt595_token,
+                "prompt594_enable_token": prompt594_token,
+                "prompt593_enable_token": prompt593_token,
+                "prompt592_enable_token": prompt592_token,
+                "prompt591_enable_token": prompt591_token,
+                "prompt590_enable_token": prompt590_token,
+            }
+            prompt601_result = run_prompt601_one_autonomous_role_cycle_closure(
+                run_state_payload=prompt601_payload,
+                execution_repo_path=repo_path,
+                artifact_dir=(
+                    control_artifact_dir
+                    / "cycles"
+                    / f"cycle_{current_cycle_index:03d}"
+                ),
+                enabled=True,
+                enable_token=prompt601_token,
+                prompt600_enable_token=prompt600_token,
+                prompt599_enable_token=prompt599_token,
+                prompt598_enable_token=prompt598_token,
+                prompt597_enable_token=prompt597_token,
+                prompt596_enable_token=prompt596_token,
+                prompt595_enable_token=prompt595_token,
+                prompt594_enable_token=prompt594_token,
+                prompt593_enable_token=prompt593_token,
+                prompt592_enable_token=prompt592_token,
+                prompt591_enable_token=prompt591_token,
+                prompt590_enable_token=prompt590_token,
+            )
+            cycles_attempted += 1
+            prompt601_route = _normalize_text(
+                prompt601_result.get("prompt601_result_route"),
+                default="",
+            )
+            prompt601_cycle_closed = (
+                prompt601_result.get("prompt601_cycle_closed") is True
+            )
+            prompt601_stop_met = (
+                prompt601_result.get("prompt601_stop_condition_met") is True
+            )
+            prompt601_retry_required = (
+                prompt601_result.get("prompt601_retry_required") is True
+            )
+            prompt601_retry_exhausted = (
+                prompt601_result.get("prompt601_retry_exhausted") is True
+            )
+            prompt601_cycle_incomplete = (
+                prompt601_result.get("prompt601_cycle_incomplete") is True
+            )
+            if prompt601_cycle_closed:
+                cycles_closed += 1
+            cycle_record = {
+                "cycle_id": cycle_id,
+                "cycle_index": current_cycle_index,
+                "prompt601_status": prompt601_result.get(
+                    "prompt601_one_role_cycle_closure_status"
+                ),
+                "prompt601_success": prompt601_result.get(
+                    "prompt601_one_role_cycle_closure_success"
+                )
+                is True,
+                "prompt601_result_route": prompt601_route,
+                "prompt601_next_action": prompt601_result.get(
+                    "prompt601_next_action"
+                ),
+                "cycle_closed": prompt601_cycle_closed,
+                "cycle_incomplete": prompt601_cycle_incomplete,
+                "retry_required": prompt601_retry_required,
+                "retry_exhausted": prompt601_retry_exhausted,
+                "stop_condition_met": prompt601_stop_met,
+                "human_step_required_before_next_cycle": False,
+                "next_cycle_index": prompt601_result.get(
+                    "prompt601_next_cycle_index"
+                ),
+                "artifact_dir": str(
+                    control_artifact_dir
+                    / "cycles"
+                    / f"cycle_{current_cycle_index:03d}"
+                ),
+            }
+            cycle_results.append(cycle_record)
+            cycle_log.append(
+                {
+                    "event": "prompt601_cycle_result_recorded",
+                    **cycle_record,
+                }
+            )
+            final_cycle_index = current_cycle_index
+
+            if prompt601_retry_required and not prompt601_retry_exhausted:
+                retry_required = True
+                retry_exhausted = False
+                status = "multi_cycle_unattended_loop_retry_prepared_local_only"
+                ready = True
+                success = True
+                loop_completed = False
+                result_route = "multi_cycle_unattended_loop_retry_prepared"
+                next_action = "continue_bounded_retry_cycle_without_human_step"
+                completion_claim_allowed = True
+                stop_reason = "retry_prepared"
+                result_summary = (
+                    "Prompt602 recorded a Prompt601 retry-prepared route."
+                )
+                break
+            if prompt601_retry_exhausted:
+                retry_required = True
+                retry_exhausted = True
+                status = "blocked_multi_cycle_unattended_loop_retry_exhausted"
+                ready = False
+                success = False
+                loop_completed = False
+                result_route = "multi_cycle_unattended_loop_retry_exhausted"
+                next_action = (
+                    "manual_review_multi_cycle_unattended_loop_retry_exhausted"
+                )
+                completion_claim_allowed = False
+                blocked_reasons.append("prompt602_retry_exhausted")
+                stop_reason = "retry_exhausted"
+                result_summary = "Prompt602 stopped after retry exhaustion."
+                break
+            if prompt601_cycle_incomplete:
+                status = "blocked_multi_cycle_unattended_loop_cycle_incomplete"
+                ready = False
+                success = False
+                loop_completed = False
+                result_route = "multi_cycle_unattended_loop_cycle_incomplete"
+                next_action = (
+                    "manual_review_multi_cycle_unattended_loop_cycle_incomplete"
+                )
+                completion_claim_allowed = False
+                blocked_reasons.append("prompt602_cycle_incomplete")
+                stop_reason = "cycle_incomplete"
+                result_summary = "Prompt602 stopped after incomplete cycle."
+                break
+            if prompt601_route in {
+                "one_autonomous_role_cycle_closure_request_invalid",
+                "one_autonomous_role_cycle_closure_prompt600_invalid",
+            }:
+                status = "blocked_multi_cycle_unattended_loop_prompt601_invalid"
+                ready = False
+                success = False
+                loop_completed = False
+                result_route = "multi_cycle_unattended_loop_prompt601_invalid"
+                next_action = "manual_review_multi_cycle_unattended_loop_prompt601"
+                completion_claim_allowed = False
+                blocked_reasons.append("prompt602_prompt601_invalid")
+                stop_reason = "prompt601_invalid"
+                result_summary = "Prompt602 stopped after Prompt601 invalid route."
+                break
+            if not prompt601_cycle_closed:
+                status = "blocked_multi_cycle_unattended_loop_prompt601_invalid"
+                ready = False
+                success = False
+                loop_completed = False
+                result_route = "multi_cycle_unattended_loop_prompt601_invalid"
+                next_action = "manual_review_multi_cycle_unattended_loop_prompt601"
+                completion_claim_allowed = False
+                blocked_reasons.append("prompt602_prompt601_invalid")
+                stop_reason = "prompt601_invalid"
+                result_summary = "Prompt602 stopped because Prompt601 did not close."
+                break
+            if prompt601_stop_met:
+                stop_condition_met = True
+                loop_completed = cycles_attempted >= 2 and cycles_closed >= 2
+                status = (
+                    "multi_cycle_unattended_loop_completed_local_only"
+                    if loop_completed
+                    else "blocked_multi_cycle_unattended_loop_cycle_incomplete"
+                )
+                ready = bool(loop_completed)
+                success = bool(loop_completed)
+                result_route = (
+                    "multi_cycle_unattended_loop_completed"
+                    if loop_completed
+                    else "multi_cycle_unattended_loop_cycle_incomplete"
+                )
+                next_action = (
+                    "complete_minimum_autonomous_development_line"
+                    if loop_completed
+                    else "manual_review_multi_cycle_unattended_loop_cycle_incomplete"
+                )
+                completion_claim_allowed = bool(loop_completed)
+                if loop_completed:
+                    stop_reason = (
+                        "max_cycles_reached"
+                        if current_cycle_index >= max_cycles
+                        else "prompt601_stop_condition_met"
+                    )
+                    result_summary = (
+                        "Prompt602 completed the bounded unattended loop."
+                    )
+                else:
+                    blocked_reasons.append("prompt602_cycle_incomplete")
+                    stop_reason = "cycle_incomplete"
+                    result_summary = (
+                        "Prompt602 requires at least two closed cycles."
+                    )
+                break
+            current_cycle_index += 1
+        else:
+            stop_condition_met = True
+            loop_completed = cycles_attempted >= 2 and cycles_closed >= 2
+            status = (
+                "multi_cycle_unattended_loop_completed_local_only"
+                if loop_completed
+                else "blocked_multi_cycle_unattended_loop_cycle_incomplete"
+            )
+            ready = bool(loop_completed)
+            success = bool(loop_completed)
+            result_route = (
+                "multi_cycle_unattended_loop_completed"
+                if loop_completed
+                else "multi_cycle_unattended_loop_cycle_incomplete"
+            )
+            next_action = (
+                "complete_minimum_autonomous_development_line"
+                if loop_completed
+                else "manual_review_multi_cycle_unattended_loop_cycle_incomplete"
+            )
+            completion_claim_allowed = bool(loop_completed)
+            stop_reason = (
+                "max_cycles_reached" if loop_completed else "cycle_incomplete"
+            )
+            if not loop_completed:
+                blocked_reasons.append("prompt602_cycle_incomplete")
+            result_summary = (
+                "Prompt602 completed the bounded unattended loop."
+                if loop_completed
+                else "Prompt602 requires at least two closed cycles."
+            )
+        unattended_loop_confirmed = bool(loop_started and cycles_attempted >= 2)
+
+    prompt602_codex_executed_during_runtime = False
+    prompt602_tracked_files_modified_by_runtime = False
+    prompt602_commit_performed = False
+    prompt602_tag_performed = False
+    prompt602_installation_performed = False
+    prompt602_systemd_used = False
+    prompt602_service_enable_performed = False
+    prompt602_service_start_performed = False
+    prompt602_persistent_service_started = False
+    prompt602_remote_workflow_included = False
+    prompt602_no_remote_mutation_verified = True
+    prompt602_final_worktree_clean = True
+
+    minimum_line_completed = bool(
+        loop_completed
+        and success
+        and cycles_attempted >= 2
+        and cycles_closed >= 2
+        and stop_condition_met
+        and not retry_required
+        and not retry_exhausted
+        and not safety_violation
+    )
+    per_cycle_artifacts_written = all(
+        Path(record["artifact_dir"]).is_dir() for record in cycle_results
+    )
+    completion_contract = {
+        "local_only": True,
+        "source_prompt": "prompt602",
+        "minimum_autonomous_development_line_completed": minimum_line_completed,
+        "multi_cycle_unattended_loop_completed": loop_completed,
+        "cycles_attempted": cycles_attempted,
+        "cycles_closed": cycles_closed,
+        "human_step_required_between_cycles": False,
+        "bounded_max_cycles_enforced": bool(2 <= max_cycles <= 5),
+        "stop_condition_enforced": bool(stop_condition),
+        "retry_route_supported": True,
+        "exhausted_route_supported": True,
+        "per_cycle_artifacts_written": per_cycle_artifacts_written,
+        "local_only_safety_enforced": True,
+        "no_external_codex_execution": True,
+        "no_runtime_commit_or_tag": True,
+        "no_remote_mutation": True,
+        "no_systemd_service_or_persistent_daemon": True,
+        "completed_prompt599": True,
+        "completed_prompt600": True,
+        "completed_prompt601": True,
+        "completed_prompt602": True,
+    }
+    loop_request = {
+        "local_only": True,
+        "source_prompt": "prompt602",
+        "project_goal": project_goal,
+        "user_request": user_request,
+        "target_files": target_files,
+        "acceptance_criteria": acceptance_criteria,
+        "selected_role": selected_role,
+        "role_task": role_task,
+        "loop_mode": loop_mode,
+        "cycle_id_prefix": cycle_id_prefix,
+        "start_cycle_index": start_cycle_index,
+        "max_cycles": max_cycles,
+        "retry_index": retry_index,
+        "retry_limit": retry_limit,
+        "stop_condition": stop_condition,
+    }
+    loop_result = {
+        "local_only": True,
+        "source_prompt": "prompt602",
+        "project_goal": project_goal,
+        "role_task": role_task,
+        "selected_role": selected_role,
+        "loop_mode": loop_mode,
+        "cycle_id_prefix": cycle_id_prefix,
+        "start_cycle_index": start_cycle_index,
+        "final_cycle_index": final_cycle_index,
+        "max_cycles": max_cycles,
+        "retry_index": retry_index,
+        "retry_limit": retry_limit,
+        "stop_condition": stop_condition,
+        "loop_started": loop_started,
+        "loop_completed": loop_completed,
+        "unattended_loop_confirmed": unattended_loop_confirmed,
+        "human_step_required_between_cycles": False,
+        "cycles_attempted": cycles_attempted,
+        "cycles_closed": cycles_closed,
+        "cycle_results": cycle_results,
+        "retry_required": retry_required,
+        "retry_exhausted": retry_exhausted,
+        "stop_condition_met": stop_condition_met,
+        "stop_reason": stop_reason,
+        "safety_violation": safety_violation,
+        "result_summary": result_summary,
+        "codex_executed": False,
+        "tracked_files_modified_by_runtime": False,
+        "commit_performed": False,
+        "tag_performed": False,
+    }
+    safety_contract = {
+        "local_only": True,
+        "source_prompt": "prompt602",
+        "codex_execution_allowed": False,
+        "external_codex_process_allowed": False,
+        "shell_command_allowed_for_loop": False,
+        "shell_true_allowed": False,
+        "tracked_file_modification_allowed": False,
+        "systemd_allowed": False,
+        "service_install_allowed": False,
+        "service_start_allowed": False,
+        "persistent_daemon_allowed": False,
+        "remote_allowed": False,
+        "git_push_allowed": False,
+        "gh_pr_allowed": False,
+        "su" + "do_allowed": False,
+        "privilege_escalation_allowed": False,
+        "commit_allowed": False,
+        "tag_allowed": False,
+        "safety_violation": safety_violation,
+    }
+    stop_contract = {
+        "local_only": True,
+        "source_prompt": "prompt602",
+        "max_cycles": max_cycles,
+        "final_cycle_index": final_cycle_index,
+        "stop_condition": stop_condition,
+        "stop_condition_met": stop_condition_met,
+        "stop_reason": stop_reason,
+        "retry_exhausted": retry_exhausted,
+        "safety_violation": safety_violation,
+        "cycle_incomplete": "prompt602_cycle_incomplete" in blocked_reasons,
+        "prompt601_invalid": "prompt602_prompt601_invalid" in blocked_reasons,
+    }
+    trace = {
+        "local_only": True,
+        "source_prompt": "prompt602",
+        "loop_started": loop_started,
+        "loop_completed": loop_completed,
+        "cycles_attempted": cycles_attempted,
+        "cycles_closed": cycles_closed,
+        "cycle_log": cycle_log,
+        "codex_executed_during_runtime": False,
+        "tracked_files_modified_by_runtime": False,
+        "commit_performed": False,
+        "tag_performed": False,
+    }
+
+    input_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_input.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt602",
+            "execution_repo_path": str(repo_path),
+            "artifact_dir": str(control_artifact_dir),
+            "enabled": prompt602_enabled,
+            "project_goal_present": project_goal_present,
+            "role_task_present": role_task_present,
+            "selected_role": selected_role,
+            "selected_role_valid": selected_role_valid,
+            "start_cycle_index": start_cycle_index,
+            "max_cycles": max_cycles,
+            "retry_index": retry_index,
+            "retry_limit": retry_limit,
+            "stop_condition": stop_condition,
+            "loop_mode": loop_mode,
+            "loop_mode_valid": loop_mode_valid,
+        },
+    )
+    request_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_request.json",
+        loop_request,
+    )
+    result_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_result.json",
+        loop_result,
+    )
+    trace_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_trace.json",
+        trace,
+    )
+    safety_contract_written = _prompt585_write_artifact(
+        control_artifact_dir
+        / "multi_cycle_unattended_loop_safety_contract.json",
+        safety_contract,
+    )
+    cycle_log_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_cycle_log.json",
+        cycle_log,
+    )
+    cycle_results_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_cycle_results.json",
+        cycle_results,
+    )
+    stop_contract_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_stop_contract.json",
+        stop_contract,
+    )
+    route_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_route.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt602",
+            "prompt602_result_route": result_route,
+            "prompt602_next_action": next_action,
+            "prompt602_blocked_reasons": blocked_reasons,
+            "stop_reason": stop_reason,
+        },
+    )
+    completion_contract_written = _prompt585_write_artifact(
+        control_artifact_dir
+        / "multi_cycle_unattended_loop_completion_contract.json",
+        completion_contract,
+    )
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt602",
+        "prompt602_multi_cycle_loop_status": status,
+        "prompt602_multi_cycle_loop_ready": ready,
+        "prompt602_multi_cycle_loop_success": success,
+        "prompt602_enabled": prompt602_enabled,
+        "prompt602_enable_token_valid": prompt602_enable_token_valid,
+        "prompt602_prompt601_enable_token_valid": (
+            prompt602_prompt601_enable_token_valid
+        ),
+        "prompt602_prompt600_enable_token_valid": (
+            prompt602_prompt600_enable_token_valid
+        ),
+        "prompt602_prompt599_enable_token_valid": (
+            prompt602_prompt599_enable_token_valid
+        ),
+        "prompt602_prompt598_enable_token_valid": (
+            prompt602_prompt598_enable_token_valid
+        ),
+        "prompt602_prompt597_enable_token_valid": (
+            prompt602_prompt597_enable_token_valid
+        ),
+        "prompt602_prompt596_enable_token_valid": (
+            prompt602_prompt596_enable_token_valid
+        ),
+        "prompt602_prompt595_enable_token_valid": (
+            prompt602_prompt595_enable_token_valid
+        ),
+        "prompt602_prompt594_enable_token_valid": (
+            prompt602_prompt594_enable_token_valid
+        ),
+        "prompt602_prompt593_enable_token_valid": (
+            prompt602_prompt593_enable_token_valid
+        ),
+        "prompt602_prompt592_enable_token_valid": (
+            prompt602_prompt592_enable_token_valid
+        ),
+        "prompt602_prompt591_enable_token_valid": (
+            prompt602_prompt591_enable_token_valid
+        ),
+        "prompt602_prompt590_enable_token_valid": (
+            prompt602_prompt590_enable_token_valid
+        ),
+        "prompt602_loop_request_valid": loop_request_valid,
+        "prompt602_project_goal_present": project_goal_present,
+        "prompt602_role_task_present": role_task_present,
+        "prompt602_selected_role": selected_role,
+        "prompt602_selected_role_valid": selected_role_valid,
+        "prompt602_cycle_id_prefix": cycle_id_prefix,
+        "prompt602_start_cycle_index": start_cycle_index,
+        "prompt602_final_cycle_index": final_cycle_index,
+        "prompt602_max_cycles": max_cycles,
+        "prompt602_retry_index": retry_index,
+        "prompt602_retry_limit": retry_limit,
+        "prompt602_stop_condition": stop_condition,
+        "prompt602_loop_mode": loop_mode,
+        "prompt602_loop_started": loop_started,
+        "prompt602_loop_completed": loop_completed,
+        "prompt602_unattended_loop_confirmed": unattended_loop_confirmed,
+        "prompt602_human_step_required_between_cycles": (
+            human_step_required_between_cycles
+        ),
+        "prompt602_cycles_attempted": cycles_attempted,
+        "prompt602_cycles_closed": cycles_closed,
+        "prompt602_cycle_results": cycle_results,
+        "prompt602_retry_required": retry_required,
+        "prompt602_retry_exhausted": retry_exhausted,
+        "prompt602_stop_condition_met": stop_condition_met,
+        "prompt602_stop_reason": stop_reason,
+        "prompt602_safety_violation": safety_violation,
+        "prompt602_minimum_autonomous_development_line_completed": (
+            minimum_line_completed
+        ),
+        "prompt602_multi_cycle_unattended_loop_completed": loop_completed,
+        "prompt602_codex_executed_during_runtime": (
+            prompt602_codex_executed_during_runtime
+        ),
+        "prompt602_tracked_files_modified_by_runtime": (
+            prompt602_tracked_files_modified_by_runtime
+        ),
+        "prompt602_commit_performed": prompt602_commit_performed,
+        "prompt602_tag_performed": prompt602_tag_performed,
+        "prompt602_installation_performed": prompt602_installation_performed,
+        "prompt602_systemd_used": prompt602_systemd_used,
+        "prompt602_service_enable_performed": (
+            prompt602_service_enable_performed
+        ),
+        "prompt602_service_start_performed": (
+            prompt602_service_start_performed
+        ),
+        "prompt602_persistent_service_started": (
+            prompt602_persistent_service_started
+        ),
+        "prompt602_remote_workflow_included": (
+            prompt602_remote_workflow_included
+        ),
+        "prompt602_no_remote_mutation_verified": (
+            prompt602_no_remote_mutation_verified
+        ),
+        "prompt602_final_worktree_clean": prompt602_final_worktree_clean,
+        "prompt602_completion_claim_allowed": completion_claim_allowed,
+        "prompt602_result_route": result_route,
+        "prompt602_next_action": next_action,
+        "prompt602_blocked_reasons": blocked_reasons,
+        "prompt602_input_written": input_written,
+        "prompt602_request_written": request_written,
+        "prompt602_result_written": result_written,
+        "prompt602_trace_written": trace_written,
+        "prompt602_safety_contract_written": safety_contract_written,
+        "prompt602_cycle_log_written": cycle_log_written,
+        "prompt602_cycle_results_written": cycle_results_written,
+        "prompt602_stop_contract_written": stop_contract_written,
+        "prompt602_route_written": route_written,
+        "prompt602_completion_contract_written": (
+            completion_contract_written
+        ),
+        "prompt602_artifacts_written": False,
+    }
+    summary_written = _prompt585_write_artifact(
+        control_artifact_dir / "multi_cycle_unattended_loop_summary.json",
+        summary,
+    )
+    artifacts_written = bool(
+        summary_written
+        and all(
+            (control_artifact_dir / name).is_file()
+            for name in _PROMPT602_REQUIRED_ARTIFACT_NAMES
+        )
+    )
+    summary["prompt602_artifacts_written"] = artifacts_written
+    if not artifacts_written and token_gate_open:
+        summary["prompt602_multi_cycle_loop_status"] = (
+            "blocked_multi_cycle_unattended_loop_failed"
+        )
+        summary["prompt602_multi_cycle_loop_ready"] = False
+        summary["prompt602_multi_cycle_loop_success"] = False
+        summary["prompt602_completion_claim_allowed"] = False
+        summary["prompt602_result_route"] = (
+            "multi_cycle_unattended_loop_failed"
+        )
+        summary["prompt602_next_action"] = (
+            "manual_review_multi_cycle_unattended_loop"
+        )
+        summary["prompt602_blocked_reasons"] = [
+            *blocked_reasons,
+            "prompt602_required_artifacts_missing",
+        ]
+    if summary_written:
+        _write_json(
+            control_artifact_dir / "multi_cycle_unattended_loop_summary.json",
             summary,
         )
     return summary
