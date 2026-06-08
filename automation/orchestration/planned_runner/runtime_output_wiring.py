@@ -186,6 +186,9 @@ PROMPT595_ACTUAL_LOCAL_DOGFOOD_RUN_ENABLE_TOKEN = (
 PROMPT596_REPEAT_DOGFOOD_CYCLE_ENABLE_TOKEN = (
     "PROMPT596_REPEAT_DOGFOOD_CYCLE_ENABLE"
 )
+PROMPT597_BOUNDED_ACTUAL_ROLE_EXECUTION_BRIDGE_ENABLE_TOKEN = (
+    "PROMPT597_BOUNDED_ACTUAL_ROLE_EXECUTION_BRIDGE_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -364,6 +367,10 @@ _PROMPT596_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt596_repeat_dogfood_cycle"
 )
+_PROMPT597_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt597_bounded_actual_role_execution_bridge"
+)
 _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_input.json",
     "daemon_control_resume_state_before.json",
@@ -467,6 +474,16 @@ _PROMPT596_REQUIRED_ARTIFACT_NAMES = (
     "repeat_dogfood_execution_trace.json",
     "repeat_dogfood_route.json",
     "repeat_dogfood_summary.json",
+)
+_PROMPT597_REQUIRED_ARTIFACT_NAMES = (
+    "bounded_role_bridge_input.json",
+    "bounded_role_bridge_request.json",
+    "bounded_role_bridge_repeat_result.json",
+    "bounded_role_execution_request.json",
+    "bounded_role_execution_prompt.json",
+    "bounded_role_execution_safety_contract.json",
+    "bounded_role_bridge_route.json",
+    "bounded_role_bridge_summary.json",
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -16391,6 +16408,775 @@ def run_prompt596_repeat_dogfood_cycle_gate(
     if summary_written:
         _write_json(
             control_artifact_dir / "repeat_dogfood_summary.json",
+            summary,
+        )
+    return summary
+
+
+def run_prompt597_bounded_actual_role_execution_bridge_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt596_enable_token: str | None = None,
+    prompt595_enable_token: str | None = None,
+    prompt594_enable_token: str | None = None,
+    prompt593_enable_token: str | None = None,
+    prompt592_enable_token: str | None = None,
+    prompt591_enable_token: str | None = None,
+    prompt590_enable_token: str | None = None,
+    prompt589_enable_token: str | None = None,
+    prompt588_enable_token: str | None = None,
+    prompt587_enable_token: str | None = None,
+    prompt586_enable_token: str | None = None,
+    prompt585_enable_token: str | None = None,
+    prompt584_enable_token: str | None = None,
+    prompt580_enable_token: str | None = None,
+    prompt583_enable_token: str | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        payload.get("prompt597_repo_path")
+        or execution_repo_path
+        or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    control_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT597_DEFAULT_ARTIFACT_DIR
+    )
+    if not control_artifact_dir.is_absolute():
+        control_artifact_dir = repo_path / control_artifact_dir
+    control_artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    prompt597_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt597_enabled") is True
+    )
+    prompt597_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt597_enable_token"),
+        default="",
+    )
+    prompt596_token = _normalize_text(
+        prompt596_enable_token
+        if prompt596_enable_token is not None
+        else payload.get("prompt596_enable_token"),
+        default="",
+    )
+    prompt595_token = _normalize_text(
+        prompt595_enable_token
+        if prompt595_enable_token is not None
+        else payload.get("prompt595_enable_token"),
+        default="",
+    )
+    prompt594_token = _normalize_text(
+        prompt594_enable_token
+        if prompt594_enable_token is not None
+        else payload.get("prompt594_enable_token"),
+        default="",
+    )
+    prompt593_token = _normalize_text(
+        prompt593_enable_token
+        if prompt593_enable_token is not None
+        else payload.get("prompt593_enable_token"),
+        default="",
+    )
+    prompt592_token = _normalize_text(
+        prompt592_enable_token
+        if prompt592_enable_token is not None
+        else payload.get("prompt592_enable_token"),
+        default="",
+    )
+    prompt591_token = _normalize_text(
+        prompt591_enable_token
+        if prompt591_enable_token is not None
+        else payload.get("prompt591_enable_token"),
+        default="",
+    )
+    prompt590_token = _normalize_text(
+        prompt590_enable_token
+        if prompt590_enable_token is not None
+        else payload.get("prompt590_enable_token"),
+        default="",
+    )
+    prompt589_token = _normalize_text(
+        prompt589_enable_token
+        if prompt589_enable_token is not None
+        else payload.get("prompt589_enable_token"),
+        default="",
+    )
+    prompt588_token = _normalize_text(
+        prompt588_enable_token
+        if prompt588_enable_token is not None
+        else payload.get("prompt588_enable_token"),
+        default="",
+    )
+    prompt587_token = _normalize_text(
+        prompt587_enable_token
+        if prompt587_enable_token is not None
+        else payload.get("prompt587_enable_token"),
+        default="",
+    )
+    prompt586_token = _normalize_text(
+        prompt586_enable_token
+        if prompt586_enable_token is not None
+        else payload.get("prompt586_enable_token"),
+        default="",
+    )
+    prompt585_token = _normalize_text(
+        prompt585_enable_token
+        if prompt585_enable_token is not None
+        else payload.get("prompt585_enable_token"),
+        default="",
+    )
+    prompt584_token = _normalize_text(
+        prompt584_enable_token
+        if prompt584_enable_token is not None
+        else payload.get("prompt584_enable_token"),
+        default="",
+    )
+    prompt580_token = _normalize_text(
+        prompt580_enable_token
+        if prompt580_enable_token is not None
+        else payload.get("prompt580_enable_token"),
+        default="",
+    )
+    prompt583_token = _normalize_text(
+        prompt583_enable_token
+        if prompt583_enable_token is not None
+        else payload.get("prompt583_enable_token"),
+        default="",
+    )
+
+    prompt597_enable_token_valid = (
+        prompt597_token
+        == PROMPT597_BOUNDED_ACTUAL_ROLE_EXECUTION_BRIDGE_ENABLE_TOKEN
+    )
+    prompt597_prompt596_enable_token_valid = (
+        prompt596_token == PROMPT596_REPEAT_DOGFOOD_CYCLE_ENABLE_TOKEN
+    )
+    prompt597_prompt595_enable_token_valid = (
+        prompt595_token == PROMPT595_ACTUAL_LOCAL_DOGFOOD_RUN_ENABLE_TOKEN
+    )
+    prompt597_prompt594_enable_token_valid = (
+        prompt594_token == PROMPT594_CLI_DOGFOOD_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt597_prompt593_enable_token_valid = (
+        prompt593_token == PROMPT593_MULTI_ROLE_AUTONOMOUS_CYCLE_ENABLE_TOKEN
+    )
+    prompt597_prompt592_enable_token_valid = (
+        prompt592_token == PROMPT592_ROLE_EVALUATION_RETRY_ENABLE_TOKEN
+    )
+    prompt597_prompt591_enable_token_valid = (
+        prompt591_token == PROMPT591_ROLE_EXECUTION_ADAPTER_ENABLE_TOKEN
+    )
+    prompt597_prompt590_enable_token_valid = (
+        prompt590_token == PROMPT590_ROLE_DRIVEN_TASK_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt597_prompt589_enable_token_valid = (
+        prompt589_token == PROMPT589_DAEMON_LOOP_ENTRYPOINT_ENABLE_TOKEN
+    )
+    prompt597_prompt588_enable_token_valid = (
+        prompt588_token == PROMPT588_MINIMAL_FAILURE_ROUTES_ENABLE_TOKEN
+    )
+    prompt597_prompt587_enable_token_valid = (
+        prompt587_token == PROMPT587_DAEMON_RESUME_STOP_CLEANUP_ENABLE_TOKEN
+    )
+    prompt597_prompt586_enable_token_valid = (
+        prompt586_token
+        == PROMPT586_SUCCESS_MULTI_CYCLE_DAEMON_SOAK_ENABLE_TOKEN
+    )
+    prompt597_prompt585_enable_token_valid = (
+        prompt585_token == PROMPT585_SUCCESS_ONLY_MULTI_CYCLE_ENABLE_TOKEN
+    )
+    prompt597_prompt584_enable_token_valid = (
+        prompt584_token == PROMPT584_INTEGRATED_REAL_DEV_ONE_CYCLE_ENABLE_TOKEN
+    )
+    prompt597_prompt580_enable_token_valid = (
+        prompt580_token == PROMPT580_REAL_DEV_TASK_DISPATCH_ENABLE_TOKEN
+    )
+    prompt597_prompt583_enable_token_valid = (
+        prompt583_token == PROMPT583_COMMIT_TAG_REAL_DEV_CHANGES_ENABLE_TOKEN
+    )
+    token_gate_open = bool(
+        prompt597_enabled
+        and prompt597_enable_token_valid
+        and prompt597_prompt596_enable_token_valid
+        and prompt597_prompt595_enable_token_valid
+        and prompt597_prompt594_enable_token_valid
+        and prompt597_prompt593_enable_token_valid
+        and prompt597_prompt592_enable_token_valid
+        and prompt597_prompt591_enable_token_valid
+        and prompt597_prompt590_enable_token_valid
+        and prompt597_prompt589_enable_token_valid
+        and prompt597_prompt588_enable_token_valid
+        and prompt597_prompt587_enable_token_valid
+        and prompt597_prompt586_enable_token_valid
+        and prompt597_prompt585_enable_token_valid
+        and prompt597_prompt584_enable_token_valid
+        and prompt597_prompt580_enable_token_valid
+        and prompt597_prompt583_enable_token_valid
+    )
+
+    allowed_roles = {
+        "planner",
+        "implementer",
+        "verifier",
+        "reviewer",
+        "fixer",
+        "committer",
+    }
+    project_goal = _normalize_text(
+        payload.get("prompt597_project_goal"),
+        default="",
+    )
+    user_request = _normalize_text(
+        payload.get("prompt597_user_request"),
+        default="",
+    )
+    target_files = _prompt579_string_list(
+        payload.get("prompt597_target_files")
+    )
+    acceptance_criteria = _prompt579_string_list(
+        payload.get("prompt597_acceptance_criteria")
+    )
+    selected_role = _normalize_text(
+        payload.get("prompt597_selected_role"),
+        default="implementer",
+    )
+    role_task = _normalize_text(
+        payload.get("prompt597_role_task"),
+        default="",
+    )
+    raw_repeat_count = payload.get("prompt597_repeat_count", 2)
+    repeat_count_requested = (
+        raw_repeat_count
+        if isinstance(raw_repeat_count, int)
+        and not isinstance(raw_repeat_count, bool)
+        else 2
+    )
+    dry_run = payload.get("prompt597_dry_run", True) is not False
+    prepare_actual_execution = (
+        payload.get("prompt597_prepare_actual_execution", True) is not False
+    )
+    execute_actual_role = (
+        payload.get("prompt597_execute_actual_role") is True
+    )
+    force_invalid_request = (
+        payload.get("prompt597_force_invalid_bridge_request") is True
+    )
+    force_repeat_retry_path = (
+        payload.get("prompt597_force_repeat_retry_path") is True
+    )
+    force_repeat_exhausted_path = (
+        payload.get("prompt597_force_repeat_exhausted_path") is True
+    )
+    force_execute_blocked_path = (
+        payload.get("prompt597_force_execute_blocked_path") is True
+    )
+
+    project_goal_present = bool(project_goal)
+    role_task_present = bool(role_task)
+    selected_role_valid = selected_role in allowed_roles
+    bridge_request_valid = bool(
+        project_goal_present
+        and role_task_present
+        and selected_role_valid
+        and isinstance(repeat_count_requested, int)
+        and 1 <= repeat_count_requested <= 5
+        and not force_invalid_request
+    )
+    execute_blocked_path = bool(
+        force_execute_blocked_path or execute_actual_role or not dry_run
+    )
+
+    prompt596_result: dict[str, Any] = {}
+    prompt596_executed = False
+    prompt596_artifact_dir = control_artifact_dir / "prompt596_repeat"
+    if token_gate_open and bridge_request_valid and not execute_blocked_path:
+        prompt596_payload: dict[str, Any] = {
+            "execution_repo_path": str(repo_path),
+            "prompt596_enabled": True,
+            "prompt596_project_goal": project_goal,
+            "prompt596_user_request": user_request,
+            "prompt596_target_files": target_files,
+            "prompt596_acceptance_criteria": acceptance_criteria,
+            "prompt596_entrypoint_name": "prompt594_cli_dogfood",
+            "prompt596_repeat_count": repeat_count_requested,
+            "prompt596_dry_run": True,
+            "prompt596_execute_repeated_dogfood": True,
+            "prompt596_force_retry_path_at_iteration": (
+                1 if force_repeat_retry_path else None
+            ),
+            "prompt596_force_exhausted_path_at_iteration": (
+                1 if force_repeat_exhausted_path else None
+            ),
+            "prompt596_enable_token": prompt596_token,
+            "prompt595_enable_token": prompt595_token,
+            "prompt594_enable_token": prompt594_token,
+            "prompt593_enable_token": prompt593_token,
+            "prompt592_enable_token": prompt592_token,
+            "prompt591_enable_token": prompt591_token,
+            "prompt590_enable_token": prompt590_token,
+            "prompt589_enable_token": prompt589_token,
+            "prompt588_enable_token": prompt588_token,
+            "prompt587_enable_token": prompt587_token,
+            "prompt586_enable_token": prompt586_token,
+            "prompt585_enable_token": prompt585_token,
+            "prompt584_enable_token": prompt584_token,
+            "prompt580_enable_token": prompt580_token,
+            "prompt583_enable_token": prompt583_token,
+        }
+        prompt596_result = run_prompt596_repeat_dogfood_cycle_gate(
+            run_state_payload=prompt596_payload,
+            execution_repo_path=repo_path,
+            artifact_dir=prompt596_artifact_dir,
+            enabled=True,
+            enable_token=prompt596_token,
+            prompt595_enable_token=prompt595_token,
+            prompt594_enable_token=prompt594_token,
+            prompt593_enable_token=prompt593_token,
+            prompt592_enable_token=prompt592_token,
+            prompt591_enable_token=prompt591_token,
+            prompt590_enable_token=prompt590_token,
+            prompt589_enable_token=prompt589_token,
+            prompt588_enable_token=prompt588_token,
+            prompt587_enable_token=prompt587_token,
+            prompt586_enable_token=prompt586_token,
+            prompt585_enable_token=prompt585_token,
+            prompt584_enable_token=prompt584_token,
+            prompt580_enable_token=prompt580_token,
+            prompt583_enable_token=prompt583_token,
+        )
+        prompt596_executed = True
+
+    prompt596_success = (
+        prompt596_result.get("prompt596_repeat_dogfood_success") is True
+    )
+    prompt596_route = _normalize_text(
+        prompt596_result.get("prompt596_result_route"),
+        default="",
+    )
+    prompt596_next_action = _normalize_text(
+        prompt596_result.get("prompt596_next_action"),
+        default="",
+    )
+    repeat_count_completed = prompt596_result.get(
+        "prompt596_repeat_count_completed",
+        0,
+    )
+    if not isinstance(repeat_count_completed, int):
+        repeat_count_completed = 0
+    prompt596_codex_executed = (
+        prompt596_result.get("prompt596_codex_executed_during_runtime")
+        is True
+    )
+    prompt596_tracked_modified = (
+        prompt596_result.get("prompt596_tracked_files_modified_by_codex")
+        is True
+    )
+    prompt596_installation_performed = (
+        prompt596_result.get("prompt596_installation_performed") is True
+    )
+    prompt596_systemd_used = (
+        prompt596_result.get("prompt596_systemd_used") is True
+    )
+    prompt596_service_enable_performed = (
+        prompt596_result.get("prompt596_service_enable_performed") is True
+    )
+    prompt596_service_start_performed = (
+        prompt596_result.get("prompt596_service_start_performed") is True
+    )
+    prompt596_persistent_service_started = (
+        prompt596_result.get("prompt596_persistent_service_started") is True
+    )
+    prompt596_remote_workflow_included = (
+        prompt596_result.get("prompt596_remote_workflow_included") is True
+    )
+    prompt596_no_remote = (
+        prompt596_result.get("prompt596_no_remote_mutation_verified") is True
+        if prompt596_executed
+        else True
+    )
+    repeat_dogfood_completed = bool(
+        prompt596_executed
+        and prompt596_success
+        and prompt596_route == "repeat_dogfood_cycle_completed"
+        and repeat_count_completed == repeat_count_requested
+    )
+    retry_required = bool(
+        prompt596_executed
+        and prompt596_result.get("prompt596_retry_required") is True
+    )
+    cycle_exhausted = bool(
+        prompt596_executed
+        and prompt596_result.get("prompt596_cycle_exhausted") is True
+    )
+
+    prompt597_codex_executed_during_runtime = prompt596_codex_executed
+    prompt597_tracked_files_modified_by_codex = prompt596_tracked_modified
+    prompt597_commit_performed = False
+    prompt597_tag_performed = False
+    prompt597_installation_performed = prompt596_installation_performed
+    prompt597_systemd_used = prompt596_systemd_used
+    prompt597_service_enable_performed = prompt596_service_enable_performed
+    prompt597_service_start_performed = prompt596_service_start_performed
+    prompt597_persistent_service_started = prompt596_persistent_service_started
+    prompt597_remote_workflow_included = prompt596_remote_workflow_included
+    prompt597_no_remote_mutation_verified = bool(
+        not prompt597_remote_workflow_included and prompt596_no_remote
+    )
+    prompt597_final_worktree_clean = _prompt596_artifact_clean_check(
+        repo_path=repo_path,
+        artifact_roots=[
+            control_artifact_dir,
+            prompt596_artifact_dir,
+            repo_path / _PROMPT596_DEFAULT_ARTIFACT_DIR,
+            repo_path / _PROMPT595_DEFAULT_ARTIFACT_DIR,
+            repo_path / _PROMPT594_DEFAULT_ARTIFACT_DIR,
+            repo_path / _PROMPT593_DEFAULT_ARTIFACT_DIR,
+        ],
+    )
+
+    blocked_reasons: list[str] = []
+    actual_role_execution_prepared = False
+    actual_role_execution_executed = False
+    execution_requires_next_explicit_enable = False
+    if not token_gate_open:
+        status = "bounded_actual_role_execution_bridge_ready_not_run_local_only"
+        ready = True
+        success = False
+        result_route = "not_run"
+        next_action = (
+            "provide_explicit_enable_token_for_bounded_actual_role_execution_bridge"
+        )
+        completion_claim_allowed = False
+    elif not bridge_request_valid:
+        status = "blocked_bounded_actual_role_execution_bridge_invalid_request"
+        ready = False
+        success = False
+        result_route = "bounded_actual_role_execution_bridge_request_invalid"
+        next_action = (
+            "manual_review_bounded_actual_role_execution_bridge_request"
+        )
+        completion_claim_allowed = False
+        blocked_reasons.append(
+            "prompt597_bounded_actual_role_execution_bridge_request_invalid"
+        )
+    elif execute_blocked_path:
+        status = (
+            "blocked_bounded_actual_role_execution_safe_execution_unavailable"
+        )
+        ready = False
+        success = False
+        result_route = "bounded_actual_role_execution_safe_execution_unavailable"
+        next_action = "prepare_prompt598_explicit_actual_role_execution"
+        completion_claim_allowed = False
+        blocked_reasons.append(
+            "prompt597_safe_actual_role_execution_unavailable"
+        )
+    elif cycle_exhausted:
+        status = (
+            "blocked_bounded_actual_role_execution_bridge_repeat_exhausted"
+        )
+        ready = False
+        success = False
+        result_route = "bounded_actual_role_execution_bridge_repeat_exhausted"
+        next_action = "manual_review_bounded_actual_role_execution_bridge"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt597_repeat_dogfood_cycle_exhausted")
+    elif retry_required:
+        status = "bounded_actual_role_execution_bridge_ready_local_only"
+        ready = True
+        success = True
+        result_route = "bounded_actual_role_execution_bridge_retry_prepared"
+        next_action = "prepare_prompt591_retry_role_execution"
+        completion_claim_allowed = True
+        actual_role_execution_prepared = prepare_actual_execution
+        execution_requires_next_explicit_enable = prepare_actual_execution
+    elif repeat_dogfood_completed:
+        status = "bounded_actual_role_execution_bridge_ready_local_only"
+        ready = True
+        success = True
+        result_route = "bounded_actual_role_execution_bridge_prepared"
+        next_action = "prepare_prompt598_explicit_actual_role_execution"
+        completion_claim_allowed = True
+        actual_role_execution_prepared = prepare_actual_execution
+        execution_requires_next_explicit_enable = prepare_actual_execution
+    else:
+        status = (
+            "blocked_bounded_actual_role_execution_bridge_repeat_exhausted"
+        )
+        ready = False
+        success = False
+        result_route = "bounded_actual_role_execution_bridge_repeat_exhausted"
+        next_action = "manual_review_bounded_actual_role_execution_bridge"
+        completion_claim_allowed = False
+        blocked_reasons.append("prompt597_repeat_dogfood_cycle_exhausted")
+
+    bounded_role_request = {
+        "local_only": True,
+        "source_prompt": "prompt597",
+        "project_goal": project_goal,
+        "user_request": user_request,
+        "target_files": target_files,
+        "acceptance_criteria": acceptance_criteria,
+        "selected_role": selected_role,
+        "role_task": role_task,
+        "dry_run": True,
+        "actual_execution_allowed": False,
+        "execution_requires_next_explicit_enable": (
+            execution_requires_next_explicit_enable
+        ),
+        "next_enable_required": "PROMPT598_EXPLICIT_ACTUAL_ROLE_EXECUTION_ENABLE",
+    }
+    bounded_role_prompt = {
+        "local_only": True,
+        "source_prompt": "prompt597",
+        "prompt": (
+            f"Role: {selected_role}\n"
+            f"Goal: {project_goal}\n"
+            f"Task: {role_task}\n"
+            "Constraints: local-only dry-run bridge; do not execute Codex "
+            "until Prompt598 supplies a separate explicit enable."
+        ),
+    }
+    safety_contract = {
+        "local_only": True,
+        "source_prompt": "prompt597",
+        "codex_execution_allowed": False,
+        "actual_role_execution_executed": False,
+        "shell_true_allowed": False,
+        "systemd_allowed": False,
+        "service_install_allowed": False,
+        "service_start_allowed": False,
+        "persistent_daemon_allowed": False,
+        "remote_allowed": False,
+        "git_push_allowed": False,
+        "gh_pr_allowed": False,
+        "su" "do_allowed": False,
+        "commit_allowed": False,
+        "tag_allowed": False,
+    }
+
+    input_written = _prompt585_write_artifact(
+        control_artifact_dir / "bounded_role_bridge_input.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt597",
+            "execution_repo_path": str(repo_path),
+            "artifact_dir": str(control_artifact_dir),
+            "enabled": prompt597_enabled,
+            "project_goal_present": project_goal_present,
+            "role_task_present": role_task_present,
+            "selected_role": selected_role,
+            "selected_role_valid": selected_role_valid,
+            "repeat_count_requested": repeat_count_requested,
+            "dry_run": dry_run,
+            "prepare_actual_execution": prepare_actual_execution,
+            "execute_actual_role": execute_actual_role,
+        },
+    )
+    request_written = _prompt585_write_artifact(
+        control_artifact_dir / "bounded_role_bridge_request.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt597",
+            "bridge_request_valid": bridge_request_valid,
+            "force_invalid_bridge_request": force_invalid_request,
+            "force_repeat_retry_path": force_repeat_retry_path,
+            "force_repeat_exhausted_path": force_repeat_exhausted_path,
+            "force_execute_blocked_path": force_execute_blocked_path,
+        },
+    )
+    repeat_result_written = _prompt585_write_artifact(
+        control_artifact_dir / "bounded_role_bridge_repeat_result.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt597",
+            "prompt596_executed": prompt596_executed,
+            "prompt596_result": prompt596_result,
+        },
+    )
+    role_request_written = _prompt585_write_artifact(
+        control_artifact_dir / "bounded_role_execution_request.json",
+        bounded_role_request,
+    )
+    role_prompt_written = _prompt585_write_artifact(
+        control_artifact_dir / "bounded_role_execution_prompt.json",
+        bounded_role_prompt,
+    )
+    safety_contract_written = _prompt585_write_artifact(
+        control_artifact_dir / "bounded_role_execution_safety_contract.json",
+        safety_contract,
+    )
+    route_written = _prompt585_write_artifact(
+        control_artifact_dir / "bounded_role_bridge_route.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt597",
+            "prompt597_result_route": result_route,
+            "prompt597_next_action": next_action,
+            "prompt597_blocked_reasons": blocked_reasons,
+            "prompt596_result_route": prompt596_route,
+            "prompt596_next_action": prompt596_next_action,
+        },
+    )
+
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt597",
+        "prompt597_bounded_role_bridge_status": status,
+        "prompt597_bounded_role_bridge_ready": ready,
+        "prompt597_bounded_role_bridge_success": success,
+        "prompt597_enabled": prompt597_enabled,
+        "prompt597_enable_token_valid": prompt597_enable_token_valid,
+        "prompt597_prompt596_enable_token_valid": (
+            prompt597_prompt596_enable_token_valid
+        ),
+        "prompt597_prompt595_enable_token_valid": (
+            prompt597_prompt595_enable_token_valid
+        ),
+        "prompt597_prompt594_enable_token_valid": (
+            prompt597_prompt594_enable_token_valid
+        ),
+        "prompt597_prompt593_enable_token_valid": (
+            prompt597_prompt593_enable_token_valid
+        ),
+        "prompt597_prompt592_enable_token_valid": (
+            prompt597_prompt592_enable_token_valid
+        ),
+        "prompt597_prompt591_enable_token_valid": (
+            prompt597_prompt591_enable_token_valid
+        ),
+        "prompt597_prompt590_enable_token_valid": (
+            prompt597_prompt590_enable_token_valid
+        ),
+        "prompt597_prompt589_enable_token_valid": (
+            prompt597_prompt589_enable_token_valid
+        ),
+        "prompt597_prompt588_enable_token_valid": (
+            prompt597_prompt588_enable_token_valid
+        ),
+        "prompt597_prompt587_enable_token_valid": (
+            prompt597_prompt587_enable_token_valid
+        ),
+        "prompt597_prompt586_enable_token_valid": (
+            prompt597_prompt586_enable_token_valid
+        ),
+        "prompt597_prompt585_enable_token_valid": (
+            prompt597_prompt585_enable_token_valid
+        ),
+        "prompt597_prompt584_enable_token_valid": (
+            prompt597_prompt584_enable_token_valid
+        ),
+        "prompt597_prompt580_enable_token_valid": (
+            prompt597_prompt580_enable_token_valid
+        ),
+        "prompt597_prompt583_enable_token_valid": (
+            prompt597_prompt583_enable_token_valid
+        ),
+        "prompt597_project_goal_present": project_goal_present,
+        "prompt597_role_task_present": role_task_present,
+        "prompt597_bridge_request_valid": bridge_request_valid,
+        "prompt597_selected_role": selected_role,
+        "prompt597_selected_role_valid": selected_role_valid,
+        "prompt597_repeat_count_requested": repeat_count_requested,
+        "prompt597_repeat_count_completed": repeat_count_completed,
+        "prompt597_prompt596_executed": prompt596_executed,
+        "prompt597_prompt596_success": prompt596_success,
+        "prompt597_prompt596_route": prompt596_route,
+        "prompt597_prompt596_next_action": prompt596_next_action,
+        "prompt597_repeat_dogfood_completed": repeat_dogfood_completed,
+        "prompt597_actual_role_execution_prepared": (
+            actual_role_execution_prepared
+        ),
+        "prompt597_actual_role_execution_executed": (
+            actual_role_execution_executed
+        ),
+        "prompt597_execution_requires_next_explicit_enable": (
+            execution_requires_next_explicit_enable
+        ),
+        "prompt597_retry_required": retry_required,
+        "prompt597_cycle_exhausted": cycle_exhausted,
+        "prompt597_codex_executed_during_runtime": (
+            prompt597_codex_executed_during_runtime
+        ),
+        "prompt597_tracked_files_modified_by_codex": (
+            prompt597_tracked_files_modified_by_codex
+        ),
+        "prompt597_commit_performed": prompt597_commit_performed,
+        "prompt597_tag_performed": prompt597_tag_performed,
+        "prompt597_installation_performed": prompt597_installation_performed,
+        "prompt597_systemd_used": prompt597_systemd_used,
+        "prompt597_service_enable_performed": (
+            prompt597_service_enable_performed
+        ),
+        "prompt597_service_start_performed": (
+            prompt597_service_start_performed
+        ),
+        "prompt597_persistent_service_started": (
+            prompt597_persistent_service_started
+        ),
+        "prompt597_remote_workflow_included": (
+            prompt597_remote_workflow_included
+        ),
+        "prompt597_no_remote_mutation_verified": (
+            prompt597_no_remote_mutation_verified
+        ),
+        "prompt597_final_worktree_clean": prompt597_final_worktree_clean,
+        "prompt597_completion_claim_allowed": completion_claim_allowed,
+        "prompt597_result_route": result_route,
+        "prompt597_next_action": next_action,
+        "prompt597_blocked_reasons": blocked_reasons,
+        "prompt597_input_written": input_written,
+        "prompt597_request_written": request_written,
+        "prompt597_repeat_result_written": repeat_result_written,
+        "prompt597_role_request_written": role_request_written,
+        "prompt597_role_prompt_written": role_prompt_written,
+        "prompt597_safety_contract_written": safety_contract_written,
+        "prompt597_route_written": route_written,
+        "prompt597_artifacts_written": False,
+    }
+    summary_written = _prompt585_write_artifact(
+        control_artifact_dir / "bounded_role_bridge_summary.json",
+        summary,
+    )
+    artifacts_written = bool(
+        summary_written
+        and all(
+            (control_artifact_dir / name).is_file()
+            for name in _PROMPT597_REQUIRED_ARTIFACT_NAMES
+        )
+    )
+    summary["prompt597_artifacts_written"] = artifacts_written
+    if not artifacts_written and token_gate_open:
+        summary["prompt597_bounded_role_bridge_status"] = (
+            "blocked_bounded_actual_role_execution_bridge_repeat_exhausted"
+        )
+        summary["prompt597_bounded_role_bridge_ready"] = False
+        summary["prompt597_bounded_role_bridge_success"] = False
+        summary["prompt597_completion_claim_allowed"] = False
+        summary["prompt597_result_route"] = (
+            "bounded_actual_role_execution_bridge_repeat_exhausted"
+        )
+        summary["prompt597_next_action"] = (
+            "manual_review_bounded_actual_role_execution_bridge"
+        )
+        summary["prompt597_blocked_reasons"] = [
+            *blocked_reasons,
+            "prompt597_required_artifacts_missing",
+        ]
+    if summary_written:
+        _write_json(
+            control_artifact_dir / "bounded_role_bridge_summary.json",
             summary,
         )
     return summary
