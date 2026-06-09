@@ -37445,6 +37445,264 @@ def _build_prompt603_real_task_dogfood_execution_gate_state(
     }
 
 
+def _build_prompt604_existing_bridge_connection_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt604_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt604_result_route"),
+        default="",
+    )
+    next_action = _normalize_text(
+        payload.get("prompt604_next_action"),
+        default="",
+    )
+    enabled = payload.get("prompt604_enabled") is True
+    enable_token_valid = (
+        payload.get("prompt604_enable_token_valid") is True
+    )
+    request_valid = payload.get("prompt604_request_valid") is True
+    project_goal_present = (
+        payload.get("prompt604_project_goal_present") is True
+    )
+    role_name_present = payload.get("prompt604_role_name_present") is True
+    role_task_present = payload.get("prompt604_role_task_present") is True
+    target_files_present = (
+        payload.get("prompt604_target_files_present") is True
+    )
+    acceptance_criteria_present = (
+        payload.get("prompt604_acceptance_criteria_present") is True
+    )
+    connection_mode = _normalize_text(
+        payload.get("prompt604_connection_mode"),
+        default="existing_modular_bridge_connection",
+    )
+    connection_mode_valid = (
+        payload.get("prompt604_connection_mode_valid") is True
+    )
+    prompt603_base_confirmed = (
+        payload.get("prompt604_prompt603_base_confirmed") is True
+    )
+    chatgpt_extension_bridge_available = (
+        payload.get("prompt604_chatgpt_extension_bridge_available") is True
+    )
+    codex_execution_bridge_available = (
+        payload.get("prompt604_codex_execution_bridge_available") is True
+    )
+    result_evaluation_available = (
+        payload.get("prompt604_result_evaluation_available") is True
+    )
+    retry_or_fix_available = (
+        payload.get("prompt604_retry_or_fix_available") is True
+    )
+    commit_tag_available = (
+        payload.get("prompt604_commit_tag_available") is True
+    )
+    loop_dispatcher_available = (
+        payload.get("prompt604_loop_dispatcher_available") is True
+    )
+    all_required_components_available = (
+        payload.get("prompt604_all_required_components_available") is True
+    )
+    connection_plan_written = (
+        payload.get("prompt604_connection_plan_written") is True
+    )
+    connection_plan_steps = _normalize_string_list(
+        payload.get("prompt604_connection_plan_steps")
+    )
+    real_codex_execution_performed = (
+        payload.get("prompt604_real_codex_execution_performed") is True
+    )
+    commit_tag_execution_performed = (
+        payload.get("prompt604_commit_tag_execution_performed") is True
+    )
+    tracked_files_modified_by_runtime = (
+        payload.get("prompt604_tracked_files_modified_by_runtime") is True
+    )
+    no_remote_mutation_verified = (
+        payload.get("prompt604_no_remote_mutation_verified") is True
+    )
+    clean_and_safe = bool(
+        not real_codex_execution_performed
+        and not commit_tag_execution_performed
+        and not tracked_files_modified_by_runtime
+        and payload.get("prompt604_systemd_used") is False
+        and payload.get("prompt604_service_enable_performed") is False
+        and payload.get("prompt604_service_start_performed") is False
+        and payload.get("prompt604_persistent_service_started") is False
+        and payload.get("prompt604_remote_workflow_included") is False
+        and no_remote_mutation_verified
+    )
+    required_steps = [
+        "role_task_input",
+        "chatgpt_prompt_generation_or_evaluation",
+        "codex_execution",
+        "codex_result_capture",
+        "result_evaluation",
+        "targeted_fix_or_retry",
+        "commit_tag_readiness",
+        "next_cycle_dispatch",
+    ]
+    success_predicates = bool(
+        enabled
+        and enable_token_valid
+        and request_valid
+        and project_goal_present
+        and role_task_present
+        and target_files_present
+        and connection_mode == "existing_modular_bridge_connection"
+        and connection_mode_valid
+        and prompt603_base_confirmed
+        and chatgpt_extension_bridge_available
+        and codex_execution_bridge_available
+        and result_evaluation_available
+        and retry_or_fix_available
+        and commit_tag_available
+        and loop_dispatcher_available
+        and all_required_components_available
+        and connection_plan_written
+        and connection_plan_steps == required_steps
+        and clean_and_safe
+        and payload.get("prompt604_final_worktree_clean") is True
+        and result_route == "existing_bridge_connection_ready"
+        and next_action
+        == "prepare_prompt605_real_codex_execution_through_existing_bridge"
+        and blocked_reasons == []
+        and payload.get("prompt604_completion_claim_allowed") is True
+    )
+    missing_component_predicates = bool(
+        request_valid
+        and not all_required_components_available
+        and result_route == "existing_bridge_connection_missing_component"
+        and next_action == "restore_or_wire_missing_existing_component"
+        and "prompt604_missing_existing_bridge_component" in blocked_reasons
+        and payload.get("prompt604_completion_claim_allowed") is False
+    )
+    invalid_request_predicates = bool(
+        not request_valid
+        and result_route == "existing_bridge_connection_request_invalid"
+        and next_action == "manual_review_existing_bridge_connection_request"
+        and "prompt604_existing_bridge_connection_request_invalid"
+        in blocked_reasons
+        and payload.get("prompt604_completion_claim_allowed") is False
+    )
+    safety_violation_predicates = bool(
+        result_route == "existing_bridge_connection_safety_violation"
+        and next_action
+        == "manual_review_existing_bridge_connection_safety_violation"
+        and "prompt604_safety_violation" in blocked_reasons
+        and payload.get("prompt604_completion_claim_allowed") is False
+    )
+
+    if success_predicates:
+        status = "existing_bridge_connection_ready_local_only"
+        ready = True
+        success = True
+    elif missing_component_predicates:
+        status = "blocked_existing_bridge_connection_missing_component"
+        ready = False
+        success = False
+    elif safety_violation_predicates:
+        status = "blocked_existing_bridge_connection_safety_violation"
+        ready = False
+        success = False
+    elif invalid_request_predicates:
+        status = "blocked_existing_bridge_connection_invalid_request"
+        ready = False
+        success = False
+    else:
+        status = "blocked_existing_bridge_connection_invalid_request"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt604",
+        "prompt604_existing_bridge_connection_status": status,
+        "prompt604_existing_bridge_connection_ready": ready,
+        "prompt604_existing_bridge_connection_success": success,
+        "prompt604_enabled": enabled,
+        "prompt604_enable_token_valid": enable_token_valid,
+        "prompt604_request_valid": request_valid,
+        "prompt604_project_goal_present": project_goal_present,
+        "prompt604_role_name_present": role_name_present,
+        "prompt604_role_task_present": role_task_present,
+        "prompt604_target_files_present": target_files_present,
+        "prompt604_acceptance_criteria_present": (
+            acceptance_criteria_present
+        ),
+        "prompt604_connection_mode": connection_mode,
+        "prompt604_connection_mode_valid": connection_mode_valid,
+        "prompt604_prompt603_base_confirmed": prompt603_base_confirmed,
+        "prompt604_chatgpt_extension_bridge_available": (
+            chatgpt_extension_bridge_available
+        ),
+        "prompt604_codex_execution_bridge_available": (
+            codex_execution_bridge_available
+        ),
+        "prompt604_result_evaluation_available": (
+            result_evaluation_available
+        ),
+        "prompt604_retry_or_fix_available": retry_or_fix_available,
+        "prompt604_commit_tag_available": commit_tag_available,
+        "prompt604_loop_dispatcher_available": loop_dispatcher_available,
+        "prompt604_all_required_components_available": (
+            all_required_components_available
+        ),
+        "prompt604_connection_plan_written": connection_plan_written,
+        "prompt604_connection_plan_steps": connection_plan_steps,
+        "prompt604_real_codex_execution_performed": (
+            real_codex_execution_performed
+        ),
+        "prompt604_commit_tag_execution_performed": (
+            commit_tag_execution_performed
+        ),
+        "prompt604_tracked_files_modified_by_runtime": (
+            tracked_files_modified_by_runtime
+        ),
+        "prompt604_systemd_used": (
+            payload.get("prompt604_systemd_used") is True
+        ),
+        "prompt604_service_enable_performed": (
+            payload.get("prompt604_service_enable_performed") is True
+        ),
+        "prompt604_service_start_performed": (
+            payload.get("prompt604_service_start_performed") is True
+        ),
+        "prompt604_persistent_service_started": (
+            payload.get("prompt604_persistent_service_started") is True
+        ),
+        "prompt604_remote_workflow_included": (
+            payload.get("prompt604_remote_workflow_included") is True
+        ),
+        "prompt604_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt604_final_worktree_clean": (
+            payload.get("prompt604_final_worktree_clean") is True
+        ),
+        "prompt604_completion_claim_allowed": (
+            payload.get("prompt604_completion_claim_allowed") is True
+        ),
+        "prompt604_result_route": result_route,
+        "prompt604_next_action": next_action,
+        "prompt604_blocked_reasons": blocked_reasons,
+        "prompt604_prompt_surface": (
+            "Local-only existing modular bridge connection gate. Prompt604 "
+            "validates role/task input, confirms the Prompt603 dogfood base, "
+            "maps existing ChatGPT bridge, Codex execution bridge, result "
+            "evaluation, retry/fix, commit/tag readiness, and loop dispatcher "
+            "components, writes a connection plan, and excludes real Codex "
+            "execution, ChatGPT/browser calls, commit/tag execution, tracked "
+            "file runtime mutation, systemd, services, daemons, subprocess "
+            "shell mode, "
+            "privilege escalation, and remote workflows."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
