@@ -266,6 +266,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt602_multi_cycle_unattended_role_cycle_loop_state,
     _build_prompt603_real_task_dogfood_execution_gate_state,
     _build_prompt604_existing_bridge_connection_gate_state,
+    _build_prompt605_real_codex_execution_through_existing_bridge_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -528,6 +529,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt602_multi_cycle_unattended_role_cycle_loop_state": _build_prompt602_multi_cycle_unattended_role_cycle_loop_state,
     "_build_prompt603_real_task_dogfood_execution_gate_state": _build_prompt603_real_task_dogfood_execution_gate_state,
     "_build_prompt604_existing_bridge_connection_gate_state": _build_prompt604_existing_bridge_connection_gate_state,
+    "_build_prompt605_real_codex_execution_through_existing_bridge_state": _build_prompt605_real_codex_execution_through_existing_bridge_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -794,4 +796,5 @@ __all__ = [
     "_build_prompt602_multi_cycle_unattended_role_cycle_loop_state",
     "_build_prompt603_real_task_dogfood_execution_gate_state",
     "_build_prompt604_existing_bridge_connection_gate_state",
+    "_build_prompt605_real_codex_execution_through_existing_bridge_state",
 ]

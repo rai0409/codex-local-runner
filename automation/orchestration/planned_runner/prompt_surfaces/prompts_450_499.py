@@ -37703,6 +37703,227 @@ def _build_prompt604_existing_bridge_connection_gate_state(
     }
 
 
+def _build_prompt605_real_codex_execution_through_existing_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt605_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt605_result_route"),
+        default="",
+    )
+    next_action = _normalize_text(
+        payload.get("prompt605_next_action"),
+        default="",
+    )
+    execution_mode = _normalize_text(
+        payload.get("prompt605_execution_mode"),
+        default="real_codex_once_existing_bridge",
+    )
+    changed_files = _normalize_string_list(
+        payload.get("prompt605_changed_files")
+    )
+    request_valid = payload.get("prompt605_request_valid") is True
+    prompt604_base_confirmed = (
+        payload.get("prompt605_prompt604_base_confirmed") is True
+    )
+    execution_mode_valid = (
+        payload.get("prompt605_execution_mode_valid") is True
+    )
+    real_codex_execution_performed = (
+        payload.get("prompt605_real_codex_execution_performed") is True
+    )
+    codex_returncode_success = (
+        payload.get("prompt605_codex_returncode_success") is True
+    )
+    changed_files_within_allowed_scope = (
+        payload.get("prompt605_changed_files_within_allowed_scope") is True
+    )
+    no_local_service_or_remote = bool(
+        payload.get("prompt605_commit_tag_execution_performed") is False
+        and payload.get("prompt605_systemd_used") is False
+        and payload.get("prompt605_service_enable_performed") is False
+        and payload.get("prompt605_service_start_performed") is False
+        and payload.get("prompt605_persistent_service_started") is False
+        and payload.get("prompt605_remote_workflow_included") is False
+        and payload.get("prompt605_no_remote_mutation_verified") is True
+    )
+    success_predicates = bool(
+        payload.get("prompt605_enabled") is True
+        and payload.get("prompt605_enable_token_valid") is True
+        and request_valid
+        and prompt604_base_confirmed
+        and execution_mode == "real_codex_once_existing_bridge"
+        and execution_mode_valid
+        and payload.get("prompt605_allow_real_codex_execution") is True
+        and payload.get("prompt605_allow_commit_tag_execution") is False
+        and payload.get("prompt605_real_codex_execution_requested") is True
+        and payload.get("prompt605_real_codex_execution_allowed") is True
+        and real_codex_execution_performed
+        and codex_returncode_success
+        and payload.get("prompt605_codex_stdout_captured") is True
+        and payload.get("prompt605_codex_stderr_captured") is True
+        and payload.get("prompt605_changed_files_captured") is True
+        and changed_files_within_allowed_scope
+        and payload.get("prompt605_patch_captured") is True
+        and no_local_service_or_remote
+        and result_route == "real_codex_execution_completed"
+        and next_action
+        == "prepare_prompt606_result_evaluation_retry_or_commit_readiness"
+        and blocked_reasons == []
+        and payload.get("prompt605_completion_claim_allowed") is True
+    )
+    failed_returncode_predicates = bool(
+        request_valid
+        and real_codex_execution_performed
+        and not codex_returncode_success
+        and result_route == "real_codex_execution_completed"
+        and next_action
+        == "prepare_prompt606_result_evaluation_retry_or_commit_readiness"
+        and "prompt605_codex_returncode_nonzero" in blocked_reasons
+        and payload.get("prompt605_completion_claim_allowed") is False
+    )
+    invalid_request_predicates = bool(
+        not request_valid
+        and result_route == "real_codex_execution_request_invalid"
+        and next_action == "manual_review_prompt605_request"
+        and "prompt605_real_codex_execution_request_invalid"
+        in blocked_reasons
+        and payload.get("prompt605_completion_claim_allowed") is False
+    )
+    safety_violation_predicates = bool(
+        result_route == "real_codex_execution_safety_violation"
+        and next_action == "manual_review_prompt605_safety_violation"
+        and "prompt605_safety_violation" in blocked_reasons
+        and payload.get("prompt605_completion_claim_allowed") is False
+    )
+    execution_bridge_unavailable_predicates = bool(
+        request_valid
+        and not real_codex_execution_performed
+        and result_route == "real_codex_execution_bridge_unavailable"
+        and next_action == "manual_review_prompt605_execution_bridge"
+        and "prompt605_execution_bridge_unavailable" in blocked_reasons
+        and payload.get("prompt605_completion_claim_allowed") is False
+    )
+
+    if success_predicates:
+        status = "real_codex_execution_through_existing_bridge_completed_local_only"
+        ready = True
+        success = True
+    elif failed_returncode_predicates:
+        status = "real_codex_execution_through_existing_bridge_completed_local_only"
+        ready = True
+        success = False
+    elif safety_violation_predicates:
+        status = "blocked_real_codex_execution_safety_violation"
+        ready = False
+        success = False
+    elif invalid_request_predicates:
+        status = "blocked_real_codex_execution_invalid_request"
+        ready = False
+        success = False
+    elif execution_bridge_unavailable_predicates:
+        status = "blocked_real_codex_execution_bridge_unavailable"
+        ready = False
+        success = False
+    else:
+        status = "blocked_real_codex_execution_invalid_request"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt605",
+        "prompt605_real_codex_execution_status": status,
+        "prompt605_real_codex_execution_ready": ready,
+        "prompt605_real_codex_execution_success": success,
+        "prompt605_enabled": payload.get("prompt605_enabled") is True,
+        "prompt605_enable_token_valid": (
+            payload.get("prompt605_enable_token_valid") is True
+        ),
+        "prompt605_request_valid": request_valid,
+        "prompt605_prompt604_base_confirmed": prompt604_base_confirmed,
+        "prompt605_execution_mode": execution_mode,
+        "prompt605_execution_mode_valid": execution_mode_valid,
+        "prompt605_allow_real_codex_execution": (
+            payload.get("prompt605_allow_real_codex_execution") is True
+        ),
+        "prompt605_allow_commit_tag_execution": (
+            payload.get("prompt605_allow_commit_tag_execution") is True
+        ),
+        "prompt605_real_codex_execution_requested": (
+            payload.get("prompt605_real_codex_execution_requested") is True
+        ),
+        "prompt605_real_codex_execution_allowed": (
+            payload.get("prompt605_real_codex_execution_allowed") is True
+        ),
+        "prompt605_real_codex_execution_performed": (
+            real_codex_execution_performed
+        ),
+        "prompt605_codex_returncode": payload.get(
+            "prompt605_codex_returncode"
+        ),
+        "prompt605_codex_returncode_success": codex_returncode_success,
+        "prompt605_codex_stdout_captured": (
+            payload.get("prompt605_codex_stdout_captured") is True
+        ),
+        "prompt605_codex_stderr_captured": (
+            payload.get("prompt605_codex_stderr_captured") is True
+        ),
+        "prompt605_changed_files": changed_files,
+        "prompt605_changed_files_captured": (
+            payload.get("prompt605_changed_files_captured") is True
+        ),
+        "prompt605_changed_files_within_allowed_scope": (
+            changed_files_within_allowed_scope
+        ),
+        "prompt605_patch_captured": (
+            payload.get("prompt605_patch_captured") is True
+        ),
+        "prompt605_commit_tag_execution_performed": (
+            payload.get("prompt605_commit_tag_execution_performed") is True
+        ),
+        "prompt605_systemd_used": (
+            payload.get("prompt605_systemd_used") is True
+        ),
+        "prompt605_service_enable_performed": (
+            payload.get("prompt605_service_enable_performed") is True
+        ),
+        "prompt605_service_start_performed": (
+            payload.get("prompt605_service_start_performed") is True
+        ),
+        "prompt605_persistent_service_started": (
+            payload.get("prompt605_persistent_service_started") is True
+        ),
+        "prompt605_remote_workflow_included": (
+            payload.get("prompt605_remote_workflow_included") is True
+        ),
+        "prompt605_no_remote_mutation_verified": (
+            payload.get("prompt605_no_remote_mutation_verified") is True
+        ),
+        "prompt605_completion_claim_allowed": (
+            payload.get("prompt605_completion_claim_allowed") is True
+        ),
+        "prompt605_result_route": result_route,
+        "prompt605_next_action": next_action,
+        "prompt605_blocked_reasons": blocked_reasons,
+        "prompt605_prompt_surface": (
+            "Local-only real Codex execution through the existing bridge. "
+            "Prompt605 validates a bounded role task, confirms the Prompt604 "
+            "existing bridge base, performs one Codex execution through an "
+            "available existing adapter when explicitly enabled or blocks with "
+            "real_codex_execution_bridge_unavailable, captures stdout, stderr, return code, "
+            "pre/post status, changed files, and patch artifacts, "
+            "blocks out-of-scope file changes, and excludes commit/tag, "
+            "remote, browser, ChatGPT, daemon, persistent service, and shell mode "
+            "operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,

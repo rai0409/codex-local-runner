@@ -210,6 +210,9 @@ PROMPT603_REAL_TASK_DOGFOOD_EXECUTION_GATE_ENABLE_TOKEN = (
 PROMPT604_EXISTING_BRIDGE_CONNECTION_GATE_ENABLE_TOKEN = (
     "PROMPT604_EXISTING_BRIDGE_CONNECTION_GATE_ENABLE"
 )
+PROMPT605_REAL_CODEX_EXECUTION_THROUGH_EXISTING_BRIDGE_ENABLE_TOKEN = (
+    "PROMPT605_REAL_CODEX_EXECUTION_THROUGH_EXISTING_BRIDGE_ENABLE"
+)
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
@@ -420,6 +423,10 @@ _PROMPT604_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt604_existing_bridge_connection_gate"
 )
+_PROMPT605_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt605_real_codex_execution_through_existing_bridge"
+)
 _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_input.json",
     "daemon_control_resume_state_before.json",
@@ -617,6 +624,23 @@ _PROMPT604_REQUIRED_ARTIFACT_NAMES = (
     "existing_bridge_summary.json",
     "existing_bridge_result.json",
     "existing_bridge_trace.json",
+)
+_PROMPT605_REQUIRED_ARTIFACT_NAMES = (
+    "real_codex_input.json",
+    "real_codex_request.json",
+    "real_codex_generated_prompt.txt",
+    "real_codex_pre_status.txt",
+    "real_codex_stdout.txt",
+    "real_codex_stderr.txt",
+    "real_codex_returncode.json",
+    "real_codex_post_status.txt",
+    "real_codex_changed_files.json",
+    "real_codex.patch",
+    "real_codex_result.json",
+    "real_codex_trace.json",
+    "real_codex_safety_contract.json",
+    "real_codex_route.json",
+    "real_codex_summary.json",
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -23332,6 +23356,541 @@ def run_prompt604_existing_bridge_connection_gate(
             "prompt604_required_artifacts_missing",
         ]
     _write_json(control_artifact_dir / "existing_bridge_summary.json", summary)
+    return summary
+
+
+def _prompt605_read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _prompt605_git_status_text(repo_path: Path) -> str:
+    if not repo_path.exists():
+        return "repo_path_missing\n"
+    return "git_status_capture_unavailable_without_safe_prompt605_bridge\n"
+
+
+def _prompt605_git_diff_for_files(repo_path: Path, files: Sequence[str]) -> str:
+    safe_files = [
+        path
+        for path in _prompt604_target_files(files)
+        if path
+    ]
+    if repo_path.exists() and safe_files:
+        return "diff_capture_unavailable_without_safe_prompt605_bridge\n"
+    return ""
+
+
+def _prompt605_adapter_artifact_files() -> set[str]:
+    return {
+        str(path)
+        for path in (
+            PROMPT546_STDOUT_ARTIFACT,
+            PROMPT546_STDERR_ARTIFACT,
+            PROMPT546_RETURNCODE_ARTIFACT,
+            PROMPT546_CHANGED_FILES_ARTIFACT,
+            PROMPT546_DIFF_ARTIFACT,
+            PROMPT546_RESULT_ARTIFACT,
+        )
+    }
+
+
+def _prompt605_prompt_text(
+    *,
+    project_goal: str,
+    role_name: str,
+    role_task: str,
+    target_files: Sequence[str],
+    acceptance_criteria: Sequence[str],
+    allowed_files: Sequence[str],
+    dry_run_prompt_text: str,
+) -> str:
+    if dry_run_prompt_text:
+        return dry_run_prompt_text.rstrip() + "\n"
+    target_lines = "\n".join(f"- {item}" for item in target_files)
+    criteria_lines = "\n".join(f"- {item}" for item in acceptance_criteria)
+    allowed_lines = "\n".join(f"- {item}" for item in allowed_files)
+    return (
+        "Mode: Implement\n"
+        f"Goal: {project_goal}\n"
+        f"Role: {role_name}\n"
+        f"Task: {role_task}\n"
+        "Allowed files:\n"
+        f"{allowed_lines}\n"
+        "Target files:\n"
+        f"{target_lines}\n"
+        "Acceptance criteria:\n"
+        f"{criteria_lines}\n"
+        "Forbidden files: every repository file not listed under Allowed files.\n"
+        "Expected artifact/output: local code changes only, limited to the "
+        "allowed files, with a concise final summary.\n"
+        "Allowed validation commands: repository-local read-only inspection "
+        "and focused validation commands needed for this task.\n"
+        "Out of scope: commits, tags, pushes, PRs, remote operations, "
+        "browser or ChatGPT calls, daemon/service/systemd operations, "
+        "merge execution, rollback execution, and broad unrelated tests.\n"
+    )
+
+
+def _prompt605_prompt604_base_confirmed(
+    *,
+    payload: Mapping[str, Any],
+    prompt604_token_valid: bool,
+) -> bool:
+    return bool(
+        prompt604_token_valid
+        and payload.get("prompt604_existing_bridge_connection_status")
+        == "existing_bridge_connection_ready_local_only"
+        and payload.get("prompt604_existing_bridge_connection_ready") is True
+        and payload.get("prompt604_existing_bridge_connection_success") is True
+        and payload.get("prompt604_request_valid") is True
+        and payload.get("prompt604_prompt603_base_confirmed") is True
+        and payload.get("prompt604_all_required_components_available") is True
+        and payload.get("prompt604_connection_plan_written") is True
+        and payload.get("prompt604_result_route")
+        == "existing_bridge_connection_ready"
+        and payload.get("prompt604_next_action")
+        == "prepare_prompt605_real_codex_execution_through_existing_bridge"
+        and payload.get("prompt604_real_codex_execution_performed") is False
+        and payload.get("prompt604_commit_tag_execution_performed") is False
+        and payload.get("prompt604_tracked_files_modified_by_runtime") is False
+    )
+
+
+def run_prompt605_real_codex_execution_through_existing_bridge(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt604_enable_token: str | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        payload.get("prompt605_repo_path")
+        or execution_repo_path
+        or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    control_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT605_DEFAULT_ARTIFACT_DIR
+    )
+    if not control_artifact_dir.is_absolute():
+        control_artifact_dir = repo_path / control_artifact_dir
+    control_artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    prompt605_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt605_enabled") is True
+    )
+    prompt605_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt605_enable_token"),
+        default="",
+    )
+    prompt604_token = _normalize_text(
+        prompt604_enable_token
+        if prompt604_enable_token is not None
+        else payload.get("prompt604_enable_token"),
+        default="",
+    )
+    prompt605_enable_token_valid = (
+        prompt605_token
+        == PROMPT605_REAL_CODEX_EXECUTION_THROUGH_EXISTING_BRIDGE_ENABLE_TOKEN
+    )
+    prompt604_enable_token_valid = (
+        prompt604_token == PROMPT604_EXISTING_BRIDGE_CONNECTION_GATE_ENABLE_TOKEN
+    )
+
+    project_goal = _normalize_text(
+        payload.get("prompt605_project_goal"),
+        default="",
+    )
+    role_name = _normalize_text(payload.get("prompt605_role_name"), default="")
+    role_task = _normalize_text(payload.get("prompt605_role_task"), default="")
+    target_files = _prompt604_target_files(payload.get("prompt605_target_files"))
+    acceptance_criteria = _prompt579_string_list(
+        payload.get("prompt605_acceptance_criteria")
+    )
+    allowed_files = _prompt604_target_files(payload.get("prompt605_allowed_files"))
+    execution_mode = _normalize_text(
+        payload.get("prompt605_execution_mode"),
+        default="real_codex_once_existing_bridge",
+    )
+    timeout_raw = payload.get("prompt605_timeout_seconds", 120)
+    timeout_seconds = (
+        timeout_raw
+        if isinstance(timeout_raw, int) and not isinstance(timeout_raw, bool)
+        else 120
+    )
+    timeout_seconds = max(1, min(600, int(timeout_seconds)))
+    dry_run_prompt_text = _normalize_text(
+        payload.get("prompt605_dry_run_prompt_text"),
+        default="",
+    )
+    allow_real_codex_execution = (
+        payload.get("prompt605_allow_real_codex_execution") is True
+    )
+    allow_commit_tag_execution = (
+        payload.get("prompt605_allow_commit_tag_execution") is True
+    )
+    force_invalid_request = (
+        payload.get("prompt605_force_invalid_request") is True
+    )
+    force_safety_violation = (
+        payload.get("prompt605_force_safety_violation") is True
+    )
+    force_codex_failure = (
+        payload.get("prompt605_force_codex_failure") is True
+    )
+
+    execution_mode_valid = execution_mode == "real_codex_once_existing_bridge"
+    prompt604_base_confirmed = _prompt605_prompt604_base_confirmed(
+        payload=payload,
+        prompt604_token_valid=prompt604_enable_token_valid,
+    )
+    request_valid = bool(
+        prompt605_enabled
+        and prompt605_enable_token_valid
+        and prompt604_base_confirmed
+        and project_goal
+        and role_name
+        and role_task
+        and target_files
+        and acceptance_criteria
+        and allowed_files
+        and execution_mode_valid
+        and allow_real_codex_execution
+        and not allow_commit_tag_execution
+        and not force_invalid_request
+    )
+    target_files_allowed = set(target_files).issubset(set(allowed_files))
+    real_codex_execution_requested = bool(allow_real_codex_execution)
+    execution_bridge_available = False
+    real_codex_execution_allowed = bool(
+        request_valid
+        and target_files_allowed
+        and not force_safety_violation
+        and execution_bridge_available
+    )
+
+    generated_prompt = _prompt605_prompt_text(
+        project_goal=project_goal,
+        role_name=role_name,
+        role_task=role_task,
+        target_files=target_files,
+        acceptance_criteria=acceptance_criteria,
+        allowed_files=allowed_files,
+        dry_run_prompt_text=dry_run_prompt_text,
+    )
+    generated_prompt_path = control_artifact_dir / "real_codex_generated_prompt.txt"
+    generated_prompt_path.write_text(generated_prompt, encoding="utf-8")
+
+    request_payload = {
+        "local_only": True,
+        "source_prompt": "prompt605",
+        "execution_mode": execution_mode,
+        "project_goal": project_goal,
+        "role_name": role_name,
+        "role_task": role_task,
+        "target_files": target_files,
+        "acceptance_criteria": acceptance_criteria,
+        "allowed_files": allowed_files,
+        "timeout_seconds": timeout_seconds,
+        "real_codex_execution_requested": real_codex_execution_requested,
+        "real_codex_execution_allowed": real_codex_execution_allowed,
+        "commit_tag_execution_allowed": False,
+        "commit_tag_execution_requested": allow_commit_tag_execution,
+        "prompt_path": str(generated_prompt_path),
+    }
+    input_payload = {
+        "local_only": True,
+        "source_prompt": "prompt605",
+        "execution_repo_path": str(repo_path),
+        "artifact_dir": str(control_artifact_dir),
+        "enabled": prompt605_enabled,
+        "enable_token_valid": prompt605_enable_token_valid,
+        "required_upstream_token_valid": prompt604_enable_token_valid,
+        **request_payload,
+    }
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_input.json",
+        input_payload,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_request.json",
+        request_payload,
+    )
+
+    pre_status = _prompt605_git_status_text(repo_path)
+    pre_changed_files: set[str] = set()
+    (control_artifact_dir / "real_codex_pre_status.txt").write_text(
+        pre_status,
+        encoding="utf-8",
+    )
+
+    post_status = _prompt605_git_status_text(repo_path)
+    post_changed_files: set[str] = set()
+    adapter_artifacts = _prompt605_adapter_artifact_files()
+    changed_files = sorted(
+        path
+        for path in post_changed_files
+        if path not in pre_changed_files and path not in adapter_artifacts
+    )
+    changed_files_within_allowed_scope = bool(
+        set(changed_files).issubset(set(allowed_files))
+    )
+    patch_text = _prompt605_git_diff_for_files(repo_path, changed_files)
+
+    codex_returncode = None
+    if force_codex_failure and real_codex_execution_allowed:
+        codex_returncode = 1
+    codex_returncode_success = codex_returncode == 0
+    real_codex_execution_performed = False
+    codex_stdout = ""
+    codex_stderr = ""
+    codex_stdout_captured = bool(real_codex_execution_performed)
+    codex_stderr_captured = bool(real_codex_execution_performed)
+    changed_files_captured = True
+    patch_captured = True
+
+    safety_violation = bool(
+        force_safety_violation
+        or not target_files_allowed
+        or (
+            real_codex_execution_performed
+            and not changed_files_within_allowed_scope
+        )
+    )
+    if safety_violation:
+        status = "blocked_real_codex_execution_safety_violation"
+        ready = False
+        success = False
+        result_route = "real_codex_execution_safety_violation"
+        next_action = "manual_review_prompt605_safety_violation"
+        completion_claim_allowed = False
+        blocked_reasons = ["prompt605_safety_violation"]
+        result_classification = "blocked_safety_violation"
+    elif not request_valid:
+        status = "blocked_real_codex_execution_invalid_request"
+        ready = False
+        success = False
+        result_route = "real_codex_execution_request_invalid"
+        next_action = "manual_review_prompt605_request"
+        completion_claim_allowed = False
+        blocked_reasons = ["prompt605_real_codex_execution_request_invalid"]
+        result_classification = "blocked_invalid_request"
+    elif not execution_bridge_available:
+        status = "blocked_real_codex_execution_bridge_unavailable"
+        ready = False
+        success = False
+        result_route = "real_codex_execution_bridge_unavailable"
+        next_action = "manual_review_prompt605_execution_bridge"
+        completion_claim_allowed = False
+        blocked_reasons = ["prompt605_execution_bridge_unavailable"]
+        result_classification = "blocked_adapter_unavailable"
+    elif not codex_returncode_success:
+        status = "real_codex_execution_through_existing_bridge_completed_local_only"
+        ready = True
+        success = False
+        result_route = "real_codex_execution_completed"
+        next_action = "prepare_prompt606_result_evaluation_retry_or_commit_readiness"
+        completion_claim_allowed = False
+        blocked_reasons = ["prompt605_codex_returncode_nonzero"]
+        result_classification = "failed_returncode"
+    else:
+        status = "real_codex_execution_through_existing_bridge_completed_local_only"
+        ready = True
+        success = True
+        result_route = "real_codex_execution_completed"
+        next_action = "prepare_prompt606_result_evaluation_retry_or_commit_readiness"
+        completion_claim_allowed = True
+        blocked_reasons = []
+        result_classification = (
+            "success_with_allowed_changes"
+            if changed_files
+            else "success_no_change"
+        )
+
+    route = {
+        "local_only": True,
+        "source_prompt": "prompt605",
+        "prompt605_result_route": result_route,
+        "prompt605_next_action": next_action,
+        "prompt605_result_classification": result_classification,
+        "prompt605_blocked_reasons": blocked_reasons,
+    }
+    safety_contract = {
+        "local_only": True,
+        "source_prompt": "prompt605",
+        "one_execution_only": True,
+        "real_codex_execution_requested": real_codex_execution_requested,
+        "real_codex_execution_allowed": real_codex_execution_allowed,
+        "real_codex_execution_performed": real_codex_execution_performed,
+        "commit_tag_execution_allowed": False,
+        "commit_tag_execution_performed": False,
+        "remote_workflow_allowed": False,
+        "remote_workflow_included": False,
+        "systemd_allowed": False,
+        "service_enable_allowed": False,
+        "service_start_allowed": False,
+        "persistent_daemon_allowed": False,
+        "shell_true_allowed": False,
+        "subprocess_shell": False,
+        "changed_files_within_allowed_scope": (
+            changed_files_within_allowed_scope
+        ),
+        "safety_violation": safety_violation,
+    }
+    trace = {
+        "local_only": True,
+        "source_prompt": "prompt605",
+        "existing_bridge_adapter": "run_internal_codex_subprocess",
+        "existing_bridge_adapter_available": execution_bridge_available,
+        "prompt_path": str(generated_prompt_path),
+        "pre_status_path": str(control_artifact_dir / "real_codex_pre_status.txt"),
+        "post_status_path": str(control_artifact_dir / "real_codex_post_status.txt"),
+        "stdout_path": str(control_artifact_dir / "real_codex_stdout.txt"),
+        "stderr_path": str(control_artifact_dir / "real_codex_stderr.txt"),
+        "patch_path": str(control_artifact_dir / "real_codex.patch"),
+        "subprocess_shell": False,
+        "chatgpt_or_browser_call_performed": False,
+        "commit_tag_execution_performed": False,
+        "remote_workflow_included": False,
+    }
+    result = {
+        "local_only": True,
+        "source_prompt": "prompt605",
+        "ready": ready,
+        "success": success,
+        "request_valid": request_valid,
+        "prompt604_base_confirmed": prompt604_base_confirmed,
+        "result_classification": result_classification,
+        "codex_returncode": codex_returncode,
+        "changed_files": changed_files,
+        "changed_files_within_allowed_scope": changed_files_within_allowed_scope,
+        "completion_claim_allowed": completion_claim_allowed,
+        "blocked_reasons": blocked_reasons,
+    }
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt605",
+        "prompt605_real_codex_execution_status": status,
+        "prompt605_real_codex_execution_ready": ready,
+        "prompt605_real_codex_execution_success": success,
+        "prompt605_enabled": prompt605_enabled,
+        "prompt605_enable_token_valid": prompt605_enable_token_valid,
+        "prompt605_request_valid": request_valid,
+        "prompt605_prompt604_base_confirmed": prompt604_base_confirmed,
+        "prompt605_execution_mode": execution_mode,
+        "prompt605_execution_mode_valid": execution_mode_valid,
+        "prompt605_allow_real_codex_execution": allow_real_codex_execution,
+        "prompt605_allow_commit_tag_execution": allow_commit_tag_execution,
+        "prompt605_real_codex_execution_requested": (
+            real_codex_execution_requested
+        ),
+        "prompt605_real_codex_execution_allowed": real_codex_execution_allowed,
+        "prompt605_real_codex_execution_performed": (
+            real_codex_execution_performed
+        ),
+        "prompt605_codex_returncode": codex_returncode,
+        "prompt605_codex_returncode_success": codex_returncode_success,
+        "prompt605_codex_stdout_captured": codex_stdout_captured,
+        "prompt605_codex_stderr_captured": codex_stderr_captured,
+        "prompt605_changed_files": changed_files,
+        "prompt605_changed_files_captured": changed_files_captured,
+        "prompt605_changed_files_within_allowed_scope": (
+            changed_files_within_allowed_scope
+        ),
+        "prompt605_patch_captured": patch_captured,
+        "prompt605_commit_tag_execution_performed": False,
+        "prompt605_systemd_used": False,
+        "prompt605_service_enable_performed": False,
+        "prompt605_service_start_performed": False,
+        "prompt605_persistent_service_started": False,
+        "prompt605_remote_workflow_included": False,
+        "prompt605_no_remote_mutation_verified": True,
+        "prompt605_completion_claim_allowed": completion_claim_allowed,
+        "prompt605_result_route": result_route,
+        "prompt605_next_action": next_action,
+        "prompt605_blocked_reasons": blocked_reasons,
+        "prompt605_result_classification": result_classification,
+        "prompt605_artifacts_written": False,
+    }
+
+    (control_artifact_dir / "real_codex_stdout.txt").write_text(
+        codex_stdout,
+        encoding="utf-8",
+    )
+    (control_artifact_dir / "real_codex_stderr.txt").write_text(
+        codex_stderr,
+        encoding="utf-8",
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_returncode.json",
+        {"returncode": codex_returncode},
+    )
+    (control_artifact_dir / "real_codex_post_status.txt").write_text(
+        post_status,
+        encoding="utf-8",
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_changed_files.json",
+        {"changed_files": changed_files},
+    )
+    (control_artifact_dir / "real_codex.patch").write_text(
+        patch_text,
+        encoding="utf-8",
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_result.json",
+        result,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_trace.json",
+        trace,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_safety_contract.json",
+        safety_contract,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_route.json",
+        route,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "real_codex_summary.json",
+        summary,
+    )
+    artifacts_written = all(
+        (control_artifact_dir / name).is_file()
+        for name in _PROMPT605_REQUIRED_ARTIFACT_NAMES
+    )
+    summary["prompt605_artifacts_written"] = artifacts_written
+    if not artifacts_written:
+        summary["prompt605_real_codex_execution_status"] = (
+            "blocked_real_codex_execution_invalid_request"
+        )
+        summary["prompt605_real_codex_execution_ready"] = False
+        summary["prompt605_real_codex_execution_success"] = False
+        summary["prompt605_completion_claim_allowed"] = False
+        summary["prompt605_result_route"] = (
+            "real_codex_execution_request_invalid"
+        )
+        summary["prompt605_next_action"] = "manual_review_prompt605_request"
+        summary["prompt605_blocked_reasons"] = [
+            *blocked_reasons,
+            "prompt605_required_artifacts_missing",
+        ]
+    _write_json(control_artifact_dir / "real_codex_summary.json", summary)
     return summary
 
 
