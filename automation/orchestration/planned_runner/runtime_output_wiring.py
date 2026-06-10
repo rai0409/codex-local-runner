@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 import hashlib
+import importlib
+import inspect
 import json
 import os
 from pathlib import Path
@@ -212,6 +214,9 @@ PROMPT604_EXISTING_BRIDGE_CONNECTION_GATE_ENABLE_TOKEN = (
 )
 PROMPT605_REAL_CODEX_EXECUTION_THROUGH_EXISTING_BRIDGE_ENABLE_TOKEN = (
     "PROMPT605_REAL_CODEX_EXECUTION_THROUGH_EXISTING_BRIDGE_ENABLE"
+)
+PROMPT606_CODEX_BRIDGE_UNAVAILABLE_DIAGNOSTIC_ENABLE_TOKEN = (
+    "PROMPT606_CODEX_BRIDGE_UNAVAILABLE_DIAGNOSTIC_ENABLE"
 )
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
@@ -427,6 +432,10 @@ _PROMPT605_DEFAULT_ARTIFACT_DIR = Path(
     "artifacts/runtime_commands/"
     "prompt605_real_codex_execution_through_existing_bridge"
 )
+_PROMPT606_DEFAULT_ARTIFACT_DIR = Path(
+    "artifacts/runtime_commands/"
+    "prompt606_codex_bridge_unavailable_diagnostic"
+)
 _PROMPT587_REQUIRED_ARTIFACT_NAMES = (
     "daemon_control_input.json",
     "daemon_control_resume_state_before.json",
@@ -641,6 +650,19 @@ _PROMPT605_REQUIRED_ARTIFACT_NAMES = (
     "real_codex_safety_contract.json",
     "real_codex_route.json",
     "real_codex_summary.json",
+)
+_PROMPT606_REQUIRED_ARTIFACT_NAMES = (
+    "codex_bridge_diagnostic_input.json",
+    "codex_bridge_diagnostic_module_inventory.json",
+    "codex_bridge_diagnostic_import_results.json",
+    "codex_bridge_diagnostic_callable_inventory.json",
+    "codex_bridge_diagnostic_signature_report.json",
+    "codex_bridge_diagnostic_contract_gap_report.json",
+    "codex_bridge_diagnostic_root_cause.json",
+    "codex_bridge_diagnostic_next_action.json",
+    "codex_bridge_diagnostic_result.json",
+    "codex_bridge_diagnostic_trace.json",
+    "codex_bridge_diagnostic_summary.json",
 )
 _PROMPT569_SOAK_CLEANUP_RUNTIME_ARTIFACTS = (
     Path("artifacts/runtime_commands/prompt565_multi_cycle_daemon"),
@@ -23891,6 +23913,817 @@ def run_prompt605_real_codex_execution_through_existing_bridge(
             "prompt605_required_artifacts_missing",
         ]
     _write_json(control_artifact_dir / "real_codex_summary.json", summary)
+    return summary
+
+
+_PROMPT606_MODULE_TARGETS = (
+    (
+        "automation.execution.codex_executor_adapter",
+        "automation/execution/codex_executor_adapter.py",
+    ),
+    ("adapters.codex_cli", "adapters/codex_cli.py"),
+    (
+        "automation.orchestration.planned_runner.project_browser.codex_bridge",
+        "automation/orchestration/planned_runner/project_browser/codex_bridge.py",
+    ),
+    (
+        "automation.orchestration.planned_runner.runtime_internal_execution_adapter",
+        "automation/orchestration/planned_runner/runtime_internal_execution_adapter.py",
+    ),
+    (
+        "automation.orchestration.planned_runner.project_browser.one_step_cycle",
+        "automation/orchestration/planned_runner/project_browser/one_step_cycle.py",
+    ),
+    (
+        "automation.orchestration.planned_runner.project_browser.local_loop",
+        "automation/orchestration/planned_runner/project_browser/local_loop.py",
+    ),
+    (
+        "automation.orchestration.planned_runner.project_browser.response_assimilation",
+        "automation/orchestration/planned_runner/project_browser/response_assimilation.py",
+    ),
+    (
+        "automation.orchestration.planned_runner.project_browser.response_parse",
+        "automation/orchestration/planned_runner/project_browser/response_parse.py",
+    ),
+    (
+        "automation.orchestration.planned_runner.runtime_output_wiring",
+        "automation/orchestration/planned_runner/runtime_output_wiring.py",
+    ),
+)
+_PROMPT606_CANDIDATE_NAMES = (
+    "CodexExecutorAdapter",
+    "CodexCliAdapter",
+    "execute",
+    "run",
+    "run_codex",
+    "execute_codex",
+    "execute_once",
+    "dispatch",
+    "bridge",
+)
+_PROMPT606_REQUIRED_CONTRACT_TERMS = (
+    ("repo path", ("repo_path", "execution_repo_path", "cwd", "workdir")),
+    ("prompt payload", ("prompt", "prompt_path", "task", "request")),
+    ("output capture", ("stdout", "stderr", "returncode", "result")),
+    ("changed files capture", ("changed_files", "status")),
+    ("patch capture", ("patch", "diff")),
+)
+_PROMPT606_NEXT_ACTIONS = {
+    "connect_existing_codex_adapter": "prompt607_connect_existing_codex_adapter",
+    "add_adapter_interface_shim": "prompt607_add_adapter_interface_shim",
+    "restore_old_bridge_call": "prompt607_restore_old_bridge_call",
+    "fix_prompt605_request_contract": "prompt607_fix_prompt605_request_contract",
+    "manual_review": "manual_review_required",
+}
+
+
+def _prompt606_prompt605_base_confirmed(
+    *,
+    payload: Mapping[str, Any],
+    prompt605_token_valid: bool,
+) -> bool:
+    blocked_reasons = _prompt579_string_list(
+        payload.get("prompt605_blocked_reasons")
+    )
+    return bool(
+        prompt605_token_valid
+        and payload.get("prompt605_real_codex_execution_status")
+        == "blocked_real_codex_execution_bridge_unavailable"
+        and payload.get("prompt605_real_codex_execution_ready") is False
+        and payload.get("prompt605_real_codex_execution_success") is False
+        and payload.get("prompt605_request_valid") is True
+        and payload.get("prompt605_prompt604_base_confirmed") is True
+        and payload.get("prompt605_real_codex_execution_requested") is True
+        and payload.get("prompt605_real_codex_execution_allowed") is False
+        and payload.get("prompt605_real_codex_execution_performed") is False
+        and payload.get("prompt605_result_route")
+        == "real_codex_execution_bridge_unavailable"
+        and payload.get("prompt605_next_action")
+        == "manual_review_prompt605_execution_bridge"
+        and "prompt605_execution_bridge_unavailable" in blocked_reasons
+    )
+
+
+def _prompt606_module_inventory(repo_path: Path) -> list[dict[str, Any]]:
+    inventory: list[dict[str, Any]] = []
+    for module_name, relative_path in _PROMPT606_MODULE_TARGETS:
+        module_path = repo_path / relative_path
+        inventory.append(
+            {
+                "module": module_name,
+                "relative_path": relative_path,
+                "exists": module_path.is_file(),
+                "path": str(module_path),
+            }
+        )
+    return inventory
+
+
+def _prompt606_import_results(
+    module_inventory: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    results: dict[str, dict[str, Any]] = {}
+    for item in module_inventory:
+        module_name = _normalize_text(item.get("module"), default="")
+        if not module_name:
+            continue
+        if item.get("exists") is not True:
+            results[module_name] = {
+                "import_attempted": False,
+                "import_ok": False,
+                "reason": "module_file_missing",
+            }
+            continue
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as exc:  # pragma: no cover - diagnostic payload only.
+            results[module_name] = {
+                "import_attempted": True,
+                "import_ok": False,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        else:
+            results[module_name] = {
+                "import_attempted": True,
+                "import_ok": True,
+                "module_file": _normalize_text(
+                    getattr(module, "__file__", ""),
+                    default="",
+                ),
+            }
+    return results
+
+
+def _prompt606_signature_text(obj: Any) -> str:
+    try:
+        return str(inspect.signature(obj))
+    except (TypeError, ValueError):
+        return "signature_unavailable"
+
+
+def _prompt606_callable_inventory(
+    import_results: Mapping[str, Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    inventory: list[dict[str, Any]] = []
+    signatures: list[dict[str, Any]] = []
+    for module_name, result in import_results.items():
+        if result.get("import_ok") is not True:
+            continue
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:
+            continue
+        for name in _PROMPT606_CANDIDATE_NAMES:
+            if not hasattr(module, name):
+                continue
+            obj = getattr(module, name)
+            callable_kind = "class" if inspect.isclass(obj) else "callable"
+            is_callable = callable(obj)
+            signature = _prompt606_signature_text(obj) if is_callable else ""
+            entry = {
+                "module": module_name,
+                "name": name,
+                "kind": callable_kind,
+                "callable": is_callable,
+                "signature": signature,
+                "listed_candidate": True,
+            }
+            inventory.append(entry)
+            signatures.append(entry)
+            if inspect.isclass(obj):
+                for method_name in _PROMPT606_CANDIDATE_NAMES:
+                    if method_name == name or not hasattr(obj, method_name):
+                        continue
+                    method = getattr(obj, method_name)
+                    if not callable(method):
+                        continue
+                    method_entry = {
+                        "module": module_name,
+                        "name": f"{name}.{method_name}",
+                        "kind": "method",
+                        "callable": True,
+                        "signature": _prompt606_signature_text(method),
+                        "listed_candidate": True,
+                    }
+                    inventory.append(method_entry)
+                    signatures.append(method_entry)
+        for name in sorted(dir(module)):
+            if name.startswith("_") or name in _PROMPT606_CANDIDATE_NAMES:
+                continue
+            lowered = name.lower()
+            if not any(
+                token in lowered
+                for token in ("codex", "execute", "dispatch", "bridge")
+            ):
+                continue
+            obj = getattr(module, name)
+            if not callable(obj):
+                continue
+            entry = {
+                "module": module_name,
+                "name": name,
+                "kind": "class" if inspect.isclass(obj) else "callable",
+                "callable": True,
+                "signature": _prompt606_signature_text(obj),
+                "listed_candidate": False,
+            }
+            inventory.append(entry)
+            signatures.append(entry)
+    return inventory, signatures
+
+
+def _prompt606_contract_gap_report(
+    callable_inventory: Sequence[Mapping[str, Any]],
+    *,
+    repo_path: Path,
+    prompt_payload_present: bool,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    report: list[dict[str, Any]] = []
+    best_candidate: dict[str, Any] | None = None
+    best_score = -1
+    for item in callable_inventory:
+        signature = _normalize_text(item.get("signature"), default="")
+        searchable = " ".join(
+            (
+                _normalize_text(item.get("module"), default=""),
+                _normalize_text(item.get("name"), default=""),
+                signature,
+            )
+        ).lower()
+        gaps: list[str] = []
+        matched_terms: list[str] = []
+        for label, terms in _PROMPT606_REQUIRED_CONTRACT_TERMS:
+            if any(term in searchable for term in terms):
+                matched_terms.append(label)
+            else:
+                gaps.append(f"{label} missing")
+        if not repo_path.exists():
+            gaps.append("repo path missing")
+        if not prompt_payload_present:
+            gaps.append("prompt payload missing")
+        usable = bool(item.get("callable") is True and not gaps)
+        score = len(matched_terms) + (2 if item.get("listed_candidate") else 0)
+        entry = {
+            "module": item.get("module"),
+            "name": item.get("name"),
+            "signature": signature,
+            "matched_contract_terms": matched_terms,
+            "contract_gaps": gaps,
+            "usable_without_raw_subprocess_in_prompt605": usable,
+        }
+        report.append(entry)
+        if score > best_score:
+            best_score = score
+            best_candidate = entry
+    return report, best_candidate
+
+
+def _prompt606_ranked_root_causes(
+    *,
+    module_inventory: Sequence[Mapping[str, Any]],
+    import_results: Mapping[str, Mapping[str, Any]],
+    callable_inventory: Sequence[Mapping[str, Any]],
+    contract_gap_report: Sequence[Mapping[str, Any]],
+    prompt_payload_present: bool,
+    repo_path: Path,
+    prompt605_base_confirmed: bool,
+) -> list[dict[str, Any]]:
+    missing_modules = [
+        item.get("relative_path")
+        for item in module_inventory
+        if item.get("exists") is not True
+    ]
+    failed_imports = [
+        module
+        for module, result in import_results.items()
+        if result.get("import_attempted") is True
+        and result.get("import_ok") is not True
+    ]
+    usable = [
+        item
+        for item in contract_gap_report
+        if item.get("usable_without_raw_subprocess_in_prompt605") is True
+    ]
+    causes: list[dict[str, Any]] = []
+    if not prompt605_base_confirmed:
+        causes.append(
+            {
+                "rank": 1,
+                "cause": "required Prompt605 bridge-unavailable base missing",
+                "category": "required request schema missing",
+            }
+        )
+    if not repo_path.exists():
+        causes.append(
+            {
+                "rank": len(causes) + 1,
+                "cause": "execution repository path is missing",
+                "category": "repo path missing",
+            }
+        )
+    if not prompt_payload_present:
+        causes.append(
+            {
+                "rank": len(causes) + 1,
+                "cause": "Prompt605 prompt payload/path is unavailable",
+                "category": "prompt payload missing",
+            }
+        )
+    if failed_imports:
+        causes.append(
+            {
+                "rank": len(causes) + 1,
+                "cause": "one or more existing bridge modules fail to import",
+                "category": "adapter import failed",
+                "modules": failed_imports,
+            }
+        )
+    if missing_modules:
+        causes.append(
+            {
+                "rank": len(causes) + 1,
+                "cause": "one or more expected adapter/bridge files are missing",
+                "category": "adapter module missing",
+                "files": missing_modules,
+            }
+        )
+    if not callable_inventory:
+        causes.append(
+            {
+                "rank": len(causes) + 1,
+                "cause": "no candidate Codex execution callable was found",
+                "category": "callable missing",
+            }
+        )
+    elif not usable:
+        gap_names = sorted(
+            {
+                gap
+                for item in contract_gap_report
+                for gap in item.get("contract_gaps", [])
+                if isinstance(gap, str)
+            }
+        )
+        categories = [
+            "callable signature incompatible",
+            "required request schema missing",
+            "output capture contract missing",
+            "changed files capture contract missing",
+            "patch capture contract missing",
+        ]
+        causes.append(
+            {
+                "rank": len(causes) + 1,
+                "cause": (
+                    "candidate callables exist, but no callable exposes the "
+                    "full Prompt605 request and capture contract"
+                ),
+                "category": categories,
+                "contract_gaps": gap_names,
+            }
+        )
+    if not causes:
+        causes.append(
+            {
+                "rank": 1,
+                "cause": "Prompt605 does not wire an existing callable even though a compatible candidate was found",
+                "category": "execution disabled by safety policy",
+            }
+        )
+    return causes
+
+
+def _prompt606_next_action(
+    *,
+    root_causes: Sequence[Mapping[str, Any]],
+    callable_inventory: Sequence[Mapping[str, Any]],
+    best_candidate: Mapping[str, Any] | None,
+) -> str:
+    categories: set[Any] = set()
+    direct_prompt605_contract_problem = False
+    for cause in root_causes:
+        category_value = cause.get("category")
+        category_items = (
+            category_value if isinstance(category_value, list) else [category_value]
+        )
+        categories.update(category_items)
+        cause_text = _normalize_text(cause.get("cause"), default="")
+        if category_value in (
+            "repo path missing",
+            "prompt payload missing",
+            "required request schema missing",
+        ) and (
+            "Prompt605" in cause_text
+            or "repository path" in cause_text
+            or "prompt payload" in cause_text
+        ):
+            direct_prompt605_contract_problem = True
+    if (
+        "prompt payload missing" in categories
+        or "repo path missing" in categories
+        or direct_prompt605_contract_problem
+    ):
+        return _PROMPT606_NEXT_ACTIONS["fix_prompt605_request_contract"]
+    if "adapter import failed" in categories or "adapter module missing" in categories:
+        return _PROMPT606_NEXT_ACTIONS["restore_old_bridge_call"]
+    if (
+        best_candidate
+        and best_candidate.get("usable_without_raw_subprocess_in_prompt605")
+        is True
+    ):
+        return _PROMPT606_NEXT_ACTIONS["connect_existing_codex_adapter"]
+    if callable_inventory:
+        return _PROMPT606_NEXT_ACTIONS["add_adapter_interface_shim"]
+    return _PROMPT606_NEXT_ACTIONS["manual_review"]
+
+
+def run_prompt606_codex_bridge_unavailable_diagnostic(
+    *,
+    run_state_payload: Mapping[str, Any] | None = None,
+    execution_repo_path: str | Path = "",
+    artifact_dir: str | Path | None = None,
+    enabled: bool | None = None,
+    enable_token: str | None = None,
+    prompt605_enable_token: str | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_text = _normalize_text(
+        payload.get("prompt606_repo_path")
+        or execution_repo_path
+        or payload.get("execution_repo_path"),
+        default="",
+    )
+    repo_path = Path(repo_text) if repo_text else Path(".")
+    control_artifact_dir = (
+        Path(artifact_dir)
+        if artifact_dir is not None
+        else _PROMPT606_DEFAULT_ARTIFACT_DIR
+    )
+    if not control_artifact_dir.is_absolute():
+        control_artifact_dir = repo_path / control_artifact_dir
+    control_artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    prompt606_enabled = (
+        enabled is True
+        if enabled is not None
+        else payload.get("prompt606_enabled") is True
+    )
+    prompt606_token = _normalize_text(
+        enable_token
+        if enable_token is not None
+        else payload.get("prompt606_enable_token"),
+        default="",
+    )
+    prompt605_token = _normalize_text(
+        prompt605_enable_token
+        if prompt605_enable_token is not None
+        else payload.get("prompt605_enable_token"),
+        default="",
+    )
+    prompt606_enable_token_valid = (
+        prompt606_token
+        == PROMPT606_CODEX_BRIDGE_UNAVAILABLE_DIAGNOSTIC_ENABLE_TOKEN
+    )
+    prompt605_enable_token_valid = (
+        prompt605_token
+        == PROMPT605_REAL_CODEX_EXECUTION_THROUGH_EXISTING_BRIDGE_ENABLE_TOKEN
+    )
+    prompt605_base_confirmed = _prompt606_prompt605_base_confirmed(
+        payload=payload,
+        prompt605_token_valid=prompt605_enable_token_valid,
+    )
+    force_invalid_request = (
+        payload.get("prompt606_force_invalid_request") is True
+    )
+    force_safety_violation = (
+        payload.get("prompt606_force_safety_violation") is True
+    )
+    request_valid = bool(
+        prompt606_enabled
+        and prompt606_enable_token_valid
+        and not force_invalid_request
+    )
+
+    prompt_path = _normalize_text(
+        payload.get("prompt605_prompt_path")
+        or payload.get("prompt606_prompt_payload")
+        or payload.get("prompt605_generated_prompt_path"),
+        default="",
+    )
+    prompt_payload_present = bool(
+        prompt_path
+        or payload.get("prompt605_dry_run_prompt_text")
+        or payload.get("prompt605_role_task")
+    )
+    module_inventory = _prompt606_module_inventory(repo_path)
+    import_results = _prompt606_import_results(module_inventory)
+    callable_inventory, signature_report = _prompt606_callable_inventory(
+        import_results
+    )
+    contract_gap_report, best_candidate = _prompt606_contract_gap_report(
+        callable_inventory,
+        repo_path=repo_path,
+        prompt_payload_present=prompt_payload_present,
+    )
+    root_causes = _prompt606_ranked_root_causes(
+        module_inventory=module_inventory,
+        import_results=import_results,
+        callable_inventory=callable_inventory,
+        contract_gap_report=contract_gap_report,
+        prompt_payload_present=prompt_payload_present,
+        repo_path=repo_path,
+        prompt605_base_confirmed=prompt605_base_confirmed,
+    )
+    next_implementation_action = _prompt606_next_action(
+        root_causes=root_causes,
+        callable_inventory=callable_inventory,
+        best_candidate=best_candidate,
+    )
+    candidate_callable_found = bool(callable_inventory)
+    candidate_callable_name = (
+        _normalize_text(best_candidate.get("name"), default="")
+        if best_candidate
+        else ""
+    )
+    candidate_callable_module = (
+        _normalize_text(best_candidate.get("module"), default="")
+        if best_candidate
+        else ""
+    )
+    candidate_callable_signature = (
+        _normalize_text(best_candidate.get("signature"), default="")
+        if best_candidate
+        else ""
+    )
+    candidate_callable_usable_without_raw_subprocess = bool(
+        best_candidate
+        and best_candidate.get("usable_without_raw_subprocess_in_prompt605")
+        is True
+    )
+
+    if force_safety_violation:
+        status = "blocked_codex_bridge_diagnostic_safety_violation"
+        ready = False
+        success = False
+        diagnostic_performed = False
+        result_route = "codex_bridge_diagnostic_safety_violation"
+        next_action = "manual_review_prompt606_safety_violation"
+        completion_claim_allowed = False
+        blocked_reasons = ["prompt606_safety_violation"]
+    elif not request_valid:
+        status = "blocked_codex_bridge_diagnostic_invalid_request"
+        ready = False
+        success = False
+        diagnostic_performed = False
+        result_route = "codex_bridge_diagnostic_invalid_request"
+        next_action = "manual_review_prompt606_request"
+        completion_claim_allowed = False
+        blocked_reasons = ["prompt606_codex_bridge_diagnostic_invalid_request"]
+    elif not prompt605_base_confirmed:
+        status = "blocked_codex_bridge_diagnostic_prompt605_base_missing"
+        ready = False
+        success = False
+        diagnostic_performed = False
+        result_route = "codex_bridge_diagnostic_prompt605_base_missing"
+        next_action = "manual_review_prompt606_prompt605_base"
+        completion_claim_allowed = False
+        blocked_reasons = ["prompt606_prompt605_base_missing"]
+    else:
+        status = "codex_bridge_diagnostic_completed_local_only"
+        ready = True
+        success = True
+        diagnostic_performed = True
+        result_route = "codex_bridge_unavailable_cause_identified"
+        next_action = next_implementation_action
+        completion_claim_allowed = True
+        blocked_reasons = []
+
+    existing_adapter_files_found = sorted(
+        item.get("relative_path")
+        for item in module_inventory
+        if item.get("exists") is True
+    )
+    contract_gaps = sorted(
+        {
+            gap
+            for item in contract_gap_report
+            for gap in item.get("contract_gaps", [])
+            if isinstance(gap, str)
+        }
+    )
+    primary_root_cause = (
+        _normalize_text(root_causes[0].get("cause"), default="unknown")
+        if root_causes
+        else "unknown"
+    )
+    input_payload = {
+        "local_only": True,
+        "source_prompt": "prompt606",
+        "execution_repo_path": str(repo_path),
+        "artifact_dir": str(control_artifact_dir),
+        "enabled": prompt606_enabled,
+        "enable_token_valid": prompt606_enable_token_valid,
+        "required_upstream_token_valid": prompt605_enable_token_valid,
+        "prompt605_base_confirmed": prompt605_base_confirmed,
+        "real_codex_execution_allowed": False,
+        "real_codex_execution_performed": False,
+        "commit_tag_execution_performed": False,
+        "remote_workflow_included": False,
+    }
+    root_cause_payload = {
+        "local_only": True,
+        "source_prompt": "prompt606",
+        "ranked_root_causes": root_causes,
+        "primary_root_cause": primary_root_cause,
+    }
+    next_action_payload = {
+        "local_only": True,
+        "source_prompt": "prompt606",
+        "next_implementation_action": next_implementation_action,
+        "allowed_actions": sorted(_PROMPT606_NEXT_ACTIONS.values()),
+    }
+    result = {
+        "local_only": True,
+        "source_prompt": "prompt606",
+        "ready": ready,
+        "success": success,
+        "prompt605_base_confirmed": prompt605_base_confirmed,
+        "diagnostic_performed": diagnostic_performed,
+        "real_codex_execution_performed": False,
+        "commit_tag_execution_performed": False,
+        "remote_workflow_included": False,
+        "no_remote_mutation_verified": True,
+        "result_route": result_route,
+        "next_action": next_action,
+        "completion_claim_allowed": completion_claim_allowed,
+        "blocked_reasons": blocked_reasons,
+    }
+    trace = {
+        "local_only": True,
+        "source_prompt": "prompt606",
+        "module_inventory_path": str(
+            control_artifact_dir
+            / "codex_bridge_diagnostic_module_inventory.json"
+        ),
+        "import_results_path": str(
+            control_artifact_dir
+            / "codex_bridge_diagnostic_import_results.json"
+        ),
+        "callable_inventory_path": str(
+            control_artifact_dir
+            / "codex_bridge_diagnostic_callable_inventory.json"
+        ),
+        "signature_report_path": str(
+            control_artifact_dir
+            / "codex_bridge_diagnostic_signature_report.json"
+        ),
+        "contract_gap_report_path": str(
+            control_artifact_dir
+            / "codex_bridge_diagnostic_contract_gap_report.json"
+        ),
+        "real_codex_execution_performed": False,
+        "chatgpt_or_browser_call_performed": False,
+        "commit_tag_execution_performed": False,
+        "remote_workflow_included": False,
+        "systemd_used": False,
+        "subprocess_shell": False,
+    }
+    summary: dict[str, Any] = {
+        "local_only": True,
+        "source_prompt": "prompt606",
+        "prompt606_codex_bridge_diagnostic_status": status,
+        "prompt606_codex_bridge_diagnostic_ready": ready,
+        "prompt606_codex_bridge_diagnostic_success": success,
+        "prompt606_enabled": prompt606_enabled,
+        "prompt606_enable_token_valid": prompt606_enable_token_valid,
+        "prompt606_request_valid": request_valid,
+        "prompt606_prompt605_base_confirmed": prompt605_base_confirmed,
+        "prompt606_diagnostic_performed": diagnostic_performed,
+        "prompt606_modules_checked": [
+            item.get("relative_path") for item in module_inventory
+        ],
+        "prompt606_existing_adapter_files_found": existing_adapter_files_found,
+        "prompt606_import_results": import_results,
+        "prompt606_callable_inventory": callable_inventory,
+        "prompt606_candidate_callable_found": candidate_callable_found,
+        "prompt606_candidate_callable_name": candidate_callable_name,
+        "prompt606_candidate_callable_module": candidate_callable_module,
+        "prompt606_candidate_callable_signature": candidate_callable_signature,
+        "prompt606_candidate_callable_usable_without_raw_subprocess": (
+            candidate_callable_usable_without_raw_subprocess
+        ),
+        "prompt606_prompt605_bridge_unavailable_root_causes": root_causes,
+        "prompt606_primary_root_cause": primary_root_cause,
+        "prompt606_contract_gaps": contract_gaps,
+        "prompt606_next_implementation_action": next_implementation_action,
+        "prompt606_real_codex_execution_performed": False,
+        "prompt606_commit_tag_execution_performed": False,
+        "prompt606_systemd_used": False,
+        "prompt606_service_enable_performed": False,
+        "prompt606_service_start_performed": False,
+        "prompt606_persistent_service_started": False,
+        "prompt606_remote_workflow_included": False,
+        "prompt606_no_remote_mutation_verified": True,
+        "prompt606_completion_claim_allowed": completion_claim_allowed,
+        "prompt606_result_route": result_route,
+        "prompt606_next_action": next_action,
+        "prompt606_blocked_reasons": blocked_reasons,
+        "prompt606_artifacts_written": False,
+    }
+
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_input.json",
+        input_payload,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_module_inventory.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt606",
+            "modules": module_inventory,
+        },
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_import_results.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt606",
+            "import_results": import_results,
+        },
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_callable_inventory.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt606",
+            "callables": callable_inventory,
+        },
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_signature_report.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt606",
+            "signatures": signature_report,
+        },
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_contract_gap_report.json",
+        {
+            "local_only": True,
+            "source_prompt": "prompt606",
+            "contract_gaps": contract_gap_report,
+            "candidate_usable_without_raw_subprocess": (
+                candidate_callable_usable_without_raw_subprocess
+            ),
+        },
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_root_cause.json",
+        root_cause_payload,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_next_action.json",
+        next_action_payload,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_result.json",
+        result,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_trace.json",
+        trace,
+    )
+    _prompt585_write_artifact(
+        control_artifact_dir / "codex_bridge_diagnostic_summary.json",
+        summary,
+    )
+    artifacts_written = all(
+        (control_artifact_dir / name).is_file()
+        for name in _PROMPT606_REQUIRED_ARTIFACT_NAMES
+    )
+    summary["prompt606_artifacts_written"] = artifacts_written
+    if not artifacts_written:
+        summary["prompt606_codex_bridge_diagnostic_status"] = (
+            "blocked_codex_bridge_diagnostic_invalid_request"
+        )
+        summary["prompt606_codex_bridge_diagnostic_ready"] = False
+        summary["prompt606_codex_bridge_diagnostic_success"] = False
+        summary["prompt606_completion_claim_allowed"] = False
+        summary["prompt606_result_route"] = (
+            "codex_bridge_diagnostic_invalid_request"
+        )
+        summary["prompt606_next_action"] = "manual_review_prompt606_request"
+        summary["prompt606_blocked_reasons"] = [
+            *blocked_reasons,
+            "prompt606_required_artifacts_missing",
+        ]
+    _write_json(
+        control_artifact_dir / "codex_bridge_diagnostic_summary.json",
+        summary,
+    )
     return summary
 
 

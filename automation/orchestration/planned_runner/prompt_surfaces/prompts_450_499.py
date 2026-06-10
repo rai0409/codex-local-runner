@@ -37924,6 +37924,222 @@ def _build_prompt605_real_codex_execution_through_existing_bridge_state(
     }
 
 
+def _build_prompt606_codex_bridge_unavailable_diagnostic_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    blocked_reasons = _normalize_string_list(
+        payload.get("prompt606_blocked_reasons")
+    )
+    result_route = _normalize_text(
+        payload.get("prompt606_result_route"),
+        default="",
+    )
+    next_action = _normalize_text(
+        payload.get("prompt606_next_action"),
+        default="",
+    )
+    root_causes = payload.get(
+        "prompt606_prompt605_bridge_unavailable_root_causes"
+    )
+    root_causes_list = root_causes if isinstance(root_causes, list) else []
+    contract_gaps = _normalize_string_list(
+        payload.get("prompt606_contract_gaps")
+    )
+    candidate_callable_found = (
+        payload.get("prompt606_candidate_callable_found") is True
+    )
+    candidate_callable_name = _normalize_text(
+        payload.get("prompt606_candidate_callable_name"),
+        default="",
+    )
+    candidate_callable_module = _normalize_text(
+        payload.get("prompt606_candidate_callable_module"),
+        default="",
+    )
+    candidate_callable_signature = _normalize_text(
+        payload.get("prompt606_candidate_callable_signature"),
+        default="",
+    )
+    next_implementation_action = _normalize_text(
+        payload.get("prompt606_next_implementation_action"),
+        default="",
+    )
+    allowed_next_actions = {
+        "prompt607_connect_existing_codex_adapter",
+        "prompt607_add_adapter_interface_shim",
+        "prompt607_restore_old_bridge_call",
+        "prompt607_fix_prompt605_request_contract",
+        "manual_review_required",
+    }
+    local_only_safety_preserved = bool(
+        payload.get("prompt606_real_codex_execution_performed") is False
+        and payload.get("prompt606_commit_tag_execution_performed") is False
+        and payload.get("prompt606_systemd_used") is False
+        and payload.get("prompt606_service_enable_performed") is False
+        and payload.get("prompt606_service_start_performed") is False
+        and payload.get("prompt606_persistent_service_started") is False
+        and payload.get("prompt606_remote_workflow_included") is False
+        and payload.get("prompt606_no_remote_mutation_verified") is True
+    )
+    completed_predicates = bool(
+        payload.get("prompt606_enabled") is True
+        and payload.get("prompt606_enable_token_valid") is True
+        and payload.get("prompt606_request_valid") is True
+        and payload.get("prompt606_prompt605_base_confirmed") is True
+        and payload.get("prompt606_diagnostic_performed") is True
+        and root_causes_list
+        and payload.get("prompt606_primary_root_cause")
+        and next_implementation_action in allowed_next_actions
+        and local_only_safety_preserved
+        and result_route == "codex_bridge_unavailable_cause_identified"
+        and next_action == next_implementation_action
+        and blocked_reasons == []
+        and payload.get("prompt606_completion_claim_allowed") is True
+    )
+    invalid_request_predicates = bool(
+        payload.get("prompt606_request_valid") is False
+        and result_route == "codex_bridge_diagnostic_invalid_request"
+        and next_action == "manual_review_prompt606_request"
+        and "prompt606_codex_bridge_diagnostic_invalid_request"
+        in blocked_reasons
+        and payload.get("prompt606_completion_claim_allowed") is False
+    )
+    prompt605_base_missing_predicates = bool(
+        payload.get("prompt606_request_valid") is True
+        and payload.get("prompt606_prompt605_base_confirmed") is False
+        and result_route == "codex_bridge_diagnostic_prompt605_base_missing"
+        and next_action == "manual_review_prompt606_prompt605_base"
+        and "prompt606_prompt605_base_missing" in blocked_reasons
+        and payload.get("prompt606_completion_claim_allowed") is False
+    )
+    safety_violation_predicates = bool(
+        result_route == "codex_bridge_diagnostic_safety_violation"
+        and next_action == "manual_review_prompt606_safety_violation"
+        and "prompt606_safety_violation" in blocked_reasons
+        and payload.get("prompt606_completion_claim_allowed") is False
+    )
+
+    if completed_predicates:
+        status = "codex_bridge_diagnostic_completed_local_only"
+        ready = True
+        success = True
+    elif safety_violation_predicates:
+        status = "blocked_codex_bridge_diagnostic_safety_violation"
+        ready = False
+        success = False
+    elif prompt605_base_missing_predicates:
+        status = "blocked_codex_bridge_diagnostic_prompt605_base_missing"
+        ready = False
+        success = False
+    elif invalid_request_predicates:
+        status = "blocked_codex_bridge_diagnostic_invalid_request"
+        ready = False
+        success = False
+    else:
+        status = "blocked_codex_bridge_diagnostic_invalid_request"
+        ready = False
+        success = False
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt606",
+        "prompt606_codex_bridge_diagnostic_status": status,
+        "prompt606_codex_bridge_diagnostic_ready": ready,
+        "prompt606_codex_bridge_diagnostic_success": success,
+        "prompt606_enabled": payload.get("prompt606_enabled") is True,
+        "prompt606_enable_token_valid": (
+            payload.get("prompt606_enable_token_valid") is True
+        ),
+        "prompt606_request_valid": (
+            payload.get("prompt606_request_valid") is True
+        ),
+        "prompt606_prompt605_base_confirmed": (
+            payload.get("prompt606_prompt605_base_confirmed") is True
+        ),
+        "prompt606_diagnostic_performed": (
+            payload.get("prompt606_diagnostic_performed") is True
+        ),
+        "prompt606_modules_checked": _normalize_string_list(
+            payload.get("prompt606_modules_checked")
+        ),
+        "prompt606_existing_adapter_files_found": _normalize_string_list(
+            payload.get("prompt606_existing_adapter_files_found")
+        ),
+        "prompt606_import_results": (
+            payload.get("prompt606_import_results")
+            if isinstance(payload.get("prompt606_import_results"), Mapping)
+            else {}
+        ),
+        "prompt606_callable_inventory": (
+            payload.get("prompt606_callable_inventory")
+            if isinstance(payload.get("prompt606_callable_inventory"), list)
+            else []
+        ),
+        "prompt606_candidate_callable_found": candidate_callable_found,
+        "prompt606_candidate_callable_name": candidate_callable_name,
+        "prompt606_candidate_callable_module": candidate_callable_module,
+        "prompt606_candidate_callable_signature": candidate_callable_signature,
+        "prompt606_candidate_callable_usable_without_raw_subprocess": (
+            payload.get(
+                "prompt606_candidate_callable_usable_without_raw_subprocess"
+            )
+            is True
+        ),
+        "prompt606_prompt605_bridge_unavailable_root_causes": (
+            root_causes_list
+        ),
+        "prompt606_primary_root_cause": _normalize_text(
+            payload.get("prompt606_primary_root_cause"),
+            default="unknown",
+        ),
+        "prompt606_contract_gaps": contract_gaps,
+        "prompt606_next_implementation_action": next_implementation_action,
+        "prompt606_real_codex_execution_performed": (
+            payload.get("prompt606_real_codex_execution_performed") is True
+        ),
+        "prompt606_commit_tag_execution_performed": (
+            payload.get("prompt606_commit_tag_execution_performed") is True
+        ),
+        "prompt606_systemd_used": (
+            payload.get("prompt606_systemd_used") is True
+        ),
+        "prompt606_service_enable_performed": (
+            payload.get("prompt606_service_enable_performed") is True
+        ),
+        "prompt606_service_start_performed": (
+            payload.get("prompt606_service_start_performed") is True
+        ),
+        "prompt606_persistent_service_started": (
+            payload.get("prompt606_persistent_service_started") is True
+        ),
+        "prompt606_remote_workflow_included": (
+            payload.get("prompt606_remote_workflow_included") is True
+        ),
+        "prompt606_no_remote_mutation_verified": (
+            payload.get("prompt606_no_remote_mutation_verified") is True
+        ),
+        "prompt606_completion_claim_allowed": (
+            payload.get("prompt606_completion_claim_allowed") is True
+        ),
+        "prompt606_result_route": result_route,
+        "prompt606_next_action": next_action,
+        "prompt606_blocked_reasons": blocked_reasons,
+        "prompt606_prompt_surface": (
+            "Local-only diagnostic gate for Prompt605 bridge-unavailable "
+            "results. Prompt606 inspects existing adapter and bridge modules, "
+            "imports safely where possible, inventories candidate Codex "
+            "execution callables and signatures, reports contract gaps for "
+            "request, output, changed-file, and patch capture, ranks root "
+            "causes, recommends the exact Prompt607 implementation action, "
+            "and excludes real Codex execution, raw subprocess additions, "
+            "commit/tag, remote workflow, browser/ChatGPT, systemd, service, "
+            "and persistent daemon operations."
+        ),
+    }
+
+
 def _build_prompt562_prepare_prompt552_final_runtime_completion_smoke_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
