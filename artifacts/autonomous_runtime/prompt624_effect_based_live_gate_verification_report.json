@@ -1,0 +1,121 @@
+{
+  "generated_at": "2026-06-11T22:25:03.375643Z",
+  "prompt624_archive_touched": false,
+  "prompt624_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt624_effect_based_live_gate_verification_report.json",
+    "artifacts/autonomous_runtime/prompt624_effect_based_live_gate_verification_summary.md",
+    "/tmp/prompt624_effect_verification_live_out/live_codex_gate_state.json",
+    "/tmp/prompt624_effect_verification_live_out/codex_execution_result.json",
+    "/tmp/prompt624_effect_verification_live_out/codex_stdout.txt",
+    "/tmp/prompt624_effect_verification_live_out/codex_stderr.txt",
+    "/tmp/prompt624_negative_live_out/live_codex_gate_state.json",
+    "/tmp/prompt624_negative_live_out/codex_stdout.txt",
+    "/tmp/prompt624_negative_live_out/codex_stderr.txt",
+    "/tmp/prompt624_effect_spec.json",
+    "/tmp/prompt624_effect_verification_prompt.md"
+  ],
+  "prompt624_autonomous_live_loop_wiring": "not required; loop unchanged this prompt",
+  "prompt624_base_commit": "bde2d7e",
+  "prompt624_base_tags_at_head": [
+    "prompt622-true-two-cycle-live-proof"
+  ],
+  "prompt624_calculator_modified": true,
+  "prompt624_cli_flags_added": [
+    "--live-codex-sandbox-mode",
+    "--live-codex-effect-spec-path"
+  ],
+  "prompt624_codex_invoked": true,
+  "prompt624_codex_returncode": 0,
+  "prompt624_default_behavior_evidence": "unit test test_default_behavior_without_effect_spec_is_unchanged passed; autonomous_live_loop calls the gate without the new parameters (defaults); prompt622 loop tests still pass (12/12 in the two related test modules)",
+  "prompt624_default_behavior_preserved": true,
+  "prompt624_dirty_artifacts_isolated": false,
+  "prompt624_dirty_artifacts_note": "Isolation not needed: the --live-codex-gate route performs no dirty-worktree check and the runtime targeted only the scratch repo. Nothing was moved.",
+  "prompt624_dirty_artifacts_restored": true,
+  "prompt624_effect_spec_supported": true,
+  "prompt624_effect_verification_enabled": true,
+  "prompt624_effect_verification_status": "passed",
+  "prompt624_final_decision": "success",
+  "prompt624_main_repo_source_modified": true,
+  "prompt624_main_repo_source_modified_note": "Only the intended implementation files (live_codex_gate.py, run_planned_execution.py) and the new test file. The runtime itself modified nothing in the main repo.",
+  "prompt624_modified_files": [
+    "automation/orchestration/planned_runner/live_codex_gate.py",
+    "scripts/run_planned_execution.py"
+  ],
+  "prompt624_negative_case_details": {
+    "also_covered_by_unit_test": "test_zero_returncode_without_change_is_not_success (codex echoes success JSON, returncode 0, no change)",
+    "codex_invoked": true,
+    "codex_returncode": 0,
+    "effect_verification_errors": [
+      "expected modified file did not change: calculator.py",
+      "required text missing in calculator.py: 'def subtract(a, b):'",
+      "required text missing in calculator.py: 'return a - b'"
+    ],
+    "effect_verification_status": "failed",
+    "mode": "live run with --live-codex-sandbox-mode read-only (real false-success scenario from Prompt623)",
+    "next_action": "inspect_missing_expected_effects",
+    "out_dir": "/tmp/prompt624_negative_live_out",
+    "status": "blocked",
+    "stop_reason": "effect_verification_failed"
+  },
+  "prompt624_negative_case_verified": true,
+  "prompt624_new_files": [
+    "tests/test_live_codex_gate_effect_verification.py",
+    "artifacts/autonomous_runtime/prompt624_effect_based_live_gate_verification_report.json",
+    "artifacts/autonomous_runtime/prompt624_effect_based_live_gate_verification_summary.md"
+  ],
+  "prompt624_next_action": "commit_tag_effect_based_live_gate_verification",
+  "prompt624_no_extra_files_created": true,
+  "prompt624_positive_state_extract": {
+    "effect_forbidden_paths_verified": true,
+    "effect_modified_files_verified": true,
+    "effect_required_text_verified": true,
+    "effect_unexpected_files": [],
+    "effect_unmodified_files_verified": true,
+    "effect_verification_status": "passed",
+    "next_action": "commit_tag_gate",
+    "sandbox_mode": "workspace-write",
+    "status": "success",
+    "stop_reason": "codex_completed"
+  },
+  "prompt624_process_returncode": 0,
+  "prompt624_result_path": "/tmp/prompt624_effect_verification_live_out/codex_execution_result.json",
+  "prompt624_runtime_command": [
+    "python",
+    "scripts/run_planned_execution.py",
+    "--live-codex-gate",
+    "--live-codex-enable-token",
+    "LOCAL_LIVE_CODEX_GATE_ENABLE",
+    "--generated-prompt-path",
+    "/tmp/prompt624_effect_verification_prompt.md",
+    "--live-codex-timeout-seconds",
+    "90",
+    "--repo-path",
+    "/tmp/prompt624_effect_verification_sandbox_repo",
+    "--live-codex-sandbox-mode",
+    "workspace-write",
+    "--live-codex-effect-spec-path",
+    "/tmp/prompt624_effect_spec.json",
+    "--out-dir",
+    "/tmp/prompt624_effect_verification_live_out",
+    "--json"
+  ],
+  "prompt624_runtime_commit_or_tag_performed": false,
+  "prompt624_sandbox_mode_notes": "default/read-only/workspace-write. default preserves the previous command exactly; read-only and workspace-write insert '--sandbox <mode>' into codex exec, syntax verified live in Prompt623 and again here (codex-cli 0.137.0). When an effect spec with a valid repo_path is provided, codex runs with cwd=repo_path so workspace-write targets the intended workspace; without a spec, cwd handling is unchanged.",
+  "prompt624_sandbox_mode_supported": true,
+  "prompt624_state_path": "/tmp/prompt624_effect_verification_live_out/live_codex_gate_state.json",
+  "prompt624_status": "success",
+  "prompt624_subtract_function_present": true,
+  "prompt624_test_file_md5": "9ce3e8ec5ff03e9bee3aebfd5f993e06",
+  "prompt624_test_file_unchanged": true,
+  "prompt624_unit_tests_added": [
+    "test_effect_verification_passes_when_change_applied",
+    "test_zero_returncode_without_change_is_not_success",
+    "test_expected_unmodified_files_are_enforced",
+    "test_forbidden_paths_and_extra_files_are_enforced",
+    "test_default_behavior_without_effect_spec_is_unchanged",
+    "test_workspace_write_sandbox_mode_changes_command",
+    "test_invalid_effect_spec_blocks_before_codex",
+    "test_nonzero_returncode_stays_failed_even_if_effects_match"
+  ],
+  "prompt624_unit_tests_result": "8 new tests passed; 12/12 with prompt622 loop tests; full suite 498 tests with 1 pre-existing unrelated import error in tests/test_planned_execution_runner.py (module untouched), 1 skipped"
+}

@@ -868,6 +868,23 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional output path for the live Codex gate result JSON",
     )
     parser.add_argument(
+        "--live-codex-sandbox-mode",
+        choices=["default", "read-only", "workspace-write"],
+        default="default",
+        help=(
+            "Codex exec sandbox policy. default preserves the current command; "
+            "read-only/workspace-write pass --sandbox <mode> to codex exec"
+        ),
+    )
+    parser.add_argument(
+        "--live-codex-effect-spec-path",
+        default=None,
+        help=(
+            "Optional JSON effect spec; when set, gate success additionally requires "
+            "verified file effects instead of trusting returncode/stdout"
+        ),
+    )
+    parser.add_argument(
         "--autonomous-live-loop",
         action="store_true",
         default=False,
@@ -928,6 +945,8 @@ def main(argv: list[str] | None = None) -> int:
                 timeout_seconds=args.live_codex_timeout_seconds,
                 live_codex_result_path=args.live_codex_result_path,
                 legacy_source_used=True,
+                sandbox_mode=args.live_codex_sandbox_mode,
+                effect_spec_path=args.live_codex_effect_spec_path,
             )
             if args.as_json:
                 print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
