@@ -19,6 +19,7 @@ from automation.orchestration.planned_execution_runner import DryRunCodexExecuti
 from automation.orchestration.planned_execution_runner import PlannedExecutionRunner  # noqa: E402
 from automation.orchestration.planned_runner.autonomous_runtime import run_autonomous_cycle_metadata_from_runtime  # noqa: E402
 from automation.orchestration.planned_runner.autonomous_runtime import run_autonomous_runtime  # noqa: E402
+from automation.orchestration.planned_runner.live_codex_gate import run_live_codex_gate  # noqa: E402
 
 
 _REQUIRED_ARTIFACT_FILES = (
@@ -844,6 +845,28 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional Codex result JSON path for autonomous cycle metadata assimilation",
     )
     parser.add_argument(
+        "--live-codex-gate",
+        action="store_true",
+        default=False,
+        help="Run one bounded local-only live Codex gate attempt when explicitly enabled",
+    )
+    parser.add_argument(
+        "--live-codex-enable-token",
+        default="",
+        help="Explicit token required before the live Codex gate can invoke Codex",
+    )
+    parser.add_argument(
+        "--live-codex-timeout-seconds",
+        type=int,
+        default=60,
+        help="Timeout for the one-shot live Codex gate attempt",
+    )
+    parser.add_argument(
+        "--live-codex-result-path",
+        default=None,
+        help="Optional output path for the live Codex gate result JSON",
+    )
+    parser.add_argument(
         "--previous-cycle-state-path",
         default=None,
         help="Optional previous autonomous cycle state JSON path",
@@ -870,6 +893,23 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = Path(args.out_dir)
 
     try:
+        if args.live_codex_gate:
+            manifest = run_live_codex_gate(
+                generated_prompt_path=args.generated_prompt_path,
+                out_dir=out_dir,
+                live_codex_enable_token=args.live_codex_enable_token,
+                timeout_seconds=args.live_codex_timeout_seconds,
+                live_codex_result_path=args.live_codex_result_path,
+                legacy_source_used=True,
+            )
+            if args.as_json:
+                print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+            else:
+                print(f"live_codex_gate_status={manifest.get('status', '')}")
+                print(f"stop_reason={manifest.get('stop_reason', '')}")
+                print(f"next_action={manifest.get('next_action', '')}")
+            return 0
+
         if args.autonomous_cycle_metadata:
             manifest = run_autonomous_cycle_metadata_from_runtime(
                 generated_prompt_path=args.generated_prompt_path,
