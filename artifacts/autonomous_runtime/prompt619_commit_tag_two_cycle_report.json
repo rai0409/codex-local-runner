@@ -1,0 +1,81 @@
+{
+  "prompt619_status": "success",
+  "prompt619_mode": "retry_after_dirty_artifact_stash",
+  "prompt619_base_commit": "ca37581231fbed04248025589097ee51d817e0de",
+  "prompt619_base_tags_at_head": [
+    "prompt618-autonomous-live-loop-wiring"
+  ],
+  "prompt619_required_prompt618_tag_present": true,
+  "prompt619_commit_created": false,
+  "prompt619_commit_sha": "ca37581231fbed04248025589097ee51d817e0de",
+  "prompt619_tag_created": false,
+  "prompt619_tag_name": "prompt618-autonomous-live-loop-wiring",
+  "prompt619_two_cycle_state_path": "/tmp/prompt619_two_cycle_live_out/autonomous_live_loop_state.json",
+  "prompt619_two_cycle_state": {
+    "artifact_paths": [
+      "/tmp/prompt619_two_cycle_live_out/autonomous_live_loop_state.json",
+      "/tmp/prompt619_two_cycle_live_out/autonomous_live_loop_summary.md"
+    ],
+    "autonomous_enable_token_valid": true,
+    "blocked_reason": "none",
+    "codex_invoked_count": 1,
+    "commit_performed": false,
+    "cycle_count": 1,
+    "dirty_paths_outside_allowed_artifacts": [],
+    "enabled": true,
+    "explicit_autonomous_enable_required": true,
+    "explicit_live_enable_required": true,
+    "final_status": "success",
+    "finished_at": "2026-06-11T12:57:25.652745Z",
+    "generated_prompt_exists": true,
+    "generated_prompt_path": "/tmp/prompt619_safe_generated_prompt.md",
+    "legacy_source_used": true,
+    "live_codex_enable_token_valid": true,
+    "live_loop_timeout_seconds": 60,
+    "local_only": true,
+    "max_cycles": 2,
+    "max_seconds": 180.0,
+    "migrated_legacy_functions": [
+      "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+      "_build_prompt385_success_path_next_cycle_handoff_state",
+      "_build_prompt387_success_path_loop_dispatch_bridge_state",
+      "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+      "_build_prompt420_success_only_next_cycle_loop_state"
+    ],
+    "next_action": "commit_tag_gate",
+    "per_cycle_result_paths": [
+      "/tmp/prompt619_two_cycle_live_out/cycle_1/live_codex_gate/codex_execution_result.json"
+    ],
+    "per_cycle_state_paths": [
+      "/tmp/prompt619_two_cycle_live_out/cycle_1/classification/autonomous_cycle_state.json"
+    ],
+    "started_at": "2026-06-11T12:57:16.452430Z",
+    "status": "success",
+    "stop_reason": "commit_tag_gate",
+    "tag_performed": false
+  },
+  "prompt619_cycle_count": 1,
+  "prompt619_codex_invoked_count": 1,
+  "prompt619_commit_or_tag_performed_during_runtime": false,
+  "prompt619_archive_touched": false,
+  "prompt619_source_modified": false,
+  "prompt619_source_dirty_paths_after": [],
+  "prompt619_dirty_paths_before": [],
+  "prompt619_dirty_paths_after": [],
+  "prompt619_artifact_paths": [
+    "/tmp/prompt619_two_cycle_live_out/autonomous_live_loop_summary.md",
+    "/tmp/prompt619_two_cycle_live_out/autonomous_live_loop_state.json",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/classification/autonomous_cycle_summary.md",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/classification/autonomous_cycle_state.json",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/live_codex_gate/codex_stdout.txt",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/live_codex_gate/codex_execution_result.json",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/live_codex_gate/live_codex_gate_state.json",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/live_codex_gate/codex_stderr.txt",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/live_codex_gate/live_codex_gate_summary.md",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/live_codex_gate/autonomous_cycle/autonomous_cycle_summary.md",
+    "/tmp/prompt619_two_cycle_live_out/cycle_1/live_codex_gate/autonomous_cycle/autonomous_cycle_state.json"
+  ],
+  "prompt619_final_decision": "success",
+  "prompt619_next_action": "daemon_lite_observed_live_run",
+  "generated_at": "2026-06-11T12:57:25.780105Z"
+}
