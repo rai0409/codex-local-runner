@@ -1,0 +1,181 @@
+{
+  "prompt612_status": "success",
+  "prompt612_base_commit": "a642380",
+  "prompt612_base_tag": "prompt610-legacy-success-path-extraction",
+  "prompt612_legacy_source_path": "/tmp/old_planned_execution_runner_full.py",
+  "prompt612_legacy_source_exists": true,
+  "prompt612_legacy_ast_parse": {
+    "method": "top_level_block_ast_parse_with_targeted_candidate_ast_parse",
+    "top_level_blocks": 884,
+    "top_level_blocks_ast_parsed": 883,
+    "top_level_block_parse_errors": [
+      {
+        "line": 257906,
+        "reason": "decorator_boundary_from_block_split"
+      }
+    ],
+    "required_candidate_spans_ast_parse": "ok"
+  },
+  "prompt612_legacy_candidates_total": 12,
+  "prompt612_legacy_candidates": [
+    {
+      "name": "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+      "line": 59746,
+      "classification": "legacy_suitable_migrate",
+      "migration_use": "generated prompt path readiness, local Codex handoff status, no invocation by default"
+    },
+    {
+      "name": "_build_prompt385_success_path_next_cycle_handoff_state",
+      "line": 87466,
+      "classification": "legacy_suitable_migrate",
+      "migration_use": "success path next-cycle and commit/tag gate decision shape"
+    },
+    {
+      "name": "_build_prompt387_success_path_loop_dispatch_bridge_state",
+      "line": 88529,
+      "classification": "present_but_not_wired",
+      "migration_use": "bounded dispatch bridge reference only"
+    },
+    {
+      "name": "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+      "line": 89930,
+      "classification": "already_present_current",
+      "migration_use": "Prompt611 runtime loop source reference"
+    },
+    {
+      "name": "_build_prompt420_success_only_next_cycle_loop_state",
+      "line": 65910,
+      "classification": "legacy_suitable_migrate",
+      "migration_use": "success-only next-cycle versus max-cycle stop shape"
+    },
+    {
+      "name": "_build_local_codex_one_shot_execution_handoff_state",
+      "line": 25157,
+      "classification": "legacy_suitable_migrate",
+      "migration_use": "local one-shot handoff contract fields"
+    },
+    {
+      "name": "_build_local_codex_one_shot_execution_result_state",
+      "line": 25912,
+      "classification": "legacy_suitable_migrate",
+      "migration_use": "external result artifact assimilation and returncode classification"
+    },
+    {
+      "name": "_build_prompt417_selected_prompt_codex_execution_adapter_state",
+      "line": 64590,
+      "classification": "present_but_not_wired",
+      "migration_use": "selected prompt adapter reference only"
+    },
+    {
+      "name": "_build_prompt422_targeted_fix_codex_execution_adapter_state",
+      "line": 66609,
+      "classification": "legacy_suitable_migrate",
+      "migration_use": "targeted-fix route and non-executing safety invariants"
+    },
+    {
+      "name": "_build_prompt509_dispatch_ingest_prompt379_execution_result_state",
+      "line": null,
+      "classification": "skip_out_of_scope",
+      "migration_use": "not present in legacy source"
+    },
+    {
+      "name": "_build_prompt510_review_prompt379_live_result_route_state",
+      "line": null,
+      "classification": "skip_out_of_scope",
+      "migration_use": "not present in legacy source"
+    },
+    {
+      "name": "_build_prompt513_success_continuation_result_ingestion_state",
+      "line": null,
+      "classification": "skip_out_of_scope",
+      "migration_use": "not present in legacy source"
+    }
+  ],
+  "prompt612_legacy_functions_migrated": [
+    "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+    "_build_local_codex_one_shot_execution_handoff_state",
+    "_build_local_codex_one_shot_execution_result_state",
+    "_build_prompt385_success_path_next_cycle_handoff_state",
+    "_build_prompt420_success_only_next_cycle_loop_state",
+    "_build_prompt422_targeted_fix_codex_execution_adapter_state"
+  ],
+  "prompt612_current_equivalent_functions": [
+    "automation.orchestration.planned_runner.autonomous_runtime.run_autonomous_runtime",
+    "automation.orchestration.planned_runner.loop_controller.run_bounded_success_loop",
+    "automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399._build_prompt379_generated_prompt_codex_execution_bridge_state",
+    "automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399._build_prompt385_success_path_next_cycle_handoff_state",
+    "automation.orchestration.planned_runner.prompt_surfaces.prompts_400_449._build_prompt420_success_only_next_cycle_loop_state",
+    "automation.orchestration.planned_runner.prompt_surfaces.prompts_400_449._build_prompt422_targeted_fix_codex_execution_adapter_state",
+    "automation.orchestration.planned_runner.summaries.compact._build_local_codex_one_shot_execution_handoff_state",
+    "automation.orchestration.planned_runner.summaries.compact._build_local_codex_one_shot_execution_result_state"
+  ],
+  "prompt612_modified_files": [
+    "scripts/run_planned_execution.py",
+    "automation/orchestration/planned_runner/autonomous_runtime.py"
+  ],
+  "prompt612_new_files": [
+    "automation/orchestration/planned_runner/autonomous_cycle.py",
+    "artifacts/autonomous_runtime/prompt612_cycle_wiring_report.json",
+    "artifacts/autonomous_runtime/prompt612_cycle_wiring_summary.md"
+  ],
+  "prompt612_cli_flags_added": [
+    "--autonomous-cycle-metadata",
+    "--generated-prompt-path",
+    "--codex-result-path",
+    "--previous-cycle-state-path"
+  ],
+  "prompt612_autonomous_cycle_entrypoint": "automation.orchestration.planned_runner.autonomous_cycle.run_autonomous_cycle_metadata",
+  "prompt612_default_behavior_preserved": true,
+  "prompt612_disabled_cycle_smoke": {
+    "returncode": 0,
+    "status": "disabled",
+    "stop_reason": "disabled_missing_enable_token",
+    "codex_invoked": false,
+    "artifact_path": "/tmp/prompt612_cycle_disabled_out/autonomous_cycle_state.json"
+  },
+  "prompt612_missing_prompt_smoke": {
+    "returncode": 0,
+    "status": "blocked",
+    "stop_reason": "missing_generated_prompt",
+    "codex_invoked": false,
+    "artifact_path": "/tmp/prompt612_cycle_missing_prompt_out/autonomous_cycle_state.json"
+  },
+  "prompt612_success_result_smoke": {
+    "returncode": 0,
+    "status": "success",
+    "codex_invoked": false,
+    "result_assimilation_status": "assimilated",
+    "next_action": "commit_tag_gate",
+    "artifact_path": "/tmp/prompt612_cycle_success_result_out/autonomous_cycle_state.json"
+  },
+  "prompt612_py_compile_results": {
+    "scripts/run_planned_execution.py": "passed",
+    "automation/orchestration/planned_runner/autonomous_runtime.py": "passed",
+    "automation/orchestration/planned_runner/loop_controller.py": "passed",
+    "automation/orchestration/planned_runner/daemon.py": "passed",
+    "automation/orchestration/planned_runner/commit_tag.py": "passed",
+    "automation/orchestration/planned_runner/autonomous_cycle.py": "passed"
+  },
+  "prompt612_help_result": {
+    "returncode": 0,
+    "flags_visible": true
+  },
+  "prompt612_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt612_cycle_wiring_report.json",
+    "artifacts/autonomous_runtime/prompt612_cycle_wiring_summary.md",
+    "/tmp/prompt612_cycle_disabled_out/autonomous_cycle_state.json",
+    "/tmp/prompt612_cycle_missing_prompt_out/autonomous_cycle_state.json",
+    "/tmp/prompt612_cycle_success_result_out/autonomous_cycle_state.json"
+  ],
+  "prompt612_safety_constraints_confirmed": {
+    "local_only": true,
+    "codex_invoked": false,
+    "commit_performed": false,
+    "tag_performed": false,
+    "remote_operations_added": false,
+    "archive_files_modified": false,
+    "live_autonomous_loop_added": false
+  },
+  "prompt612_final_decision": "cycle_metadata_wiring_ready",
+  "prompt612_next_action": "commit_tag_gate"
+}

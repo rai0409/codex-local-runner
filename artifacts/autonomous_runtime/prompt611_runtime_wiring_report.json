@@ -1,0 +1,156 @@
+{
+  "prompt611_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt611_runtime_wiring_report.json",
+    "artifacts/autonomous_runtime/prompt611_runtime_wiring_summary.md",
+    "/tmp/prompt611_disabled_out_b/autonomous_runtime_state.json",
+    "/tmp/prompt611_enabled_out_b/autonomous_runtime_state.json",
+    "/tmp/prompt611_daemon_out_b/autonomous_runtime_state.json",
+    "/tmp/prompt611_daemon_out_b/daemon_lite_observed_run_state.json"
+  ],
+  "prompt611_autonomous_runtime_entrypoint": "automation.orchestration.planned_runner.autonomous_runtime.run_autonomous_runtime",
+  "prompt611_base_commit": "a642380",
+  "prompt611_base_tag": "prompt610-legacy-success-path-extraction",
+  "prompt611_cli_flags_added": [
+    "--autonomous-loop",
+    "--daemon-lite",
+    "--max-cycles",
+    "--max-seconds",
+    "--autonomous-enable-token",
+    "--commit-tag-on-success",
+    "--commit-tag-enable-token",
+    "--autonomous-runtime-out-dir"
+  ],
+  "prompt611_current_equivalent_functions": [
+    {
+      "classification": "already_present_current",
+      "function": "loop_controller.run_bounded_success_loop",
+      "reason": "Prompt610 bounded local loop primitive with explicit token and stop checks."
+    },
+    {
+      "classification": "already_present_current",
+      "function": "daemon.build_daemon_lite_observed_run_state",
+      "reason": "Prompt610 daemon-lite observed wrapper over the bounded loop primitive."
+    },
+    {
+      "classification": "already_present_current",
+      "function": "commit_tag.build_commit_tag_execution_gate",
+      "reason": "Prompt610 local-only commit/tag gate, disabled unless explicitly enabled."
+    },
+    {
+      "classification": "already_present_current",
+      "function": "commit_tag.execute_bounded_commit_tag",
+      "reason": "Prompt610 bounded local commit/tag executor, not used by default."
+    }
+  ],
+  "prompt611_daemon_lite_smoke": {
+    "command": "python scripts/run_planned_execution.py --daemon-lite --max-cycles 1 --max-seconds 30 --autonomous-enable-token LOCAL_AUTONOMOUS_RUNTIME_ENABLE --out-dir /tmp/prompt611_daemon_out_b --json",
+    "codex_invoked": false,
+    "commit_performed": false,
+    "daemon_lite_observed_run_state_json": "/tmp/prompt611_daemon_out_b/daemon_lite_observed_run_state.json",
+    "returncode": 0,
+    "status": "blocked",
+    "stop_reason": "dirty_worktree_outside_allowed_artifacts",
+    "tag_performed": false
+  },
+  "prompt611_default_behavior_preserved": true,
+  "prompt611_disabled_mode_smoke": {
+    "command": "python scripts/run_planned_execution.py --autonomous-loop --max-cycles 1 --max-seconds 30 --out-dir /tmp/prompt611_disabled_out_b --json",
+    "codex_invoked": false,
+    "commit_performed": false,
+    "returncode": 0,
+    "status": "disabled",
+    "stop_reason": "explicit_enable_required",
+    "tag_performed": false
+  },
+  "prompt611_enabled_metadata_smoke": {
+    "command": "python scripts/run_planned_execution.py --autonomous-loop --max-cycles 1 --max-seconds 30 --autonomous-enable-token LOCAL_AUTONOMOUS_RUNTIME_ENABLE --out-dir /tmp/prompt611_enabled_out_b --json",
+    "codex_invoked": false,
+    "commit_performed": false,
+    "returncode": 0,
+    "status": "blocked",
+    "stop_reason": "dirty_worktree_outside_allowed_artifacts",
+    "tag_performed": false
+  },
+  "prompt611_final_decision": "legacy-first contract shape migrated into a small current-code wrapper; current Prompt610 primitives are used for loop, daemon-lite, and commit/tag gate behavior.",
+  "prompt611_help_result": {
+    "autonomous_flags_visible": true,
+    "returncode": 0
+  },
+  "prompt611_legacy_ast_parse": "ok",
+  "prompt611_legacy_candidates": [
+    {
+      "classification": "legacy_suitable_migrate",
+      "function": "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+      "legacy_lines": "89930-91217",
+      "reason": "Contains explicit bounded repeated success-path loop gate, max cycle validation, local-only safety booleans, and artifact receipt shape."
+    },
+    {
+      "classification": "legacy_suitable_migrate",
+      "function": "_build_prompt420_success_only_next_cycle_loop_state",
+      "legacy_lines": "65910-66075",
+      "reason": "Defines success-only next-cycle loop contract, local-only posture, max cycle accounting, and next-prompt stop conditions."
+    },
+    {
+      "classification": "legacy_suitable_migrate",
+      "function": "_build_local_daemon_lite_wrapper_artifacts",
+      "legacy_lines": "14878-15376",
+      "reason": "Defines daemon-lite wrapper artifact contract and safety fields with Codex/git disabled by default."
+    },
+    {
+      "classification": "skip_out_of_scope",
+      "function": "run_prompt574_observed_daemon_run_gate",
+      "legacy_lines": "",
+      "reason": "Requested exact name was not found in OLD_RUNNER; related Prompt574 token constants are part of the older runner-wide surface."
+    },
+    {
+      "classification": "present_but_not_wired",
+      "function": "scripts/run_planned_execution.py Prompt389/Prompt434 flags",
+      "legacy_lines": "",
+      "reason": "Existing CLI flags expose older prompt surfaces but not the requested generic autonomous runtime metadata mode."
+    },
+    {
+      "classification": "current_wrapper_needed",
+      "function": "autonomous_runtime.run_autonomous_runtime",
+      "legacy_lines": "",
+      "reason": "Needed to connect current Prompt610 primitives to CLI-accessible metadata artifacts without adding old public APIs."
+    }
+  ],
+  "prompt611_legacy_candidates_total": 683,
+  "prompt611_legacy_functions_migrated": [
+    "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+    "_build_prompt420_success_only_next_cycle_loop_state",
+    "_build_local_daemon_lite_wrapper_artifacts"
+  ],
+  "prompt611_legacy_source_exists": true,
+  "prompt611_legacy_source_path": "/tmp/old_planned_execution_runner_full.py",
+  "prompt611_modified_files": [
+    "scripts/run_planned_execution.py"
+  ],
+  "prompt611_new_files": [
+    "automation/orchestration/planned_runner/autonomous_runtime.py",
+    "artifacts/autonomous_runtime/prompt611_runtime_wiring_report.json",
+    "artifacts/autonomous_runtime/prompt611_runtime_wiring_summary.md"
+  ],
+  "prompt611_next_action": "commit_tag_gate",
+  "prompt611_py_compile_results": {
+    "automation/orchestration/planned_runner/autonomous_runtime.py": "passed",
+    "automation/orchestration/planned_runner/commit_tag.py": "passed",
+    "automation/orchestration/planned_runner/daemon.py": "passed",
+    "automation/orchestration/planned_runner/loop_controller.py": "passed",
+    "automation/orchestration/planned_runner/runtime_output_wiring.py": "passed",
+    "scripts/run_planned_execution.py": "passed"
+  },
+  "prompt611_safety_constraints_confirmed": {
+    "autonomous_disabled_by_default": true,
+    "bounded_max_cycles_required": true,
+    "bounded_max_seconds_required": true,
+    "commit_tag_disabled_by_default": true,
+    "daemon_unbounded_loop_added": false,
+    "github_remote_operation_added": false,
+    "live_codex_executed_during_validation": false,
+    "local_only": true,
+    "merge_or_rollback_added": false,
+    "push_or_pr_added": false
+  },
+  "prompt611_status": "success"
+}

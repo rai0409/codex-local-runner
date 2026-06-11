@@ -17,6 +17,8 @@ from automation.execution.codex_executor_adapter import select_execution_transpo
 from automation.execution.codex_live_transport import CodexLiveExecutionTransport  # noqa: E402
 from automation.orchestration.planned_execution_runner import DryRunCodexExecutionTransport  # noqa: E402
 from automation.orchestration.planned_execution_runner import PlannedExecutionRunner  # noqa: E402
+from automation.orchestration.planned_runner.autonomous_runtime import run_autonomous_cycle_metadata_from_runtime  # noqa: E402
+from automation.orchestration.planned_runner.autonomous_runtime import run_autonomous_runtime  # noqa: E402
 
 
 _REQUIRED_ARTIFACT_FILES = (
@@ -611,7 +613,7 @@ def _read_json_file_if_present(path_value: str | None) -> dict[str, object] | No
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run planned PR-slice execution with explicit transport mode")
-    parser.add_argument("--artifacts-dir", required=True, help="Directory containing planning artifacts")
+    parser.add_argument("--artifacts-dir", default=None, help="Directory containing planning artifacts")
     parser.add_argument("--out-dir", required=True, help="Output root for execution artifacts")
     parser.add_argument("--job-id", default=None, help="Optional override for execution job_id")
     parser.add_argument("--retry-context", default=None, help="Optional retry context JSON path")
@@ -790,6 +792,62 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--stop-on-failure", action="store_true", default=True, help="Stop when a unit fails")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue processing units after failures")
+    parser.add_argument(
+        "--autonomous-loop",
+        action="store_true",
+        default=False,
+        help="Run local-only bounded autonomous runtime metadata mode",
+    )
+    parser.add_argument(
+        "--daemon-lite",
+        action="store_true",
+        default=False,
+        help="Run local-only daemon-lite observed metadata mode",
+    )
+    parser.add_argument("--max-cycles", type=int, default=None, help="Required positive autonomous runtime cycle bound")
+    parser.add_argument("--max-seconds", type=float, default=None, help="Required positive autonomous runtime time bound")
+    parser.add_argument(
+        "--autonomous-enable-token",
+        default="",
+        help="Explicit token required to enable autonomous runtime metadata cycles",
+    )
+    parser.add_argument(
+        "--commit-tag-on-success",
+        action="store_true",
+        default=False,
+        help="Request local commit/tag gate after autonomous runtime success",
+    )
+    parser.add_argument(
+        "--commit-tag-enable-token",
+        default="",
+        help="Explicit token required before local commit/tag execution can run",
+    )
+    parser.add_argument(
+        "--autonomous-runtime-out-dir",
+        default=None,
+        help="Optional output directory for autonomous runtime artifacts; defaults to --out-dir",
+    )
+    parser.add_argument(
+        "--autonomous-cycle-metadata",
+        action="store_true",
+        default=False,
+        help="Write local-only autonomous cycle metadata without invoking Codex",
+    )
+    parser.add_argument(
+        "--generated-prompt-path",
+        default=None,
+        help="Optional generated prompt path for autonomous cycle metadata",
+    )
+    parser.add_argument(
+        "--codex-result-path",
+        default=None,
+        help="Optional Codex result JSON path for autonomous cycle metadata assimilation",
+    )
+    parser.add_argument(
+        "--previous-cycle-state-path",
+        default=None,
+        help="Optional previous autonomous cycle state JSON path",
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
@@ -809,10 +867,59 @@ def _validate_inputs(artifacts_dir: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
-    artifacts_dir = Path(args.artifacts_dir)
     out_dir = Path(args.out_dir)
 
     try:
+        if args.autonomous_cycle_metadata:
+            manifest = run_autonomous_cycle_metadata_from_runtime(
+                generated_prompt_path=args.generated_prompt_path,
+                codex_result_path=args.codex_result_path,
+                previous_cycle_state_path=args.previous_cycle_state_path,
+                output_dir=out_dir,
+                cycle_index=args.autonomous_current_cycle or 1,
+                max_cycles=args.max_cycles,
+                max_seconds=args.max_seconds,
+                autonomous_enable_token=args.autonomous_enable_token,
+                legacy_source_used=True,
+            )
+            if args.as_json:
+                print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+            else:
+                print(f"autonomous_cycle_status={manifest.get('status', '')}")
+                print(f"stop_reason={manifest.get('stop_reason', '')}")
+                print(f"next_action={manifest.get('next_action', '')}")
+            return 0
+
+        if args.autonomous_loop or args.daemon_lite:
+            manifest = run_autonomous_runtime(
+                repo_path=Path(args.repo_path).resolve() if args.repo_path else REPO_ROOT,
+                out_dir=out_dir,
+                autonomous_loop=bool(args.autonomous_loop),
+                daemon_lite=bool(args.daemon_lite),
+                max_cycles=args.max_cycles,
+                max_seconds=args.max_seconds,
+                autonomous_enable_token=args.autonomous_enable_token,
+                commit_tag_on_success=bool(args.commit_tag_on_success),
+                commit_tag_enable_token=args.commit_tag_enable_token,
+                autonomous_runtime_out_dir=args.autonomous_runtime_out_dir,
+                legacy_source_used=True,
+                migrated_legacy_functions=[
+                    "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+                    "_build_prompt420_success_only_next_cycle_loop_state",
+                    "_build_local_daemon_lite_wrapper_artifacts",
+                ],
+            )
+            if args.as_json:
+                print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+            else:
+                print(f"autonomous_runtime_status={manifest.get('status', '')}")
+                print(f"final_status={manifest.get('final_status', '')}")
+                print(f"next_action={manifest.get('next_action', '')}")
+            return 0
+
+        if not args.artifacts_dir:
+            raise ValueError("planned execution requires --artifacts-dir")
+        artifacts_dir = Path(args.artifacts_dir)
         _validate_inputs(artifacts_dir)
 
         retry_context = _read_json_file_if_present(args.retry_context)
