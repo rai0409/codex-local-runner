@@ -1,0 +1,89 @@
+{
+  "prompt618_archive_touched": false,
+  "prompt618_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt618_live_loop_wiring_report.json",
+    "artifacts/autonomous_runtime/prompt618_live_loop_wiring_summary.md"
+  ],
+  "prompt618_base_commit": "67dbb3c",
+  "prompt618_base_tag": "prompt616-live-codex-gate-wiring",
+  "prompt618_cli_flags_added": [
+    "--autonomous-live-loop",
+    "--live-loop-generated-prompt-path",
+    "--live-loop-timeout-seconds"
+  ],
+  "prompt618_codex_invoked_during_validation": false,
+  "prompt618_commit_or_tag_performed": false,
+  "prompt618_current_equivalent_functions": {
+    "autonomous_cycle.run_autonomous_cycle_metadata": "already_present_current",
+    "autonomous_live_loop.run_autonomous_live_loop": "current_wrapper_needed",
+    "autonomous_runtime.run_autonomous_runtime": "already_present_current",
+    "live_codex_gate.run_live_codex_gate": "present_but_not_wired",
+    "loop_controller.run_bounded_success_loop": "already_present_current"
+  },
+  "prompt618_default_behavior_preserved": true,
+  "prompt618_disabled_live_loop_smoke": {
+    "codex_invoked_count": 0,
+    "commit_performed": false,
+    "returncode": 0,
+    "status": "disabled",
+    "stop_reason": "missing_autonomous_enable_token",
+    "tag_performed": false
+  },
+  "prompt618_final_decision": "success",
+  "prompt618_legacy_ast_parse": true,
+  "prompt618_legacy_candidates_total": 268,
+  "prompt618_legacy_classification": {
+    "_build_prompt379_generated_prompt_codex_execution_bridge_state": "legacy_suitable_migrate",
+    "_build_prompt385_success_path_next_cycle_handoff_state": "legacy_suitable_migrate",
+    "_build_prompt387_success_path_loop_dispatch_bridge_state": "legacy_suitable_migrate",
+    "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state": "legacy_suitable_migrate",
+    "_build_prompt420_success_only_next_cycle_loop_state": "legacy_suitable_migrate",
+    "_build_prompt509_dispatch_ingest_prompt379_execution_result_state": "skip_out_of_scope",
+    "_build_prompt510_review_prompt379_live_result_route_state": "skip_out_of_scope",
+    "_build_prompt513_success_continuation_result_ingestion_state": "skip_out_of_scope",
+    "commit_tag_delivery_functions": "skip_out_of_scope",
+    "project_browser_dom_functions": "skip_out_of_scope",
+    "rollback_delivery_functions": "skip_out_of_scope"
+  },
+  "prompt618_legacy_functions_migrated": [
+    "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+    "_build_prompt385_success_path_next_cycle_handoff_state",
+    "_build_prompt387_success_path_loop_dispatch_bridge_state",
+    "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+    "_build_prompt420_success_only_next_cycle_loop_state"
+  ],
+  "prompt618_legacy_source_exists": true,
+  "prompt618_live_loop_entrypoint": "automation.orchestration.planned_runner.autonomous_live_loop.run_autonomous_live_loop",
+  "prompt618_missing_live_token_smoke": {
+    "codex_invoked_count": 0,
+    "commit_performed": false,
+    "returncode": 0,
+    "status": "disabled",
+    "stop_reason": "missing_live_codex_enable_token",
+    "tag_performed": false
+  },
+  "prompt618_modified_files": [
+    "scripts/run_planned_execution.py"
+  ],
+  "prompt618_new_files": [
+    "automation/orchestration/planned_runner/autonomous_live_loop.py",
+    "artifacts/autonomous_runtime/prompt618_live_loop_wiring_report.json",
+    "artifacts/autonomous_runtime/prompt618_live_loop_wiring_summary.md"
+  ],
+  "prompt618_next_action": "commit_tag_gate",
+  "prompt618_one_cycle_live_loop_smoke": {
+    "codex_invoked_count": 0,
+    "commit_performed": false,
+    "returncode": 0,
+    "status": "blocked",
+    "stop_reason": "dirty_worktree_outside_allowed_artifacts",
+    "tag_performed": false
+  },
+  "prompt618_source_modified": false,
+  "prompt618_status": "success",
+  "prompt618_validation": {
+    "cli_help_flags_present": true,
+    "imports_ok": true,
+    "py_compile_ok": true
+  }
+}

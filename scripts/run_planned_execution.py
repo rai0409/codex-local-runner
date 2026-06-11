@@ -19,6 +19,7 @@ from automation.orchestration.planned_execution_runner import DryRunCodexExecuti
 from automation.orchestration.planned_execution_runner import PlannedExecutionRunner  # noqa: E402
 from automation.orchestration.planned_runner.autonomous_runtime import run_autonomous_cycle_metadata_from_runtime  # noqa: E402
 from automation.orchestration.planned_runner.autonomous_runtime import run_autonomous_runtime  # noqa: E402
+from automation.orchestration.planned_runner.autonomous_live_loop import run_autonomous_live_loop  # noqa: E402
 from automation.orchestration.planned_runner.live_codex_gate import run_live_codex_gate  # noqa: E402
 
 
@@ -867,6 +868,23 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional output path for the live Codex gate result JSON",
     )
     parser.add_argument(
+        "--autonomous-live-loop",
+        action="store_true",
+        default=False,
+        help="Run bounded local-only autonomous live loop when explicitly enabled",
+    )
+    parser.add_argument(
+        "--live-loop-generated-prompt-path",
+        default=None,
+        help="Generated prompt path for bounded autonomous live loop cycles",
+    )
+    parser.add_argument(
+        "--live-loop-timeout-seconds",
+        type=int,
+        default=60,
+        help="Per-cycle live Codex timeout for bounded autonomous live loop",
+    )
+    parser.add_argument(
         "--previous-cycle-state-path",
         default=None,
         help="Optional previous autonomous cycle state JSON path",
@@ -954,6 +972,26 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"autonomous_runtime_status={manifest.get('status', '')}")
                 print(f"final_status={manifest.get('final_status', '')}")
+                print(f"next_action={manifest.get('next_action', '')}")
+            return 0
+
+        if args.autonomous_live_loop:
+            manifest = run_autonomous_live_loop(
+                repo_path=Path(args.repo_path).resolve() if args.repo_path else REPO_ROOT,
+                out_dir=out_dir,
+                generated_prompt_path=args.live_loop_generated_prompt_path,
+                max_cycles=args.max_cycles,
+                max_seconds=args.max_seconds,
+                autonomous_enable_token=args.autonomous_enable_token,
+                live_codex_enable_token=args.live_codex_enable_token,
+                live_loop_timeout_seconds=args.live_loop_timeout_seconds,
+                legacy_source_used=True,
+            )
+            if args.as_json:
+                print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+            else:
+                print(f"autonomous_live_loop_status={manifest.get('status', '')}")
+                print(f"stop_reason={manifest.get('stop_reason', '')}")
                 print(f"next_action={manifest.get('next_action', '')}")
             return 0
 
