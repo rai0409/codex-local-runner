@@ -1,0 +1,92 @@
+{
+  "prompt620_status": "success",
+  "prompt620_mode": "normal_shell_retry_no_nested_codex",
+  "prompt620_base_commit": "7cca49dd7c53c2fd1c7cfed87a80399ed6bb0163",
+  "prompt620_base_tags_at_head": [
+    "prompt619-two-cycle-unattended-live-smoke"
+  ],
+  "prompt620_prompt617_success_confirmed": true,
+  "prompt620_prompt618_tag_confirmed": true,
+  "prompt620_prompt619_success_confirmed": true,
+  "prompt620_prompt619_tag_confirmed": true,
+  "prompt620_runtime_entrypoint": "scripts/run_planned_execution.py --autonomous-live-loop",
+  "prompt620_process_returncode": null,
+  "prompt620_state_path": "/tmp/prompt620_daemon_lite_observed_live_out/autonomous_live_loop_state.json",
+  "prompt620_state": {
+    "artifact_paths": [
+      "/tmp/prompt620_daemon_lite_observed_live_out/autonomous_live_loop_state.json",
+      "/tmp/prompt620_daemon_lite_observed_live_out/autonomous_live_loop_summary.md"
+    ],
+    "autonomous_enable_token_valid": true,
+    "blocked_reason": "none",
+    "codex_invoked_count": 1,
+    "commit_performed": false,
+    "cycle_count": 1,
+    "dirty_paths_outside_allowed_artifacts": [],
+    "enabled": true,
+    "explicit_autonomous_enable_required": true,
+    "explicit_live_enable_required": true,
+    "final_status": "success",
+    "finished_at": "2026-06-11T14:51:39.872779Z",
+    "generated_prompt_exists": true,
+    "generated_prompt_path": "/tmp/prompt620_safe_generated_prompt.md",
+    "legacy_source_used": true,
+    "live_codex_enable_token_valid": true,
+    "live_loop_timeout_seconds": 60,
+    "local_only": true,
+    "max_cycles": 2,
+    "max_seconds": 180.0,
+    "migrated_legacy_functions": [
+      "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+      "_build_prompt385_success_path_next_cycle_handoff_state",
+      "_build_prompt387_success_path_loop_dispatch_bridge_state",
+      "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+      "_build_prompt420_success_only_next_cycle_loop_state"
+    ],
+    "next_action": "commit_tag_gate",
+    "per_cycle_result_paths": [
+      "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/codex_execution_result.json"
+    ],
+    "per_cycle_state_paths": [
+      "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/classification/autonomous_cycle_state.json"
+    ],
+    "started_at": "2026-06-11T14:51:27.175764Z",
+    "status": "success",
+    "stop_reason": "commit_tag_gate",
+    "tag_performed": false
+  },
+  "prompt620_observed_run_started": true,
+  "prompt620_observed_run_finished": true,
+  "prompt620_local_only": true,
+  "prompt620_bounded": true,
+  "prompt620_cycle_count": 1,
+  "prompt620_codex_invoked_count": 1,
+  "prompt620_commit_or_tag_performed_during_runtime": false,
+  "prompt620_push_pr_merge_performed": false,
+  "prompt620_archive_touched": false,
+  "prompt620_source_modified": false,
+  "prompt620_dirty_paths_before": [],
+  "prompt620_dirty_paths_after": [],
+  "prompt620_per_cycle_result_paths": [
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/codex_execution_result.json"
+  ],
+  "prompt620_per_cycle_state_paths": [
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/classification/autonomous_cycle_state.json"
+  ],
+  "prompt620_artifact_paths": [
+    "/tmp/prompt620_daemon_lite_observed_live_out/autonomous_live_loop_summary.md",
+    "/tmp/prompt620_daemon_lite_observed_live_out/autonomous_live_loop_state.json",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/classification/autonomous_cycle_summary.md",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/classification/autonomous_cycle_state.json",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/codex_stdout.txt",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/codex_execution_result.json",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/live_codex_gate_state.json",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/codex_stderr.txt",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/live_codex_gate_summary.md",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/autonomous_cycle/autonomous_cycle_summary.md",
+    "/tmp/prompt620_daemon_lite_observed_live_out/cycle_1/live_codex_gate/autonomous_cycle/autonomous_cycle_state.json"
+  ],
+  "prompt620_final_decision": "success",
+  "prompt620_next_action": "complete_autonomous_live_daemon_lite_gate",
+  "generated_at": "2026-06-11T14:51:39.970186Z"
+}
