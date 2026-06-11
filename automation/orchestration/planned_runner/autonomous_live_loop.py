@@ -73,6 +73,35 @@ def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     )
 
 
+def _load_prompt_manifest(path_text: str) -> tuple[list[dict[str, str]], list[str]]:
+    try:
+        payload = json.loads(Path(path_text).read_text(encoding="utf-8"))
+    except OSError:
+        return [], [f"prompt manifest unreadable: {path_text}"]
+    except json.JSONDecodeError:
+        return [], [f"prompt manifest is not valid JSON: {path_text}"]
+    cycles = payload.get("cycles") if isinstance(payload, dict) else None
+    if not isinstance(cycles, list) or not cycles:
+        return [], [f"prompt manifest must contain a non-empty cycles list: {path_text}"]
+    entries: list[dict[str, str]] = []
+    errors: list[str] = []
+    for index, raw in enumerate(cycles, start=1):
+        if not isinstance(raw, dict):
+            errors.append(f"manifest cycle {index} must be an object")
+            continue
+        prompt_path = _normalize_text(raw.get("generated_prompt_path"))
+        if not prompt_path or not Path(prompt_path).is_file():
+            errors.append(f"manifest cycle {index} generated_prompt_path missing or not a file")
+        entries.append(
+            {
+                "generated_prompt_path": prompt_path,
+                "repo_path": _normalize_text(raw.get("repo_path")),
+                "effect_spec_path": _normalize_text(raw.get("effect_spec_path")),
+            }
+        )
+    return entries, errors
+
+
 def _write_summary(path: Path, payload: Mapping[str, Any]) -> None:
     lines = [
         "# Autonomous Live Loop Summary",
@@ -299,6 +328,9 @@ def run_autonomous_live_loop(
     live_loop_timeout_seconds: Any = 60,
     legacy_source_used: bool = True,
     verification_continue: bool = False,
+    sandbox_mode: str = "default",
+    effect_spec_path: str | Path | None = None,
+    generated_prompt_manifest_path: str | Path | None = None,
 ) -> dict[str, Any]:
     bounded_max_cycles = _as_required_positive_int(max_cycles, field_name="max_cycles")
     bounded_max_seconds = _as_required_positive_float(max_seconds, field_name="max_seconds")
@@ -313,6 +345,27 @@ def run_autonomous_live_loop(
     started_at = _utc_now()
     autonomous_token_valid = _normalize_text(autonomous_enable_token) == AUTONOMOUS_CYCLE_ENABLE_TOKEN
     live_token_valid = _normalize_text(live_codex_enable_token) == LIVE_CODEX_GATE_ENABLE_TOKEN
+    sandbox_text = _normalize_text(sandbox_mode, default="default")
+    effect_spec_text = _normalize_text(effect_spec_path)
+    manifest_text = _normalize_text(generated_prompt_manifest_path)
+    manifest_entries: list[dict[str, str]] = []
+    manifest_errors: list[str] = []
+    if manifest_text:
+        manifest_entries, manifest_errors = _load_prompt_manifest(manifest_text)
+    loop_option_fields = {
+        "sandbox_mode": sandbox_text,
+        "effect_spec_path": effect_spec_text,
+        "generated_prompt_manifest_path": manifest_text,
+        "manifest_cycle_count": len(manifest_entries),
+        "manifest_errors": list(manifest_errors),
+        "per_cycle_effect_verification_statuses": [],
+        "per_cycle_generated_prompt_paths": [],
+    }
+    # A manifest never extends the loop: cycles are bounded by both max_cycles
+    # and the number of manifest entries.
+    effective_max_cycles = (
+        min(bounded_max_cycles, len(manifest_entries)) if manifest_entries else bounded_max_cycles
+    )
 
     if not autonomous_token_valid:
         payload = _disabled_payload(
@@ -330,6 +383,7 @@ def run_autonomous_live_loop(
             legacy_source_used=legacy_source_used,
             verification_continue=verification_continue,
         )
+        payload.update(loop_option_fields)
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
         return payload
@@ -350,6 +404,29 @@ def run_autonomous_live_loop(
             legacy_source_used=legacy_source_used,
             verification_continue=verification_continue,
         )
+        payload.update(loop_option_fields)
+        _write_json(state_path, payload)
+        _write_summary(summary_path, payload)
+        return payload
+
+    if manifest_text and manifest_errors:
+        payload = _disabled_payload(
+            status="blocked",
+            stop_reason="invalid_prompt_manifest",
+            next_action="manual_review_required",
+            state_path=state_path,
+            summary_path=summary_path,
+            max_cycles=bounded_max_cycles,
+            max_seconds=bounded_max_seconds,
+            started_at=started_at,
+            autonomous_token_valid=autonomous_token_valid,
+            live_token_valid=live_token_valid,
+            generated_prompt_path=generated_path_text,
+            legacy_source_used=legacy_source_used,
+            verification_continue=verification_continue,
+        )
+        payload["enabled"] = True
+        payload.update(loop_option_fields)
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
         return payload
@@ -380,6 +457,7 @@ def run_autonomous_live_loop(
         payload["dirty_paths_outside_allowed_artifacts"] = list(
             dirty_state.get("dirty_paths_outside_allowed_artifacts", [])
         )
+        payload.update(loop_option_fields)
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
         return payload
@@ -387,6 +465,8 @@ def run_autonomous_live_loop(
     started_monotonic = time.monotonic()
     per_cycle_result_paths: list[str] = []
     per_cycle_state_paths: list[str] = []
+    per_cycle_effect_statuses: list[str] = []
+    per_cycle_prompt_paths: list[str] = []
     codex_invoked_count = 0
     commit_tag_gate_observed_cycles: list[int] = []
     previous_failure = ""
@@ -397,7 +477,7 @@ def run_autonomous_live_loop(
     next_action = "manual_review_required"
     cycle_count = 0
 
-    for cycle_index in range(1, bounded_max_cycles + 1):
+    for cycle_index in range(1, effective_max_cycles + 1):
         elapsed_before = time.monotonic() - started_monotonic
         if elapsed_before >= bounded_max_seconds:
             stop_reason = "max_seconds_reached"
@@ -413,25 +493,39 @@ def run_autonomous_live_loop(
             blocked_reason = "dirty_worktree_outside_allowed_artifacts"
             break
 
+        if manifest_entries:
+            entry = manifest_entries[cycle_index - 1]
+            cycle_prompt_text = entry["generated_prompt_path"]
+            cycle_effect_spec = entry["effect_spec_path"] or effect_spec_text
+        else:
+            cycle_prompt_text = generated_path_text
+            cycle_effect_spec = effect_spec_text
+
         cycle_dir = output_root / f"cycle_{cycle_index}"
         live_gate = run_live_codex_gate(
-            generated_prompt_path=generated_path_text,
+            generated_prompt_path=cycle_prompt_text,
             out_dir=cycle_dir / "live_codex_gate",
             live_codex_enable_token=live_codex_enable_token,
             timeout_seconds=timeout_seconds,
             legacy_source_used=legacy_source_used,
             migrated_legacy_functions=AUTONOMOUS_LIVE_LOOP_MIGRATED_LEGACY_FUNCTIONS,
+            sandbox_mode=sandbox_text,
+            effect_spec_path=cycle_effect_spec or None,
         )
         if live_gate.get("codex_invoked"):
             codex_invoked_count += 1
+        per_cycle_effect_statuses.append(
+            _normalize_text(live_gate.get("effect_verification_status"), default="not_run")
+        )
+        per_cycle_prompt_paths.append(cycle_prompt_text)
 
         classification = run_autonomous_cycle_metadata(
-            generated_prompt_path=generated_path_text,
+            generated_prompt_path=cycle_prompt_text,
             codex_result_path=live_gate.get("codex_result_path"),
             previous_cycle_state_path=per_cycle_state_paths[-1] if per_cycle_state_paths else None,
             output_dir=cycle_dir / "classification",
             cycle_index=cycle_index,
-            max_cycles=bounded_max_cycles,
+            max_cycles=effective_max_cycles,
             max_seconds=bounded_max_seconds,
             autonomous_enable_token=autonomous_enable_token,
             legacy_source_used=legacy_source_used,
@@ -451,7 +545,7 @@ def run_autonomous_live_loop(
         stop_state = _cycle_stop_state(
             classification=classification,
             cycle_index=cycle_index,
-            max_cycles=bounded_max_cycles,
+            max_cycles=effective_max_cycles,
             elapsed_seconds=time.monotonic() - started_monotonic,
             max_seconds=bounded_max_seconds,
             previous_failure=previous_failure,
@@ -494,6 +588,14 @@ def run_autonomous_live_loop(
         "verification_continue_after_commit_gate": bool(verification_continue),
         "commit_tag_gate_observed_count": len(commit_tag_gate_observed_cycles),
         "commit_tag_gate_observed_cycles": list(commit_tag_gate_observed_cycles),
+        "sandbox_mode": sandbox_text,
+        "effect_spec_path": effect_spec_text,
+        "generated_prompt_manifest_path": manifest_text,
+        "manifest_cycle_count": len(manifest_entries),
+        "manifest_errors": list(manifest_errors),
+        "effective_max_cycles": effective_max_cycles,
+        "per_cycle_effect_verification_statuses": list(per_cycle_effect_statuses),
+        "per_cycle_generated_prompt_paths": list(per_cycle_prompt_paths),
         "commit_performed": False,
         "tag_performed": False,
         "local_only": True,

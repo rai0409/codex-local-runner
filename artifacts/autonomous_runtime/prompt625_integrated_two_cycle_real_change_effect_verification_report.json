@@ -1,0 +1,172 @@
+{
+  "generated_at": "2026-06-11T22:38:35.556546Z",
+  "prompt625_archive_touched": false,
+  "prompt625_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt625_integrated_two_cycle_real_change_effect_verification_report.json",
+    "artifacts/autonomous_runtime/prompt625_integrated_two_cycle_real_change_effect_verification_summary.md",
+    "/tmp/prompt625_integrated_live_out/autonomous_live_loop_state.json",
+    "/tmp/prompt625_integrated_live_out/autonomous_live_loop_summary.md",
+    "/tmp/prompt625_integrated_live_out/cycle_1/live_codex_gate/live_codex_gate_state.json",
+    "/tmp/prompt625_integrated_live_out/cycle_1/live_codex_gate/codex_execution_result.json",
+    "/tmp/prompt625_integrated_live_out/cycle_1/live_codex_gate/codex_stdout.txt",
+    "/tmp/prompt625_integrated_live_out/cycle_2/live_codex_gate/live_codex_gate_state.json",
+    "/tmp/prompt625_integrated_live_out/cycle_2/live_codex_gate/codex_execution_result.json",
+    "/tmp/prompt625_integrated_live_out/cycle_2/live_codex_gate/codex_stdout.txt",
+    "/tmp/prompt625_manifest.json",
+    "/tmp/prompt625_cycle1_prompt.md",
+    "/tmp/prompt625_cycle2_prompt.md",
+    "/tmp/prompt625_cycle1_effect_spec.json",
+    "/tmp/prompt625_cycle2_effect_spec.json"
+  ],
+  "prompt625_base_commit": "45e73b7",
+  "prompt625_base_tags_at_head": [
+    "prompt624-effect-based-live-gate-verification"
+  ],
+  "prompt625_cli_flags_added": [
+    "--live-loop-sandbox-mode",
+    "--live-loop-effect-spec-path",
+    "--live-loop-generated-prompt-manifest-path"
+  ],
+  "prompt625_codex_invoked_count": 2,
+  "prompt625_commit_or_tag_performed_during_runtime": false,
+  "prompt625_commit_tag_gate_observed_count": 2,
+  "prompt625_cycle1_calculator_modified": true,
+  "prompt625_cycle1_no_extra_files": true,
+  "prompt625_cycle1_subtract_present": true,
+  "prompt625_cycle1_test_file_unchanged": true,
+  "prompt625_cycle2_calculator_modified": true,
+  "prompt625_cycle2_multiply_present": true,
+  "prompt625_cycle2_no_extra_files": true,
+  "prompt625_cycle2_test_file_unchanged": true,
+  "prompt625_cycle_count": 2,
+  "prompt625_default_behavior_preserved": true,
+  "prompt625_dirty_artifacts_isolated": false,
+  "prompt625_dirty_artifacts_note": "Isolation not needed: the loop dirty guard targeted the clean scratch repo and the runtime touched only /tmp paths. Nothing was moved.",
+  "prompt625_dirty_artifacts_restored": true,
+  "prompt625_effect_verification_cycle1_status": "passed",
+  "prompt625_effect_verification_cycle2_status": "passed",
+  "prompt625_existing_support_gap": "run_autonomous_live_loop did not pass sandbox_mode/effect_spec_path to run_live_codex_gate and used one generated prompt for all cycles; Design A (per-cycle manifest) required minimal opt-in wiring",
+  "prompt625_existing_support_sufficient": false,
+  "prompt625_final_decision": "success",
+  "prompt625_main_repo_source_modified": true,
+  "prompt625_main_repo_source_modified_note": "Only the intended implementation files (autonomous_live_loop.py, run_planned_execution.py) and the new test file; the runtime itself modified nothing in the main repo",
+  "prompt625_manifest_design": "Design A: opt-in JSON manifest {cycles:[{generated_prompt_path, repo_path, effect_spec_path}]}; cycles bounded by min(max_cycles, manifest length) (effective_max_cycles); invalid manifest blocks before any Codex invocation; single-prompt behavior unchanged when manifest absent",
+  "prompt625_manifest_support_added": true,
+  "prompt625_modified_files": [
+    "automation/orchestration/planned_runner/autonomous_live_loop.py",
+    "scripts/run_planned_execution.py"
+  ],
+  "prompt625_new_files": [
+    "tests/test_autonomous_live_loop_effect_verification_integration.py",
+    "artifacts/autonomous_runtime/prompt625_integrated_two_cycle_real_change_effect_verification_report.json",
+    "artifacts/autonomous_runtime/prompt625_integrated_two_cycle_real_change_effect_verification_summary.md"
+  ],
+  "prompt625_next_action": "commit_tag_integrated_two_cycle_real_change_effect_verification",
+  "prompt625_process_returncode": 0,
+  "prompt625_repo_path_note": "--repo-path points the loop-level dirty-worktree guard at a clean scratch repo because the prompt625 implementation itself must stay uncommitted (no-commit constraint), making the main repo worktree necessarily dirty — same documented approach as prompt622. The per-cycle sandbox repos are guarded by effect specs, and each cycle's codex runs with cwd = that cycle's spec repo_path.",
+  "prompt625_runtime_command": [
+    "python",
+    "scripts/run_planned_execution.py",
+    "--autonomous-live-loop",
+    "--autonomous-enable-token",
+    "LOCAL_AUTONOMOUS_RUNTIME_ENABLE",
+    "--live-codex-enable-token",
+    "LOCAL_LIVE_CODEX_GATE_ENABLE",
+    "--max-cycles",
+    "2",
+    "--max-seconds",
+    "300",
+    "--live-loop-timeout-seconds",
+    "90",
+    "--live-loop-verification-continue",
+    "--live-loop-sandbox-mode",
+    "workspace-write",
+    "--live-loop-generated-prompt-manifest-path",
+    "/tmp/prompt625_manifest.json",
+    "--repo-path",
+    "/tmp/prompt625_clean_repo_for_dirty_gate",
+    "--out-dir",
+    "/tmp/prompt625_integrated_live_out",
+    "--json"
+  ],
+  "prompt625_sandbox_validation": {
+    "cycle1": "git diff: only calculator.py (+4 lines, subtract); test md5 9ce3e8ec5ff03e9bee3aebfd5f993e06 unchanged; 0 tags, 1 commit (fixture)",
+    "cycle2": "git diff: only calculator.py (+4 lines, multiply); test md5 9ce3e8ec5ff03e9bee3aebfd5f993e06 unchanged; 0 tags, 1 commit (fixture)"
+  },
+  "prompt625_state": {
+    "artifact_paths": [
+      "/tmp/prompt625_integrated_live_out/autonomous_live_loop_state.json",
+      "/tmp/prompt625_integrated_live_out/autonomous_live_loop_summary.md"
+    ],
+    "autonomous_enable_token_valid": true,
+    "blocked_reason": "none",
+    "codex_invoked_count": 2,
+    "commit_performed": false,
+    "commit_tag_gate_observed_count": 2,
+    "commit_tag_gate_observed_cycles": [
+      1,
+      2
+    ],
+    "cycle_count": 2,
+    "dirty_paths_outside_allowed_artifacts": [],
+    "effect_spec_path": "",
+    "effective_max_cycles": 2,
+    "enabled": true,
+    "explicit_autonomous_enable_required": true,
+    "explicit_live_enable_required": true,
+    "final_status": "success",
+    "finished_at": "2026-06-11T22:37:32.022541Z",
+    "generated_prompt_exists": false,
+    "generated_prompt_manifest_path": "/tmp/prompt625_manifest.json",
+    "generated_prompt_path": "",
+    "legacy_source_used": true,
+    "live_codex_enable_token_valid": true,
+    "live_loop_timeout_seconds": 90,
+    "local_only": true,
+    "manifest_cycle_count": 2,
+    "manifest_errors": [],
+    "max_cycles": 2,
+    "max_seconds": 300.0,
+    "migrated_legacy_functions": [
+      "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+      "_build_prompt385_success_path_next_cycle_handoff_state",
+      "_build_prompt387_success_path_loop_dispatch_bridge_state",
+      "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+      "_build_prompt420_success_only_next_cycle_loop_state"
+    ],
+    "next_action": "commit_tag_gate",
+    "per_cycle_effect_verification_statuses": [
+      "passed",
+      "passed"
+    ],
+    "per_cycle_generated_prompt_paths": [
+      "/tmp/prompt625_cycle1_prompt.md",
+      "/tmp/prompt625_cycle2_prompt.md"
+    ],
+    "per_cycle_result_paths": [
+      "/tmp/prompt625_integrated_live_out/cycle_1/live_codex_gate/codex_execution_result.json",
+      "/tmp/prompt625_integrated_live_out/cycle_2/live_codex_gate/codex_execution_result.json"
+    ],
+    "per_cycle_state_paths": [
+      "/tmp/prompt625_integrated_live_out/cycle_1/classification/autonomous_cycle_state.json",
+      "/tmp/prompt625_integrated_live_out/cycle_2/classification/autonomous_cycle_state.json"
+    ],
+    "sandbox_mode": "workspace-write",
+    "started_at": "2026-06-11T22:36:43.161334Z",
+    "status": "success",
+    "stop_reason": "verification_max_cycles_reached",
+    "tag_performed": false,
+    "verification_continue_after_commit_gate": true,
+    "verification_only": true
+  },
+  "prompt625_state_path": "/tmp/prompt625_integrated_live_out/autonomous_live_loop_state.json",
+  "prompt625_status": "success",
+  "prompt625_unit_tests_added": [
+    "test_manifest_assigns_prompt_and_spec_per_cycle",
+    "test_default_single_prompt_behavior_unchanged",
+    "test_invalid_manifest_blocks_without_invoking_codex",
+    "test_manifest_bounds_cycles_below_max_cycles",
+    "test_effect_failure_stops_loop_without_success"
+  ],
+  "prompt625_unit_tests_result": "5 new tests passed; 17/17 across the three live-loop/gate test modules; full suite 503 tests with 1 pre-existing unrelated import error in tests/test_planned_execution_runner.py (module untouched), 1 skipped"
+}

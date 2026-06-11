@@ -911,6 +911,28 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--live-loop-sandbox-mode",
+        choices=["default", "read-only", "workspace-write"],
+        default="default",
+        help="Codex exec sandbox policy applied to every live loop cycle",
+    )
+    parser.add_argument(
+        "--live-loop-effect-spec-path",
+        default=None,
+        help=(
+            "Optional JSON effect spec applied to every live loop cycle "
+            "(per-cycle manifest entries take precedence)"
+        ),
+    )
+    parser.add_argument(
+        "--live-loop-generated-prompt-manifest-path",
+        default=None,
+        help=(
+            "Optional JSON manifest with per-cycle generated prompt/effect spec entries; "
+            "cycles stay bounded by max-cycles and the manifest length"
+        ),
+    )
+    parser.add_argument(
         "--previous-cycle-state-path",
         default=None,
         help="Optional previous autonomous cycle state JSON path",
@@ -1015,6 +1037,9 @@ def main(argv: list[str] | None = None) -> int:
                 live_loop_timeout_seconds=args.live_loop_timeout_seconds,
                 legacy_source_used=True,
                 verification_continue=bool(args.live_loop_verification_continue),
+                sandbox_mode=args.live_loop_sandbox_mode,
+                effect_spec_path=args.live_loop_effect_spec_path,
+                generated_prompt_manifest_path=args.live_loop_generated_prompt_manifest_path,
             )
             if args.as_json:
                 print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
