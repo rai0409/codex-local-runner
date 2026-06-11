@@ -84,6 +84,8 @@ def _write_summary(path: Path, payload: Mapping[str, Any]) -> None:
         f"- next_action: {payload.get('next_action', '')}",
         f"- cycle_count: {payload.get('cycle_count', 0)}",
         f"- codex_invoked_count: {payload.get('codex_invoked_count', 0)}",
+        f"- verification_only: {payload.get('verification_only', False)}",
+        f"- commit_tag_gate_observed_count: {payload.get('commit_tag_gate_observed_count', 0)}",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -103,6 +105,7 @@ def _disabled_payload(
     live_token_valid: bool,
     generated_prompt_path: str,
     legacy_source_used: bool,
+    verification_continue: bool = False,
 ) -> dict[str, Any]:
     return {
         "status": status,
@@ -123,6 +126,10 @@ def _disabled_payload(
         "per_cycle_result_paths": [],
         "per_cycle_state_paths": [],
         "dirty_paths_outside_allowed_artifacts": [],
+        "verification_only": bool(verification_continue),
+        "verification_continue_after_commit_gate": bool(verification_continue),
+        "commit_tag_gate_observed_count": 0,
+        "commit_tag_gate_observed_cycles": [],
         "commit_performed": False,
         "tag_performed": False,
         "local_only": True,
@@ -143,6 +150,7 @@ def _cycle_stop_state(
     max_seconds: float,
     previous_failure: str,
     previous_progress: str,
+    verification_continue: bool = False,
 ) -> dict[str, Any]:
     status = _normalize_text(classification.get("status"), default="blocked").lower()
     next_action = _normalize_text(classification.get("next_action"), default="manual_review_required")
@@ -157,12 +165,44 @@ def _cycle_stop_state(
     )
 
     if next_action == "commit_tag_gate":
+        if not verification_continue:
+            return {
+                "stop": True,
+                "final_status": "success",
+                "stop_reason": "commit_tag_gate",
+                "blocked_reason": "none",
+                "next_action": "commit_tag_gate",
+                "failure": failure,
+                "progress": progress,
+            }
+        # Verification-only mode: observe the gate without committing/tagging and
+        # keep cycling until max_cycles so a true multi-cycle live run can be proven.
+        if cycle_index >= max_cycles:
+            return {
+                "stop": True,
+                "final_status": "success",
+                "stop_reason": "verification_max_cycles_reached",
+                "blocked_reason": "none",
+                "next_action": "commit_tag_gate",
+                "failure": failure,
+                "progress": progress,
+            }
+        if elapsed_seconds >= max_seconds:
+            return {
+                "stop": True,
+                "final_status": "success",
+                "stop_reason": "max_seconds_reached",
+                "blocked_reason": "none",
+                "next_action": "commit_tag_gate",
+                "failure": failure,
+                "progress": progress,
+            }
         return {
-            "stop": True,
-            "final_status": "success",
-            "stop_reason": "commit_tag_gate",
+            "stop": False,
+            "final_status": "running",
+            "stop_reason": "continue",
             "blocked_reason": "none",
-            "next_action": "commit_tag_gate",
+            "next_action": "continue_loop",
             "failure": failure,
             "progress": progress,
         }
@@ -258,6 +298,7 @@ def run_autonomous_live_loop(
     live_codex_enable_token: str = "",
     live_loop_timeout_seconds: Any = 60,
     legacy_source_used: bool = True,
+    verification_continue: bool = False,
 ) -> dict[str, Any]:
     bounded_max_cycles = _as_required_positive_int(max_cycles, field_name="max_cycles")
     bounded_max_seconds = _as_required_positive_float(max_seconds, field_name="max_seconds")
@@ -287,6 +328,7 @@ def run_autonomous_live_loop(
             live_token_valid=live_token_valid,
             generated_prompt_path=generated_path_text,
             legacy_source_used=legacy_source_used,
+            verification_continue=verification_continue,
         )
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
@@ -306,6 +348,7 @@ def run_autonomous_live_loop(
             live_token_valid=live_token_valid,
             generated_prompt_path=generated_path_text,
             legacy_source_used=legacy_source_used,
+            verification_continue=verification_continue,
         )
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
@@ -331,6 +374,7 @@ def run_autonomous_live_loop(
             live_token_valid=live_token_valid,
             generated_prompt_path=generated_path_text,
             legacy_source_used=legacy_source_used,
+            verification_continue=verification_continue,
         )
         payload["enabled"] = True
         payload["dirty_paths_outside_allowed_artifacts"] = list(
@@ -344,6 +388,7 @@ def run_autonomous_live_loop(
     per_cycle_result_paths: list[str] = []
     per_cycle_state_paths: list[str] = []
     codex_invoked_count = 0
+    commit_tag_gate_observed_cycles: list[int] = []
     previous_failure = ""
     previous_progress = ""
     final_status = "blocked"
@@ -393,6 +438,8 @@ def run_autonomous_live_loop(
             migrated_legacy_functions=AUTONOMOUS_LIVE_LOOP_MIGRATED_LEGACY_FUNCTIONS,
         )
         cycle_count = cycle_index
+        if _normalize_text(classification.get("next_action")) == "commit_tag_gate":
+            commit_tag_gate_observed_cycles.append(cycle_index)
         result_path = _normalize_text(live_gate.get("codex_result_path"))
         state_artifacts = classification.get("artifact_paths") if isinstance(classification, Mapping) else []
         state_path_text = _normalize_text(state_artifacts[0] if state_artifacts else "")
@@ -409,6 +456,7 @@ def run_autonomous_live_loop(
             max_seconds=bounded_max_seconds,
             previous_failure=previous_failure,
             previous_progress=previous_progress,
+            verification_continue=verification_continue,
         )
         final_status = stop_state["final_status"]
         stop_reason = stop_state["stop_reason"]
@@ -442,6 +490,10 @@ def run_autonomous_live_loop(
         "dirty_paths_outside_allowed_artifacts": list(
             dirty_state.get("dirty_paths_outside_allowed_artifacts", [])
         ),
+        "verification_only": bool(verification_continue),
+        "verification_continue_after_commit_gate": bool(verification_continue),
+        "commit_tag_gate_observed_count": len(commit_tag_gate_observed_cycles),
+        "commit_tag_gate_observed_cycles": list(commit_tag_gate_observed_cycles),
         "commit_performed": False,
         "tag_performed": False,
         "local_only": True,

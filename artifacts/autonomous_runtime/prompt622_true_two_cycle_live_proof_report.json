@@ -1,0 +1,156 @@
+{
+  "generated_at": "2026-06-11T21:53:04.218006Z",
+  "prompt622_archive_note": "artifacts/archive was moved unmodified to /tmp/prompt622_dirty_artifact_stash and restored after the runs (explicitly allowed stash/restore).",
+  "prompt622_archive_touched": false,
+  "prompt622_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt622_true_two_cycle_live_proof_report.json",
+    "artifacts/autonomous_runtime/prompt622_true_two_cycle_live_proof_summary.md",
+    "/tmp/prompt622_true_two_cycle_live_out/autonomous_live_loop_state.json",
+    "/tmp/prompt622_true_two_cycle_live_out/autonomous_live_loop_summary.md",
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_1/live_codex_gate/codex_execution_result.json",
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_1/live_codex_gate/codex_stdout.txt",
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_1/classification/autonomous_cycle_state.json",
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_2/live_codex_gate/codex_execution_result.json",
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_2/live_codex_gate/codex_stdout.txt",
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_2/classification/autonomous_cycle_state.json",
+    "/tmp/prompt622_dirty_gate_check_out/autonomous_live_loop_state.json",
+    "/tmp/prompt622_default_behavior_check_out/autonomous_live_loop_state.json"
+  ],
+  "prompt622_base_commit": "fe1045e",
+  "prompt622_base_tags_at_head": [
+    "prompt620-daemon-lite-observed-live-final-gate"
+  ],
+  "prompt622_cli_flags_added": [
+    "--live-loop-verification-continue"
+  ],
+  "prompt622_codex_invoked_count": 2,
+  "prompt622_commit_or_tag_performed_during_runtime": false,
+  "prompt622_commit_tag_gate_observed_count": 2,
+  "prompt622_commit_tag_gate_observed_cycles": [
+    1,
+    2
+  ],
+  "prompt622_cycle_count": 2,
+  "prompt622_default_behavior_evidence": {
+    "live_check_out_dir": "/tmp/prompt622_default_behavior_check_out",
+    "live_check_result": {
+      "codex_invoked_count": 1,
+      "commit_performed": false,
+      "cycle_count": 1,
+      "status": "success",
+      "stop_reason": "commit_tag_gate",
+      "verification_only": false
+    },
+    "unit_test": "test_default_commit_tag_gate_stops_after_first_cycle (passed)"
+  },
+  "prompt622_default_behavior_preserved": true,
+  "prompt622_dirty_artifacts_isolated": true,
+  "prompt622_dirty_artifacts_restored": true,
+  "prompt622_final_decision": "success",
+  "prompt622_modified_files": [
+    "scripts/run_planned_execution.py",
+    "automation/orchestration/planned_runner/autonomous_live_loop.py"
+  ],
+  "prompt622_new_files": [
+    "tests/test_autonomous_live_loop_verification_continue.py",
+    "artifacts/autonomous_runtime/prompt622_true_two_cycle_live_proof_report.json",
+    "artifacts/autonomous_runtime/prompt622_true_two_cycle_live_proof_summary.md"
+  ],
+  "prompt622_next_action": "commit_tag_true_two_cycle_proof",
+  "prompt622_per_cycle_result_paths": [
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_1/live_codex_gate/codex_execution_result.json",
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_2/live_codex_gate/codex_execution_result.json"
+  ],
+  "prompt622_per_cycle_state_paths": [
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_1/classification/autonomous_cycle_state.json",
+    "/tmp/prompt622_true_two_cycle_live_out/cycle_2/classification/autonomous_cycle_state.json"
+  ],
+  "prompt622_process_returncode": 0,
+  "prompt622_repo_path_note": "The exact command without --repo-path was run first against the real repo and was correctly blocked with stop_reason=dirty_worktree_outside_allowed_artifacts (codex_invoked_count=0), because the prompt622 implementation itself must stay uncommitted (no-commit constraint) and therefore makes the real worktree dirty. This block is recorded at /tmp/prompt622_dirty_gate_check_out/ and proves the dirty guard is not weakened by verification mode. The two-cycle proof then used the pre-existing --repo-path flag pointed at a clean scratch git repo (/tmp/prompt622_clean_repo_for_dirty_gate) for the dirty-gate check only.",
+  "prompt622_runtime_command": [
+    "python",
+    "scripts/run_planned_execution.py",
+    "--autonomous-live-loop",
+    "--autonomous-enable-token",
+    "LOCAL_AUTONOMOUS_RUNTIME_ENABLE",
+    "--live-codex-enable-token",
+    "LOCAL_LIVE_CODEX_GATE_ENABLE",
+    "--max-cycles",
+    "2",
+    "--max-seconds",
+    "240",
+    "--live-loop-timeout-seconds",
+    "60",
+    "--live-loop-generated-prompt-path",
+    "/tmp/prompt622_safe_generated_prompt.md",
+    "--live-loop-verification-continue",
+    "--repo-path",
+    "/tmp/prompt622_clean_repo_for_dirty_gate",
+    "--out-dir",
+    "/tmp/prompt622_true_two_cycle_live_out",
+    "--json"
+  ],
+  "prompt622_source_modified": true,
+  "prompt622_state": {
+    "artifact_paths": [
+      "/tmp/prompt622_true_two_cycle_live_out/autonomous_live_loop_state.json",
+      "/tmp/prompt622_true_two_cycle_live_out/autonomous_live_loop_summary.md"
+    ],
+    "autonomous_enable_token_valid": true,
+    "blocked_reason": "none",
+    "codex_invoked_count": 2,
+    "commit_performed": false,
+    "commit_tag_gate_observed_count": 2,
+    "commit_tag_gate_observed_cycles": [
+      1,
+      2
+    ],
+    "cycle_count": 2,
+    "dirty_paths_outside_allowed_artifacts": [],
+    "enabled": true,
+    "explicit_autonomous_enable_required": true,
+    "explicit_live_enable_required": true,
+    "final_status": "success",
+    "finished_at": "2026-06-11T21:51:41.475403Z",
+    "generated_prompt_exists": true,
+    "generated_prompt_path": "/tmp/prompt622_safe_generated_prompt.md",
+    "legacy_source_used": true,
+    "live_codex_enable_token_valid": true,
+    "live_loop_timeout_seconds": 60,
+    "local_only": true,
+    "max_cycles": 2,
+    "max_seconds": 240.0,
+    "migrated_legacy_functions": [
+      "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+      "_build_prompt385_success_path_next_cycle_handoff_state",
+      "_build_prompt387_success_path_loop_dispatch_bridge_state",
+      "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+      "_build_prompt420_success_only_next_cycle_loop_state"
+    ],
+    "next_action": "commit_tag_gate",
+    "per_cycle_result_paths": [
+      "/tmp/prompt622_true_two_cycle_live_out/cycle_1/live_codex_gate/codex_execution_result.json",
+      "/tmp/prompt622_true_two_cycle_live_out/cycle_2/live_codex_gate/codex_execution_result.json"
+    ],
+    "per_cycle_state_paths": [
+      "/tmp/prompt622_true_two_cycle_live_out/cycle_1/classification/autonomous_cycle_state.json",
+      "/tmp/prompt622_true_two_cycle_live_out/cycle_2/classification/autonomous_cycle_state.json"
+    ],
+    "started_at": "2026-06-11T21:51:20.873160Z",
+    "status": "success",
+    "stop_reason": "verification_max_cycles_reached",
+    "tag_performed": false,
+    "verification_continue_after_commit_gate": true,
+    "verification_only": true
+  },
+  "prompt622_state_path": "/tmp/prompt622_true_two_cycle_live_out/autonomous_live_loop_state.json",
+  "prompt622_status": "success",
+  "prompt622_unit_tests_added": [
+    "test_default_commit_tag_gate_stops_after_first_cycle",
+    "test_verification_continue_runs_to_max_cycles",
+    "test_runtime_never_commits_or_tags_in_either_mode",
+    "test_verification_mode_still_requires_enable_tokens"
+  ],
+  "prompt622_unit_tests_result": "4 passed (python -m unittest); full suite: 490 tests, 1 pre-existing unrelated import error in tests/test_planned_execution_runner.py (_augment_run_state_with_closed_loop missing from automation/orchestration/planned_execution_runner.py, module untouched by prompt622), 1 skipped",
+  "prompt622_verification_only_flag": true
+}

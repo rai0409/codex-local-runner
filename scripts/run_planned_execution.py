@@ -885,6 +885,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Per-cycle live Codex timeout for bounded autonomous live loop",
     )
     parser.add_argument(
+        "--live-loop-verification-continue",
+        action="store_true",
+        default=False,
+        help=(
+            "Verification-only: continue past commit_tag_gate until max cycles to prove "
+            "multi-cycle live execution. Never commits or tags."
+        ),
+    )
+    parser.add_argument(
         "--previous-cycle-state-path",
         default=None,
         help="Optional previous autonomous cycle state JSON path",
@@ -986,6 +995,7 @@ def main(argv: list[str] | None = None) -> int:
                 live_codex_enable_token=args.live_codex_enable_token,
                 live_loop_timeout_seconds=args.live_loop_timeout_seconds,
                 legacy_source_used=True,
+                verification_continue=bool(args.live_loop_verification_continue),
             )
             if args.as_json:
                 print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
