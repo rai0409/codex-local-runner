@@ -257,5 +257,73 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
         self.assertNotEqual(state["next_action"], "commit_tag_gate")
 
 
+class VerifyCommandTests(unittest.TestCase):
+    def _run_gate_with_commands(self, verify_commands, apply_change=True):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            spec_path = _write_spec(tmp_dir, repo, verify_commands=verify_commands)
+
+            def _change():
+                target = repo / "calculator.py"
+                target.write_text(
+                    target.read_text(encoding="utf-8")
+                    + "\n\ndef subtract(a, b):\n    return a - b\n",
+                    encoding="utf-8",
+                )
+
+            prompt_path = tmp_dir / "prompt.md"
+            prompt_path.write_text("safe prompt\n", encoding="utf-8")
+            with mock.patch.object(
+                live_codex_gate,
+                "_run_codex_once",
+                new=_fake_codex_factory(side_effect=_change if apply_change else None),
+            ):
+                state = live_codex_gate.run_live_codex_gate(
+                    generated_prompt_path=prompt_path,
+                    out_dir=tmp_dir / "out",
+                    live_codex_enable_token=live_codex_gate.LIVE_CODEX_GATE_ENABLE_TOKEN,
+                    timeout_seconds=10,
+                    effect_spec_path=spec_path,
+                )
+                command_results = state.get("effect_verify_command_results", [])
+                stdout_exists = all(
+                    Path(item["stdout_path"]).is_file() for item in command_results
+                )
+        return state, command_results, stdout_exists
+
+    def test_passing_verify_command_keeps_success(self):
+        state, results, stdout_exists = self._run_gate_with_commands(
+            [["python", "-c", "from calculator import subtract; assert subtract(7, 4) == 3"]]
+        )
+        self.assertEqual(state["status"], "success")
+        self.assertEqual(state["effect_verification_status"], "passed")
+        self.assertTrue(state["effect_verify_commands_passed"])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["returncode"], 0)
+        self.assertTrue(stdout_exists)
+
+    def test_failing_verify_command_blocks_success(self):
+        state, results, _ = self._run_gate_with_commands(
+            [["python", "-c", "import sys; sys.exit(3)"]]
+        )
+        self.assertEqual(state["status"], "blocked")
+        self.assertEqual(state["effect_verification_status"], "failed")
+        self.assertEqual(state["stop_reason"], "effect_verification_failed")
+        self.assertEqual(state["next_action"], "inspect_missing_expected_effects")
+        self.assertFalse(state["effect_verify_commands_passed"])
+        self.assertEqual(results[0]["returncode"], 3)
+        self.assertTrue(
+            any("verify command 1 failed" in err for err in state["effect_verification_errors"])
+        )
+
+    def test_disallowed_verify_command_invalidates_spec_before_codex(self):
+        state, results, _ = self._run_gate_with_commands([["rm", "-rf", "/"]], apply_change=False)
+        self.assertEqual(state["status"], "blocked")
+        self.assertEqual(state["stop_reason"], "effect_spec_invalid")
+        self.assertFalse(state["codex_invoked"])
+        self.assertEqual(results, [])
+
+
 if __name__ == "__main__":
     unittest.main()
