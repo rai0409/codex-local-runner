@@ -1,0 +1,72 @@
+{
+  "generated_at": "2026-06-12T14:16:00.526183Z",
+  "prompt637_acceptance_command": "python scripts/run_daemon_candidate_acceptance.py --work-dir /tmp/prompt637_daemon_candidate_cleanup_check --json",
+  "prompt637_acceptance_returncode": 0,
+  "prompt637_acceptance_status": "success",
+  "prompt637_archive_touched": false,
+  "prompt637_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt637_sandbox_generated_artifact_cleanup_policy_report.json",
+    "artifacts/autonomous_runtime/prompt637_sandbox_generated_artifact_cleanup_policy_summary.md",
+    "/tmp/prompt637_daemon_candidate_cleanup_check/daemon_candidate_acceptance_report.json",
+    "/tmp/prompt637_daemon_candidate_cleanup_check/runs/daemon-acceptance-subtract/run_report.json",
+    "/tmp/prompt637_daemon_candidate_cleanup_check/runs/daemon_run_report.json",
+    "/tmp/prompt637_daemon_candidate_cleanup_check/runs/daemon_log.jsonl"
+  ],
+  "prompt637_base_commit": "c2bf9bb",
+  "prompt637_base_tags_at_head": [
+    "prompt636-verify-command-tests"
+  ],
+  "prompt637_cleanup_module_path": "automation/orchestration/planned_runner/sandbox_cleanup.py",
+  "prompt637_cleanup_path_safety_notes": "paths resolved (symlinks followed to real path) BEFORE safety decisions; must be under /tmp, not '/', not the main repo or any ancestor/descendant of it, and an existing directory; a /tmp symlink pointing at the main repo is refused (unit-tested); symlinked entries inside the sandbox are never followed or deleted through",
+  "prompt637_cleanup_policy_added": true,
+  "prompt637_cleanup_preserves_source_files": true,
+  "prompt637_cleanup_refuses_empty_path": true,
+  "prompt637_cleanup_refuses_main_repo": true,
+  "prompt637_cleanup_refuses_root": true,
+  "prompt637_cleanup_removes_pyc": true,
+  "prompt637_cleanup_removes_pycache": true,
+  "prompt637_cleanup_removes_pyo": true,
+  "prompt637_codex_invoked_count": 1,
+  "prompt637_direct_sandbox_status_check": "git -C <sandbox_repo> status --short printed nothing; find for __pycache__/*.pyc/*.pyo returned 0 entries",
+  "prompt637_effect_verification_statuses": [
+    "passed"
+  ],
+  "prompt637_final_decision": "success",
+  "prompt637_final_sandbox_clean_check_added": true,
+  "prompt637_flow_order": "codex live execution -> effect verification -> verify commands -> cleanup generated python artifacts -> sandbox commit/tag gate -> final sandbox clean check -> report; a dirty sandbox after commit/tag fails the task (stage final_clean_check) and the acceptance script additionally re-verifies cleanliness and scans for leftover __pycache__/*.pyc/*.pyo independently",
+  "prompt637_live_codex_invoked_count": 1,
+  "prompt637_main_repo_commit_performed": false,
+  "prompt637_main_repo_evidence": "git status md5 identical before/after acceptance; HEAD c2bf9bb and tag prompt636-verify-command-tests unchanged",
+  "prompt637_main_repo_source_modified": false,
+  "prompt637_main_repo_stage_performed": false,
+  "prompt637_main_repo_tag_performed": false,
+  "prompt637_modified_files": [
+    "scripts/run_daemon_candidate_acceptance.py",
+    "scripts/run_task_queue_daemon.py"
+  ],
+  "prompt637_new_files": [
+    "automation/orchestration/planned_runner/sandbox_cleanup.py",
+    "tests/test_sandbox_cleanup.py",
+    "tests/test_daemon_candidate_acceptance.py",
+    "artifacts/autonomous_runtime/prompt637_sandbox_generated_artifact_cleanup_policy_report.json",
+    "artifacts/autonomous_runtime/prompt637_sandbox_generated_artifact_cleanup_policy_summary.md"
+  ],
+  "prompt637_next_action": "commit_tag_sandbox_generated_artifact_cleanup_policy",
+  "prompt637_sandbox_commit_performed": true,
+  "prompt637_sandbox_final_status_clean": true,
+  "prompt637_sandbox_final_status_short": [],
+  "prompt637_sandbox_generated_artifact_paths_removed": [
+    "__pycache__/"
+  ],
+  "prompt637_sandbox_generated_artifacts_removed": 1,
+  "prompt637_sandbox_repo": "/tmp/prompt637_daemon_candidate_cleanup_check/sandbox_repo",
+  "prompt637_sandbox_tag_performed": true,
+  "prompt637_sandbox_untracked_after_cleanup": [],
+  "prompt637_status": "success",
+  "prompt637_unit_tests_added": [
+    "tests/test_sandbox_cleanup.py (9 tests: removal of __pycache__/pyc/pyo incl. nested, source preservation, noop, empty/root/main-repo/non-tmp/symlink-escape/missing-dir refusals, dirty/clean cleanliness evaluation)",
+    "tests/test_daemon_candidate_acceptance.py (4 tests: cleanliness failure required for dirty sandbox, no failure when clean, leftover artifact detection, clean-repo noop)"
+  ],
+  "prompt637_unit_tests_result": "34/34 passed across sandbox_cleanup, daemon_candidate_acceptance, daemon_queue, daemon_lock_logs, daemon_state_resume, sandbox_commit_tag_gate (python -m unittest)",
+  "prompt637_verify_commands_used": true
+}

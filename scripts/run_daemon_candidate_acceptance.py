@@ -23,6 +23,29 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, REPO_ROOT.as_posix())
 
 from automation.orchestration.planned_runner.daemon_queue import enqueue_task, list_tasks  # noqa: E402
+from automation.orchestration.planned_runner.sandbox_cleanup import (  # noqa: E402
+    GENERATED_DIR_NAME,
+    GENERATED_FILE_SUFFIXES,
+    evaluate_sandbox_cleanliness,
+)
+
+
+def cleanliness_failures(cleanliness: dict) -> list[str]:
+    """Acceptance requires the sandbox repo to be fully clean after the run."""
+    if not cleanliness.get("sandbox_final_status_clean"):
+        return [
+            "sandbox repo not clean after run: "
+            + ", ".join(cleanliness.get("sandbox_final_status_short", []) or ["<unknown>"])
+        ]
+    return []
+
+
+def leftover_generated_artifacts(repo: Path) -> list[str]:
+    leftovers: list[str] = []
+    for entry in repo.rglob("*"):
+        if entry.name == GENERATED_DIR_NAME or entry.suffix in GENERATED_FILE_SUFFIXES:
+            leftovers.append(entry.relative_to(repo).as_posix())
+    return sorted(leftovers)
 
 AUTONOMOUS_ENABLE_TOKEN = "LOCAL_AUTONOMOUS_RUNTIME_ENABLE"
 LIVE_CODEX_ENABLE_TOKEN = "LOCAL_LIVE_CODEX_GATE_ENABLE"
@@ -158,6 +181,14 @@ def main(argv: list[str] | None = None) -> int:
         if sandbox_commits != 2:
             failures.append(f"unexpected sandbox commit count: {sandbox_commits}")
 
+    cleanliness = evaluate_sandbox_cleanliness(sandbox_repo)
+    failures.extend(cleanliness_failures(cleanliness))
+    leftovers = leftover_generated_artifacts(sandbox_repo)
+    if leftovers:
+        failures.append(f"generated python artifacts remain in sandbox: {leftovers}")
+    if not bool(run_report.get("sandbox_final_status_clean")):
+        failures.append("run report did not record a clean final sandbox status")
+
     if (queue_dir / "daemon.lock").exists():
         failures.append("daemon lock not released")
     if not (runs_dir / "daemon_log.jsonl").is_file():
@@ -187,6 +218,13 @@ def main(argv: list[str] | None = None) -> int:
         "sandbox_tag_performed": sandbox_tag_performed,
         "sandbox_tags": sandbox_tags,
         "sandbox_repo": sandbox_repo.as_posix(),
+        "sandbox_final_status_clean": bool(cleanliness.get("sandbox_final_status_clean")),
+        "sandbox_final_status_short": list(cleanliness.get("sandbox_final_status_short", [])),
+        "sandbox_untracked_after_cleanup": list(cleanliness.get("sandbox_untracked_after_cleanup", [])),
+        "sandbox_generated_artifacts_removed": int(run_report.get("sandbox_generated_artifacts_removed", 0) or 0),
+        "sandbox_generated_artifact_paths_removed": list(
+            run_report.get("sandbox_generated_artifact_paths_removed", []) or []
+        ),
         "lock_released": not (queue_dir / "daemon.lock").exists(),
         "log_path": (runs_dir / "daemon_log.jsonl").as_posix(),
         "daemon_report_path": (runs_dir / "daemon_run_report.json").as_posix(),

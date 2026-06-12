@@ -46,6 +46,10 @@ from automation.orchestration.planned_runner.daemon_state import (  # noqa: E402
     recover_interrupted_tasks,
     write_daemon_state,
 )
+from automation.orchestration.planned_runner.sandbox_cleanup import (  # noqa: E402
+    cleanup_generated_python_artifacts,
+    evaluate_sandbox_cleanliness,
+)
 from automation.orchestration.planned_runner.task_planner import plan_task  # noqa: E402
 from automation.orchestration.planned_runner.task_spec import validate_task_spec  # noqa: E402
 
@@ -105,6 +109,11 @@ def _process_task(
         "codex_invoked_count": 0,
         "sandbox_commit_performed": False,
         "sandbox_tag_performed": False,
+        "sandbox_generated_artifacts_removed": 0,
+        "sandbox_generated_artifact_paths_removed": [],
+        "sandbox_final_status_clean": False,
+        "sandbox_final_status_short": [],
+        "sandbox_untracked_after_cleanup": [],
     }
     try:
         raw_spec = json.loads(task_path.read_text(encoding="utf-8"))
@@ -150,6 +159,16 @@ def _process_task(
         report["errors"] = [f"loop status {loop_state.get('status')}: {loop_state.get('stop_reason')}"]
         return report
 
+    # Verify commands may have generated Python bytecode inside the sandbox repo;
+    # remove it BEFORE the commit/tag gate and the final cleanliness evaluation.
+    report["stage"] = "sandbox_cleanup"
+    cleanup = cleanup_generated_python_artifacts(spec["repo_path"])
+    report["sandbox_generated_artifacts_removed"] = cleanup["removed_count"]
+    report["sandbox_generated_artifact_paths_removed"] = cleanup["removed_paths"]
+    if cleanup["status"] != "success":
+        report["errors"] = [f"sandbox cleanup blocked: {cleanup['blocked_reason']}"]
+        return report
+
     if args.sandbox_commit_tag:
         report["stage"] = "sandbox_commit_tag"
         commit_result = execute_sandbox_commit_tag(
@@ -169,6 +188,15 @@ def _process_task(
         if commit_result.get("status") != "success":
             report["errors"] = [f"sandbox commit/tag blocked: {commit_result.get('blocked_reason')}"]
             return report
+
+    report["stage"] = "final_clean_check"
+    cleanliness = evaluate_sandbox_cleanliness(spec["repo_path"])
+    report.update(cleanliness)
+    if args.sandbox_commit_tag and not cleanliness["sandbox_final_status_clean"]:
+        report["errors"] = [
+            f"sandbox repo not clean after commit/tag: {cleanliness['sandbox_final_status_short']}"
+        ]
+        return report
 
     report["stage"] = "done"
     report["status"] = "success"
