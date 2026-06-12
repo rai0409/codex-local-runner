@@ -1,0 +1,44 @@
+{
+  "decision": "adopt",
+  "features": [
+    "queue pending/running/done/failed directories",
+    "hard caps: max_jobs<=5, max_seconds_total<=1800, max_cycles<=2; no unbounded mode",
+    "consumes task specs via task_spec+task_planner, runs effect-verified autonomous live loop per task",
+    "optional sandbox-only gated commit/tag on verified success",
+    "pidfile lock, JSONL log, persistent daemon state and per-run report"
+  ],
+  "files_added": [
+    "automation/orchestration/planned_runner/daemon_queue.py",
+    "automation/orchestration/planned_runner/daemon_lock.py",
+    "automation/orchestration/planned_runner/daemon_logs.py",
+    "automation/orchestration/planned_runner/daemon_state.py",
+    "scripts/run_task_queue_daemon.py",
+    "tests/test_daemon_queue.py",
+    "tests/test_daemon_lock_logs.py"
+  ],
+  "generated_at": "2026-06-12T11:16:02.149278Z",
+  "honest_note": "first acceptance run blocked at sandbox commit/tag because the verify command's __pycache__ tripped the strict allowlist; fixed by excluding Python bytecode caches as generated artifacts (policy otherwise unchanged, covered by a new unit test); second run passed clean",
+  "live_codex_invocations": 2,
+  "objective": "Bounded foreground queue daemon candidate",
+  "phase": 635,
+  "prompt635_status": "success",
+  "scratch_repo_acceptance": {
+    "acceptance_status": "success",
+    "codex_invoked_count": 1,
+    "effect_verification_statuses": [
+      "passed"
+    ],
+    "lock_released": true,
+    "main_repo_source_modified": false,
+    "sandbox_commit_performed": true,
+    "sandbox_tag_performed": true,
+    "sandbox_tags": [
+      "sandbox-daemon-acceptance-subtract"
+    ],
+    "task_done": [
+      "daemon-acceptance-subtract.json"
+    ],
+    "via": "scripts/run_daemon_candidate_acceptance.py (live)"
+  },
+  "unit_tests": "tests/test_daemon_queue.py (4) + tests/test_daemon_lock_logs.py (5) passed"
+}

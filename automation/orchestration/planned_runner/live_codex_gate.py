@@ -12,10 +12,13 @@ from automation.orchestration.planned_runner.autonomous_cycle import (
     AUTONOMOUS_CYCLE_ENABLE_TOKEN,
     run_autonomous_cycle_metadata,
 )
+from automation.orchestration.planned_runner.failure_digest import build_failure_digest
 
 
 LIVE_CODEX_GATE_ENABLE_TOKEN = "LOCAL_LIVE_CODEX_GATE_ENABLE"
 SUPPORTED_SANDBOX_MODES = ("default", "read-only", "workspace-write")
+ALLOWED_VERIFY_COMMAND_BASENAMES = {"python", "python3", "pytest"}
+DEFAULT_VERIFY_COMMAND_TIMEOUT_SECONDS = 120
 MIGRATED_LEGACY_FUNCTIONS = [
     "_build_prompt379_generated_prompt_codex_execution_bridge_state",
     "_build_prompt417_selected_prompt_codex_execution_adapter_state",
@@ -144,7 +147,32 @@ def _load_effect_spec(path_text: str) -> tuple[dict[str, Any], list[str]]:
         errors.append("effect spec required_text must be an object")
         required_text = {}
 
+    raw_commands = payload.get("verify_commands", [])
+    verify_commands: list[list[str]] = []
+    if raw_commands:
+        if not isinstance(raw_commands, list):
+            errors.append("effect spec verify_commands must be a list of argv lists")
+        else:
+            for index, raw in enumerate(raw_commands, start=1):
+                if not isinstance(raw, (list, tuple)) or not raw:
+                    errors.append(f"verify command {index} must be a non-empty argv list")
+                    continue
+                argv = [str(item) for item in raw]
+                basename = Path(argv[0]).name
+                if basename not in ALLOWED_VERIFY_COMMAND_BASENAMES:
+                    errors.append(
+                        f"verify command {index} executable not allowed: {basename} "
+                        f"(allowed: {sorted(ALLOWED_VERIFY_COMMAND_BASENAMES)})"
+                    )
+                    continue
+                verify_commands.append(argv)
+
+    timeout_value = payload.get("verify_command_timeout_seconds", DEFAULT_VERIFY_COMMAND_TIMEOUT_SECONDS)
+    verify_timeout = _as_positive_int(timeout_value, default=DEFAULT_VERIFY_COMMAND_TIMEOUT_SECONDS)
+
     spec = {
+        "verify_commands": verify_commands,
+        "verify_command_timeout_seconds": verify_timeout,
         "repo_path": repo_path,
         "expected_modified_files": _normalize_relative_file_list(payload.get("expected_modified_files")),
         "expected_unmodified_files": _normalize_relative_file_list(payload.get("expected_unmodified_files")),
@@ -222,6 +250,67 @@ def _verify_effects(
         "effect_unexpected_files": unexpected,
         "effect_verification_errors": errors,
     }
+
+
+def _run_verify_commands(
+    *,
+    spec: Mapping[str, Any],
+    repo: Path,
+    out_dir: Path,
+) -> tuple[list[dict[str, Any]], bool, list[str]]:
+    """Run the spec's allowlisted test commands inside the sandbox repo only."""
+    commands = list(spec.get("verify_commands", []))
+    timeout = int(spec.get("verify_command_timeout_seconds", DEFAULT_VERIFY_COMMAND_TIMEOUT_SECONDS))
+    results: list[dict[str, Any]] = []
+    errors: list[str] = []
+    all_passed = True
+    for index, argv in enumerate(commands, start=1):
+        stdout_path = out_dir / f"verify_command_{index}_stdout.txt"
+        stderr_path = out_dir / f"verify_command_{index}_stderr.txt"
+        timed_out = False
+        try:
+            completed = subprocess.run(
+                argv,
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            returncode: int | None = completed.returncode
+            _write_text(stdout_path, completed.stdout or "")
+            _write_text(stderr_path, completed.stderr or "")
+        except subprocess.TimeoutExpired as exc:
+            returncode = None
+            timed_out = True
+            _write_text(stdout_path, exc.stdout if isinstance(exc.stdout, str) else "")
+            _write_text(
+                stderr_path,
+                (exc.stderr if isinstance(exc.stderr, str) else "")
+                + f"\nverify command timed out after {timeout} seconds\n",
+            )
+        except OSError as exc:
+            returncode = None
+            _write_text(stdout_path, "")
+            _write_text(stderr_path, f"verify command failed to start: {exc}\n")
+        passed = returncode == 0
+        if not passed:
+            all_passed = False
+            errors.append(
+                f"verify command {index} failed (returncode={returncode}"
+                + (", timed out" if timed_out else "")
+                + f"): {' '.join(argv)}"
+            )
+        results.append(
+            {
+                "argv": list(argv),
+                "returncode": returncode,
+                "timed_out": timed_out,
+                "passed": passed,
+                "stdout_path": stdout_path.as_posix(),
+                "stderr_path": stderr_path.as_posix(),
+            }
+        )
+    return results, all_passed, errors
 
 
 def _base_result(
@@ -457,6 +546,21 @@ def run_live_codex_gate(
                 pre_hashes=pre_hashes,
                 pre_listing=pre_listing,
             )
+            # Test commands run after the file-effect snapshot comparison so that
+            # bytecode/artifacts created by the tests cannot count as Codex output.
+            command_results, commands_passed, command_errors = _run_verify_commands(
+                spec=effect_spec,
+                repo=effect_repo,
+                out_dir=output_root,
+            )
+            effect_state["effect_verify_command_results"] = command_results
+            effect_state["effect_verify_commands_passed"] = commands_passed
+            if command_errors:
+                effect_state["effect_verification_errors"] = (
+                    list(effect_state["effect_verification_errors"]) + command_errors
+                )
+            if not commands_passed:
+                effect_state["effect_verification_status"] = "failed"
             # A zero returncode (or success JSON echoed by Codex) is not proof the
             # requested change happened; only verified effects may keep success.
             if status == "success" and effect_state["effect_verification_status"] != "passed":
@@ -513,6 +617,8 @@ def run_live_codex_gate(
         "effect_forbidden_paths_verified": effect_state["effect_forbidden_paths_verified"],
         "effect_unexpected_files": list(effect_state["effect_unexpected_files"]),
         "effect_verification_errors": list(effect_state["effect_verification_errors"]),
+        "effect_verify_command_results": list(effect_state.get("effect_verify_command_results", [])),
+        "effect_verify_commands_passed": bool(effect_state.get("effect_verify_commands_passed", True)),
         "timeout_seconds": timeout,
         "returncode": returncode,
         "stdout_path": stdout_path.as_posix(),
@@ -545,6 +651,11 @@ def run_live_codex_gate(
         "started_at": started_at,
         "finished_at": _utc_now(),
     }
+    if status != "success":
+        digest = build_failure_digest(state=state, out_dir=output_root, run_kind="live_codex_gate")
+        state["failure_digest_path"] = digest["digest_path"]
+    else:
+        state["failure_digest_path"] = ""
     _write_json(state_path, state)
     _write_text(summary_path, "\n".join(_summary_lines(state)) + "\n")
     return state

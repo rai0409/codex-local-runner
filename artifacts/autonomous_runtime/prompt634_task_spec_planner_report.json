@@ -1,0 +1,29 @@
+{
+  "decision": "adopt",
+  "files_added": [
+    "automation/orchestration/planned_runner/task_spec.py",
+    "automation/orchestration/planned_runner/task_planner.py",
+    "tests/test_task_spec_and_planner.py"
+  ],
+  "generated_at": "2026-06-12T11:09:47.352187Z",
+  "limitation": "planner v1 supports only kind=add_function single-cycle tasks; arbitrary tasks remain unproven",
+  "live_acceptance": {
+    "codex_invoked_count": 1,
+    "cycle_count": 1,
+    "hand_written_prompt": false,
+    "loop_state": "/tmp/prompt634_live_out/autonomous_live_loop_state.json",
+    "note": "__pycache__ created by the verify command after the file-effect snapshot, by design not counted as Codex output",
+    "per_cycle_effect_verification_statuses": [
+      "passed"
+    ],
+    "status": "success",
+    "task_spec_only": true,
+    "verify_command_included": true
+  },
+  "live_codex_invocations": 1,
+  "objective": "Task specification schema + planner generating per-cycle prompt/effect-spec/manifest",
+  "phase": 634,
+  "prompt634_status": "success",
+  "schema": "task_id (slug), kind=add_function (v1), repo_path, target_file (repo-relative, no '..'), function_name (identifier), expression, expected_unmodified_files, verify_commands, allow_extra_files",
+  "unit_tests": "tests/test_task_spec_and_planner.py (5 tests) passed; planner tests run without Codex"
+}

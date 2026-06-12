@@ -1,0 +1,25 @@
+{
+  "blocked_input_handling": "missing/invalid digest or spec -> status=blocked, no prompt file written",
+  "decision": "adopt",
+  "files_added": [
+    "automation/orchestration/planned_runner/fix_prompt_builder.py",
+    "tests/test_fix_prompt_builder.py"
+  ],
+  "files_modified": [],
+  "fix_prompt_contains": [
+    "failure evidence (class, stop_reason, verification errors)",
+    "target repo path",
+    "expected modified/unmodified files",
+    "required text verbatim",
+    "forbidden paths",
+    "original prompt context",
+    "constraints (no commit/tag/push/new files/outside-repo)",
+    "fixed reply JSON instruction"
+  ],
+  "generated_at": "2026-06-12T11:01:29.569018Z",
+  "live_codex_invoked": false,
+  "objective": "Offline targeted-fix prompt builder (no Codex execution)",
+  "phase": 629,
+  "prompt629_status": "success",
+  "unit_tests": "tests/test_fix_prompt_builder.py (4 tests) passed"
+}

@@ -381,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "acceptance_status": validation["acceptance_status"],
         "failures": validation["failures"],
+        "failure_digest_path": str(state.get("failure_digest_path", "")),
         "base_commit": base_commit,
         "base_tags_at_head": base_tags,
         "command": command,

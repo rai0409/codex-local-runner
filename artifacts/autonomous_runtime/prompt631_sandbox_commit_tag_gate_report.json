@@ -1,0 +1,29 @@
+{
+  "decision": "adopt",
+  "enable_token": "ENABLE_SANDBOX_COMMIT_TAG_EXECUTION",
+  "existing_functions_unchanged": true,
+  "files_added": [
+    "tests/test_sandbox_commit_tag_gate.py"
+  ],
+  "files_modified": [
+    "automation/orchestration/planned_runner/commit_tag.py"
+  ],
+  "generated_at": "2026-06-12T11:05:23.312397Z",
+  "live_codex_invoked": false,
+  "main_repo_commit_or_tag": false,
+  "new_function": "execute_sandbox_commit_tag",
+  "objective": "Safe sandbox-only gated commit/tag executor",
+  "phase": 631,
+  "policies_enforced": [
+    "explicit enable token",
+    "repo must resolve under /tmp",
+    "repo must not be (inside) the main repo",
+    "changed files must be non-empty and within allowed_files",
+    "forbidden paths must not exist",
+    "tag must not already exist",
+    "commit message/tag auto-generated from task_id when omitted"
+  ],
+  "prompt631_status": "success",
+  "proof": "unit tests execute a real commit+tag inside a /tmp scratch repo and verify 5 refusal policies including main-repo refusal (no mutation)",
+  "unit_tests": "tests/test_sandbox_commit_tag_gate.py (7 tests) passed"
+}

@@ -1,0 +1,26 @@
+{
+  "bounds": "max_fix_attempts default 1, hard cap 2; only retryable failure classes retried; non-retryable stops without fix",
+  "commit_tag_performed": false,
+  "decision": "adopt",
+  "files_added": [
+    "automation/orchestration/planned_runner/targeted_fix_retry.py",
+    "scripts/run_targeted_fix_acceptance.py",
+    "tests/test_targeted_fix_retry.py"
+  ],
+  "generated_at": "2026-06-12T11:05:08.906524Z",
+  "live_acceptance": {
+    "acceptance_status": "success",
+    "codex_invoked_count": 2,
+    "command": "python scripts/run_targeted_fix_acceptance.py --json",
+    "converged": true,
+    "fix_attempts_used": 1,
+    "induced_failure": "original prompt forbids changes while spec requires subtract -> attempt 0 effect_verification_failed; fix prompt built from digest; attempt 1 converged",
+    "main_repo_source_modified": false,
+    "report_path": "/tmp/codex-local-runner-targeted-fix-acceptance-out/targeted_fix_acceptance_report.json"
+  },
+  "live_codex_invocations": 2,
+  "objective": "Bounded live targeted-fix retry in scratch repo",
+  "phase": 630,
+  "prompt630_status": "success",
+  "unit_tests": "tests/test_targeted_fix_retry.py (6 tests) passed"
+}

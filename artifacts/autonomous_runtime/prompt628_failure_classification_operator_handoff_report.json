@@ -1,0 +1,38 @@
+{
+  "acceptance": "synthetic failures classify correctly (12 stop_reason mappings asserted); gate-level wiring test uses a real blocked run (missing prompt) without Codex",
+  "decision": "adopt",
+  "default_behavior_preserved": true,
+  "failure_classes_supported": [
+    "enable_token_missing",
+    "missing_input",
+    "invalid_input",
+    "environment_unavailable",
+    "codex_timeout",
+    "codex_execution_failed",
+    "effect_verification_failed",
+    "dirty_worktree",
+    "targeted_fix_required",
+    "no_progress",
+    "budget_exhausted",
+    "terminal_blocked",
+    "missing_codex_result",
+    "interrupted",
+    "unknown"
+  ],
+  "files_added": [
+    "automation/orchestration/planned_runner/failure_digest.py",
+    "tests/test_failure_digest.py"
+  ],
+  "files_modified": [
+    "automation/orchestration/planned_runner/live_codex_gate.py",
+    "automation/orchestration/planned_runner/autonomous_live_loop.py",
+    "scripts/run_integrated_live_acceptance.py"
+  ],
+  "generated_at": "2026-06-12T11:01:29.569018Z",
+  "live_codex_invoked": false,
+  "objective": "Structured failure classification and operator handoff digest",
+  "phase": 628,
+  "prompt628_status": "success",
+  "unit_tests": "tests/test_failure_digest.py (8 tests) passed; default behavior regression: 35/35 across 6 related modules",
+  "wiring": "gate writes failure_digest.json + state.failure_digest_path on any non-success; loop ditto for all early-return branches and final payload; acceptance report propagates failure_digest_path"
+}

@@ -1,0 +1,264 @@
+{
+  "archive_touched": false,
+  "base_commit": "c32d90f",
+  "base_tags_at_head": [
+    "prompt626-reproducible-acceptance-fixture"
+  ],
+  "crash_resume_proven": true,
+  "crash_resume_scope": "synthetic interrupted state via --recover-only; mid-cycle loop resume not implemented",
+  "current_maturity_before": "L4",
+  "daemon_candidate_acceptance_command": "python scripts/run_daemon_candidate_acceptance.py --json",
+  "daemon_candidate_acceptance_extract": {
+    "codex_invoked_count": 1,
+    "effect_verification_statuses": [
+      "passed"
+    ],
+    "lock_released": true,
+    "main_repo_source_modified": false,
+    "queue_done": [
+      "daemon-acceptance-subtract.json"
+    ],
+    "sandbox_commit_performed": true,
+    "sandbox_tags": [
+      "sandbox-daemon-acceptance-subtract"
+    ]
+  },
+  "daemon_candidate_acceptance_report_path": "/tmp/codex-local-runner-daemon-acceptance/daemon_candidate_acceptance_report.json",
+  "daemon_candidate_acceptance_status": "success",
+  "files_added": [
+    "automation/orchestration/planned_runner/failure_digest.py",
+    "automation/orchestration/planned_runner/fix_prompt_builder.py",
+    "automation/orchestration/planned_runner/targeted_fix_retry.py",
+    "automation/orchestration/planned_runner/task_spec.py",
+    "automation/orchestration/planned_runner/task_planner.py",
+    "automation/orchestration/planned_runner/daemon_queue.py",
+    "automation/orchestration/planned_runner/daemon_state.py",
+    "automation/orchestration/planned_runner/daemon_lock.py",
+    "automation/orchestration/planned_runner/daemon_logs.py",
+    "scripts/run_targeted_fix_acceptance.py",
+    "scripts/run_task_queue_daemon.py",
+    "scripts/run_daemon_candidate_acceptance.py",
+    "docs/daemon_candidate.md",
+    "docs/targeted_fix_retry.md",
+    "docs/task_queue_daemon.md"
+  ],
+  "files_modified": [
+    "automation/orchestration/planned_runner/autonomous_live_loop.py",
+    "automation/orchestration/planned_runner/live_codex_gate.py",
+    "automation/orchestration/planned_runner/commit_tag.py",
+    "scripts/run_integrated_live_acceptance.py",
+    "tests/test_live_codex_gate_effect_verification.py"
+  ],
+  "final_decision": "success",
+  "generated_at": "2026-06-12T11:16:56.718316Z",
+  "live_codex_invocations": 6,
+  "live_codex_invocations_breakdown": {
+    "final_daemon_acceptance_first_run_blocked_at_commit_policy": 1,
+    "final_daemon_acceptance_passing_run": 1,
+    "phase630_targeted_fix_acceptance": 2,
+    "phase633_clone_acceptance": 1,
+    "phase634_spec_driven_acceptance": 1
+  },
+  "main_repo_commit_performed": false,
+  "main_repo_implementation_changes_note": "only the allowed implementation/test/script/doc files were modified or added, all left unstaged; HEAD unchanged at c32d90f",
+  "main_repo_runtime_source_modified": false,
+  "main_repo_stage_performed": false,
+  "main_repo_tag_performed": false,
+  "next_action": "commit_tag_daemon_candidate_program",
+  "phase_scores": {
+    "phase_628": 94,
+    "phase_629": 94,
+    "phase_630": 95,
+    "phase_631": 93,
+    "phase_632": 91,
+    "phase_633": 88,
+    "phase_634": 93,
+    "phase_635": 93,
+    "phase_636": 94
+  },
+  "phases": [
+    {
+      "decision": "adopt",
+      "name": "failure classification & operator handoff digest",
+      "note": "15 failure classes; wired into gate, loop (all branches), acceptance; no live codex needed",
+      "phase": 628,
+      "report": "artifacts/autonomous_runtime/prompt628_*.json",
+      "scores": {
+        "acceptance_strength": 85,
+        "constraint_compliance": 100,
+        "phase_final_score": 94,
+        "purpose_achievement": 95,
+        "safety": 100,
+        "test_coverage": 90
+      },
+      "status": "success"
+    },
+    {
+      "decision": "adopt",
+      "name": "offline fix prompt builder",
+      "note": "evidence+spec+constraints prompt; blocked-input handling; offline only",
+      "phase": 629,
+      "report": "artifacts/autonomous_runtime/prompt629_*.json",
+      "scores": {
+        "acceptance_strength": 85,
+        "constraint_compliance": 100,
+        "phase_final_score": 94,
+        "purpose_achievement": 95,
+        "safety": 100,
+        "test_coverage": 90
+      },
+      "status": "success"
+    },
+    {
+      "decision": "adopt",
+      "name": "bounded live targeted-fix retry",
+      "note": "live induced-failure converged in 1 fix attempt; hard cap 2; non-retryable classes stop",
+      "phase": 630,
+      "report": "artifacts/autonomous_runtime/prompt630_*.json",
+      "scores": {
+        "acceptance_strength": 95,
+        "constraint_compliance": 100,
+        "phase_final_score": 95,
+        "purpose_achievement": 95,
+        "safety": 95,
+        "test_coverage": 90
+      },
+      "status": "success"
+    },
+    {
+      "decision": "adopt",
+      "name": "sandbox-only commit/tag gate",
+      "note": "7 policies incl. /tmp-only and main-repo refusal; real commit+tag proven in /tmp; later hardened to ignore __pycache__",
+      "phase": 631,
+      "report": "artifacts/autonomous_runtime/prompt631_*.json",
+      "scores": {
+        "acceptance_strength": 85,
+        "constraint_compliance": 100,
+        "phase_final_score": 93,
+        "purpose_achievement": 90,
+        "safety": 95,
+        "test_coverage": 95
+      },
+      "status": "success"
+    },
+    {
+      "decision": "adopt",
+      "name": "test-command verification layer",
+      "note": "argv-only allowlisted commands, cwd=sandbox repo, run after file snapshot; disallowed command blocks before codex",
+      "phase": 632,
+      "report": "artifacts/autonomous_runtime/prompt632_*.json",
+      "scores": {
+        "acceptance_strength": 80,
+        "constraint_compliance": 100,
+        "phase_final_score": 91,
+        "purpose_achievement": 90,
+        "safety": 95,
+        "test_coverage": 90
+      },
+      "status": "success"
+    },
+    {
+      "decision": "adopt",
+      "name": "main-repo clone acceptance without commit",
+      "note": "full clone of real repo; codex created exact marker file, verify command passed, no commits anywhere; actual main-repo modification remains gated; no dedicated unit tests (live proof + existing gate tests)",
+      "phase": 633,
+      "report": "artifacts/autonomous_runtime/prompt633_*.json",
+      "scores": {
+        "acceptance_strength": 90,
+        "constraint_compliance": 100,
+        "phase_final_score": 88,
+        "purpose_achievement": 85,
+        "safety": 95,
+        "test_coverage": 70
+      },
+      "status": "success"
+    },
+    {
+      "decision": "adopt",
+      "name": "task spec & planner v1",
+      "note": "spec-only live run succeeded with no hand-written prompt; planner limited to add_function/1-cycle",
+      "phase": 634,
+      "report": "artifacts/autonomous_runtime/prompt634_*.json",
+      "scores": {
+        "acceptance_strength": 90,
+        "constraint_compliance": 100,
+        "phase_final_score": 93,
+        "purpose_achievement": 85,
+        "safety": 100,
+        "test_coverage": 90
+      },
+      "status": "success"
+    },
+    {
+      "decision": "adopt",
+      "name": "queue daemon candidate",
+      "note": "full chain live: enqueue->claim->plan->loop->verify->sandbox commit/tag->done; first run honestly blocked on __pycache__ policy, fixed and re-proven",
+      "phase": 635,
+      "report": "artifacts/autonomous_runtime/prompt635_*.json",
+      "scores": {
+        "acceptance_strength": 95,
+        "constraint_compliance": 100,
+        "phase_final_score": 93,
+        "purpose_achievement": 90,
+        "safety": 95,
+        "test_coverage": 85
+      },
+      "status": "success"
+    },
+    {
+      "decision": "adopt",
+      "name": "crash resume / lock / logs",
+      "note": "synthetic interrupted state recovered via --recover-only; stale lock + contention + exhaustion proven",
+      "phase": 636,
+      "report": "artifacts/autonomous_runtime/prompt636_*.json",
+      "scores": {
+        "acceptance_strength": 90,
+        "constraint_compliance": 100,
+        "phase_final_score": 94,
+        "purpose_achievement": 90,
+        "safety": 100,
+        "test_coverage": 90
+      },
+      "status": "success"
+    }
+  ],
+  "program_status": "success",
+  "queue_daemon_candidate_proven": true,
+  "reached_maturity": "L7",
+  "reached_maturity_notes": "L5 (targeted-fix retry) proven live; L6 (safe auto commit/tag) proven sandbox-only; L7 (queued daemon) proven for one bounded task; L8 partially covered (synthetic crash-resume + locking proven; mid-cycle resume not implemented)",
+  "recommended_next_prompts_to_commercial_candidate": [
+    "Prompt637: repeated-run reliability harness (N scheduled daemon acceptance runs, pass-rate ledger)",
+    "Prompt638: planner v2 (multi-file/multi-cycle task kinds, task-level constraints)",
+    "Prompt639: mid-cycle resume contract for the autonomous live loop",
+    "Prompt640: main-repo worktree real-change path with auto-revert and gated human approval",
+    "Prompt641: security hardening (secret redaction, write-allowlist enforcement, token handling)",
+    "Prompt642: packaging/config (single config file replacing CLI flag forest, install doc test)",
+    "Prompt643: legacy debt cleanup (broken test import, deprecated flags, project_browser freeze)"
+  ],
+  "sandbox_commit_tag_proven": true,
+  "still_not_commercial_grade_reasons": [
+    "planner supports exactly one task kind (add_function, single cycle); arbitrary development tasks unproven",
+    "all real changes remain fixture-grade in /tmp sandbox repos; actual main-repo modification stays gated and unproven",
+    "no production daemonization (no detach/systemd/scheduler/health endpoint); foreground bounded runs only",
+    "mid-cycle resume not implemented (recovery requeues whole tasks)",
+    "reliability evidence is single-run, not repeated-run statistics",
+    "security: in-source intent tokens are not authentication; prompts/stdout stored in plaintext; no secret redaction; codex CLI sandbox is the only OS-level isolation",
+    "no packaging/config management/multi-user/multi-repo support; nested read-only environments unsupported (prompt620 finding)",
+    "pre-existing broken test import (tests/test_planned_execution_runner.py) and 60+ legacy CLI flags remain unaddressed debt"
+  ],
+  "target_maturity": "L7 (first local daemon candidate)",
+  "targeted_fix_retry_proven": true,
+  "task_spec_planner_proven": true,
+  "tests_added": [
+    "tests/test_failure_digest.py",
+    "tests/test_fix_prompt_builder.py",
+    "tests/test_targeted_fix_retry.py",
+    "tests/test_sandbox_commit_tag_gate.py",
+    "tests/test_task_spec_and_planner.py",
+    "tests/test_daemon_queue.py",
+    "tests/test_daemon_lock_logs.py",
+    "tests/test_daemon_state_resume.py"
+  ],
+  "tests_result": "70/70 program tests OK; full suite: 1 pre-existing unrelated import error in tests/test_planned_execution_runner.py (module untouched), 1 skipped, rest OK",
+  "tests_run": "70 tests across the 12 program-related modules; full suite 556 tests"
+}

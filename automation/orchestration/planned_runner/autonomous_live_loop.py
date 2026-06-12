@@ -14,6 +14,7 @@ from automation.orchestration.planned_runner.live_codex_gate import (
     LIVE_CODEX_GATE_ENABLE_TOKEN,
     run_live_codex_gate,
 )
+from automation.orchestration.planned_runner.failure_digest import build_failure_digest
 from automation.orchestration.planned_runner.loop_controller import (
     dirty_paths_outside_allowed_artifacts,
 )
@@ -118,6 +119,14 @@ def _write_summary(path: Path, payload: Mapping[str, Any]) -> None:
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _attach_failure_digest(payload: dict[str, Any], out_dir: Path) -> None:
+    if payload.get("status") == "success":
+        payload["failure_digest_path"] = ""
+        return
+    digest = build_failure_digest(state=payload, out_dir=out_dir, run_kind="autonomous_live_loop")
+    payload["failure_digest_path"] = digest["digest_path"]
 
 
 def _disabled_payload(
@@ -384,6 +393,7 @@ def run_autonomous_live_loop(
             verification_continue=verification_continue,
         )
         payload.update(loop_option_fields)
+        _attach_failure_digest(payload, state_path.parent)
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
         return payload
@@ -405,6 +415,7 @@ def run_autonomous_live_loop(
             verification_continue=verification_continue,
         )
         payload.update(loop_option_fields)
+        _attach_failure_digest(payload, state_path.parent)
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
         return payload
@@ -427,6 +438,7 @@ def run_autonomous_live_loop(
         )
         payload["enabled"] = True
         payload.update(loop_option_fields)
+        _attach_failure_digest(payload, state_path.parent)
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
         return payload
@@ -458,6 +470,7 @@ def run_autonomous_live_loop(
             dirty_state.get("dirty_paths_outside_allowed_artifacts", [])
         )
         payload.update(loop_option_fields)
+        _attach_failure_digest(payload, state_path.parent)
         _write_json(state_path, payload)
         _write_summary(summary_path, payload)
         return payload
@@ -605,6 +618,7 @@ def run_autonomous_live_loop(
         "started_at": started_at,
         "finished_at": _utc_now(),
     }
+    _attach_failure_digest(payload, output_root)
     _write_json(state_path, payload)
     _write_summary(summary_path, payload)
     return payload
