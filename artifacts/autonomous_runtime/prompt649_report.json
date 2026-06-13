@@ -1,0 +1,16 @@
+{
+  "prompt649_status": "success",
+  "prompt649_base_commit": "87de053",
+  "prompt649_layer": "project-level iterate-until-done controller (bounded, offline, deterministic)",
+  "prompt649_controller_created": true,
+  "prompt649_files_created": ["automation/orchestration/planned_runner/project_loop_controller.py", "tests/test_project_loop_controller.py"],
+  "prompt649_api": "run_project_loop(intent, task_descriptors, output_queue_dir, *, result_snapshots=None, max_cycles=1, repo_path_override=None, generated_at='') -> {status, next_step, cycles_run, plan_task_count, queue_output_dir, written_files, per_cycle, final_completion, errors, warnings}; never raises.",
+  "prompt649_behavior": "Connects generate_project_task_plan -> populate_queue_from_plan (explicit dir) -> evaluate_project_completion. Iterates over per-cycle result snapshots bounded by max_cycles (hard cap MAX_PROJECT_LOOP_CYCLES=10). next_step in {finish, wait_for_execution_results, fix_failures, manual_review}. No daemon/Codex run, no live/default queue mutation, deterministic, no infinite loop.",
+  "prompt649_tests_passed": true,
+  "prompt649_tests_detail": "tests/test_project_loop_controller.py = 10 OK (in_progress when no results; complete on all-done snapshot; failed->fix; iterate-until-done across snapshots; bounded by max_cycles; hard cap; invalid intent blocked + no queue; missing output dir blocked; deterministic; no side effects). Regression: 69 OK.",
+  "prompt649_existing_runtime_regression_tests_passed": true,
+  "prompt649_main_repo_safe": true,
+  "prompt649_archive_touched": false,
+  "prompt649_handoff_reports_touched": false,
+  "prompt649_next_action": "task_kind_expansion_minimal_safe"
+}

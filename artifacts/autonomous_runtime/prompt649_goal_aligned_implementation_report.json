@@ -1,0 +1,59 @@
+{
+  "prompt649_status": "success",
+  "prompt649_base_commit": "87de053",
+  "prompt649_layer": "project-level iterate-until-done controller (bounded, offline, deterministic)",
+  "prompt649_controller_created": true,
+  "prompt649_files_created": [
+    "automation/orchestration/planned_runner/project_loop_controller.py",
+    "tests/test_project_loop_controller.py"
+  ],
+  "prompt649_api": "run_project_loop(intent, task_descriptors, output_queue_dir, *, result_snapshots=None, max_cycles=1, repo_path_override=None, generated_at='') -> {status, next_step, cycles_run, plan_task_count, queue_output_dir, written_files, per_cycle, final_completion, errors, warnings}; never raises.",
+  "prompt649_behavior": "Connects generate_project_task_plan -> populate_queue_from_plan (explicit dir) -> evaluate_project_completion. Iterates over per-cycle result snapshots bounded by max_cycles (hard cap MAX_PROJECT_LOOP_CYCLES=10). next_step in {finish, wait_for_execution_results, fix_failures, manual_review}. No daemon/Codex run, no live/default queue mutation, deterministic, no infinite loop.",
+  "prompt649_tests_passed": true,
+  "prompt649_tests_detail": "tests/test_project_loop_controller.py = 10 OK (in_progress when no results; complete on all-done snapshot; failed->fix; iterate-until-done across snapshots; bounded by max_cycles; hard cap; invalid intent blocked + no queue; missing output dir blocked; deterministic; no side effects). Regression: 69 OK.",
+  "prompt649_existing_runtime_regression_tests_passed": true,
+  "prompt649_main_repo_safe": true,
+  "prompt649_archive_touched": false,
+  "prompt649_handoff_reports_touched": false,
+  "prompt649_next_action": "task_kind_expansion_minimal_safe",
+  "current_head_before": "87de053",
+  "selected_target": "project_level_iterate_until_done_controller",
+  "selected_target_rationale": "Completion gate (Prompt648) just landed; the controller is the next missing roadmap layer connecting generate->populate->completion into a bounded offline loop.",
+  "implementation_performed": true,
+  "files_modified": [
+    "automation/orchestration/planned_runner/project_loop_controller.py",
+    "tests/test_project_loop_controller.py",
+    "artifacts/autonomous_runtime/prompt649_report.json",
+    "artifacts/autonomous_runtime/prompt649_summary.md"
+  ],
+  "tests_run": [
+    "tests.test_project_loop_controller",
+    "tests.test_project_completion_gate",
+    "tests.test_project_intent_plan_model",
+    "tests.test_project_task_generator_from_intent",
+    "tests.test_project_queue_population_from_plan",
+    "tests.test_daemon_queue",
+    "tests.test_targeted_fix_retry"
+  ],
+  "tests_passed": true,
+  "commit": "PENDING",
+  "tag": "prompt649-project-level-iterate-until-done-controller",
+  "confirmed_capabilities_after": [
+    "L7.5 self-healing daemon",
+    "ProjectIntent/Plan models",
+    "plan generation",
+    "queue population",
+    "completion gate",
+    "bounded offline iterate-until-done controller (NEW)"
+  ],
+  "missing_capabilities_after": [
+    "broad task kinds beyond add_function",
+    "project-level E2E acceptance",
+    "long-running daemon soak"
+  ],
+  "current_capability_boundary_after": "full offline project loop (intent->plan->queue->completion->next_step) deterministic & bounded; runtime daemon execution still operator-triggered; task kinds still add_function only",
+  "project_level_autonomy_complete": false,
+  "evaluation_score_out_of_100": 80,
+  "next_recommended_action": "task_kind_expansion_minimal_safe",
+  "final_decision": "Implemented bounded offline loop controller (cycle 2). Continue to assess task-kind expansion."
+}
