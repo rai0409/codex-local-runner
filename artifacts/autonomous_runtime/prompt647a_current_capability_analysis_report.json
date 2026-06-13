@@ -1,0 +1,79 @@
+{
+  "prompt647a_status": "success",
+  "prompt647a_current_head": "894fac8",
+  "prompt647a_current_head_subject": "prompt646 project task generator from intent",
+  "prompt647a_tags_at_head": ["prompt646-project-task-generator-from-intent"],
+  "prompt647a_latest_confirmed_implementation": "prompt646",
+
+  "prompt647a_prompt644a_verified": true,
+  "prompt647a_prompt644a_evidence": "artifacts/autonomous_runtime/prompt644a_current_capability_acceptance_report.json present: status=success, classification=L7.5_confirmed. Lineage commit 3170ddc tag prompt644a-current-capability-acceptance.",
+  "prompt647a_prompt645_verified": true,
+  "prompt647a_prompt645_evidence": "Committed at 8d46ca4 (tag prompt645-project-intent-schema-task-plan-model). Tracked source: project_intent.py (validate_project_intent + JSON helpers), project_plan.py (validate_project_task_plan, planned_task_to_task_spec + JSON helpers). Imports OK.",
+  "prompt647a_prompt646_verified": true,
+  "prompt647a_prompt646_evidence": "Committed at HEAD 894fac8 (tag prompt646-project-task-generator-from-intent). HEAD commit adds project_task_generator.py (generate_project_task_plan), tests/test_project_task_generator_from_intent.py, prompt646_report.json/summary. Import OK.",
+  "prompt647a_prompt647_generator_verified": true,
+  "prompt647a_prompt647_generator_evidence": "prompts/generated/prompt647_auto_queue_population_from_project_plan.md exists; artifacts/autonomous_runtime/prompt647_prompt_generation_report.json/summary exist (untracked). These are GENERATED prompt artifacts only.",
+  "prompt647a_prompt647_implementation_detected": false,
+  "prompt647a_prompt647_implementation_evidence": "NOT implemented: automation/orchestration/planned_runner/project_queue_population.py ABSENT; artifacts/autonomous_runtime/prompt647_report.json ABSENT; tests/test_project_queue_population_from_plan.py ABSENT; git tag prompt647-auto-queue-population-from-project-plan ABSENT. Per the interpretation rules, Prompt647 is generated/planned only.",
+
+  "prompt647a_confirmed_capabilities": {
+    "process_daemon_queue_jobs": "YES — bounded daemon queue execution proven (Prompt639/644a; run_task_queue_daemon.py, daemon_queue.py).",
+    "strict_effect_verification": "YES — Prompt638B effect gate (effect_gate.py) authoritative; 0 violations in acceptance.",
+    "targeted_fix_retry_inside_daemon_queue": "YES — Prompt643 wired run_targeted_fix_retry into the daemon (--max-fix-attempts); confirmed end-to-end by Prompt644a (resolved self-healing -> done; unresolved -> failed/no-commit-tag).",
+    "model_project_intent": "YES — Prompt645 project_intent.py validate_project_intent + JSON round-trip.",
+    "model_project_task_plan": "YES — Prompt645 project_plan.py validate_project_task_plan (deps/ordering/bounds) + planned_task_to_task_spec + JSON round-trip.",
+    "generate_plan_from_intent_and_descriptors": "YES — Prompt646 project_task_generator.py generate_project_task_plan (deterministic, non-LLM, bounded, allowed-kind enforced, backward-compatible)."
+  },
+  "prompt647a_generated_not_implemented": {
+    "auto_queue_population_from_project_plan": "Prompt647 — implementation PROMPT generated (prompts/generated/prompt647_auto_queue_population_from_project_plan.md) but NO source/test/report/tag. Planned only."
+  },
+  "prompt647a_missing_capabilities": {
+    "populate_daemon_queue_from_project_plan": "NOT IMPLEMENTED (Prompt647 planned only).",
+    "project_progress_and_completion_gate": "NOT IMPLEMENTED.",
+    "project_level_iterate_until_done_controller": "NOT IMPLEMENTED.",
+    "broad_task_kinds_beyond_add_function": "NOT IMPLEMENTED — task_spec.SUPPORTED_TASK_KINDS=('add_function',) only.",
+    "long_running_daemon_soak_proof": "NOT PROVEN.",
+    "llm_free_text_decomposition": "NOT IMPLEMENTED (generator is deterministic/structured-descriptor only)."
+  },
+  "prompt647a_unknown_requires_manual_verification": [
+    "Whether any older untracked artifacts under artifacts/archive/ or handoff_reports/ are still relevant (not inspected per scope; left untouched)."
+  ],
+  "prompt647a_capability_question_matrix": {
+    "process_daemon_queue_jobs": true,
+    "perform_strict_effect_verification": true,
+    "perform_targeted_fix_retry_inside_daemon_queue": true,
+    "model_project_intent": true,
+    "model_project_task_plan": true,
+    "generate_project_task_plan_from_intent_and_descriptors": true,
+    "populate_daemon_queue_from_project_task_plan": false,
+    "run_project_level_completion_gate": false,
+    "iterate_until_project_completion": false,
+    "support_broad_task_kinds_beyond_add_function": false
+  },
+  "prompt647a_current_capability_boundary": "L7.5 runtime (self-healing daemon: queue + strict effect gate + targeted-fix retry, confirmed) PLUS offline project planning layer (intent model + plan model + deterministic plan generation, confirmed). The plan->queue bridge (Prompt647) and everything above it (completion gate, iterate-until-done controller, broad task kinds, soak) are NOT implemented. The autonomous chain intent->plan->QUEUE->execute->verify->fix->commit->next->completion is NOT yet closed end-to-end.",
+  "prompt647a_project_level_autonomy_complete": false,
+  "prompt647a_project_level_autonomy_assessment": "INCOMPLETE. Confirmed: runtime execution/self-healing (L7.5) + offline modeling (intent/plan) + deterministic plan generation. Missing to close the loop: queue population from a plan, a project completion gate, and an iterate-until-done controller. Until queue population exists, a generated plan cannot be handed to the daemon automatically.",
+  "prompt647a_next_recommended_action": "execute_prompt647_auto_queue_population_from_project_plan",
+  "prompt647a_recommended_next_prompt": "prompts/generated/prompt647_auto_queue_population_from_project_plan.md",
+  "prompt647a_evidence_files_inspected": [
+    "git log -1 --oneline; git tag --points-at HEAD; git status --short; git show --stat HEAD",
+    "artifacts/autonomous_runtime/prompt644a_current_capability_acceptance_report.json",
+    "artifacts/autonomous_runtime/prompt645_report.json (committed in lineage)",
+    "artifacts/autonomous_runtime/prompt646_report.json (committed at HEAD)",
+    "artifacts/autonomous_runtime/prompt647_prompt_generation_report.json (untracked, generated)",
+    "prompts/generated/prompt647_auto_queue_population_from_project_plan.md (untracked, generated)"
+  ],
+  "prompt647a_source_files_inspected": [
+    "automation/orchestration/planned_runner/project_intent.py (present, tracked)",
+    "automation/orchestration/planned_runner/project_plan.py (present, tracked)",
+    "automation/orchestration/planned_runner/project_task_generator.py (present, tracked)",
+    "automation/orchestration/planned_runner/project_queue_population.py (ABSENT)",
+    "automation/orchestration/planned_runner/task_spec.py (SUPPORTED_TASK_KINDS=('add_function',))",
+    "automation/orchestration/planned_runner/daemon_queue.py (ensure_queue_dirs/enqueue_task/claim_next_task; no dependency field)",
+    "automation/orchestration/planned_runner/targeted_fix_retry.py (present)",
+    "automation/orchestration/planned_runner/effect_gate.py (present)",
+    "scripts/run_task_queue_daemon.py (--max-fix-attempts + run_targeted_fix_retry wired, Prompt643)"
+  ],
+  "prompt647a_untracked_risk_summary": "Working tree carries many untracked artifacts: artifacts/archive/ and handoff_reports/ (known risky areas — reported, NOT touched), plus prior prompt-generation reports/summaries and generated prompt files (prompt638c/638d/640/641/643/645/646/647 family) that were intentionally not committed by their analysis/generation-only prompts. None interfere with the current scope; they are not failures. The only Prompt647 artifacts present are GENERATED (impl prompt + generation report/summary), correctly classified as planned-not-implemented.",
+  "prompt647a_final_decision": "Latest CONFIRMED implementation is Prompt646 (HEAD 894fac8, tag prompt646-project-task-generator-from-intent). Confirmed capability = L7.5 self-healing daemon runtime + offline project intent/plan modeling + deterministic plan generation. Prompt647 (auto_queue_population_from_project_plan) is GENERATED/PLANNED ONLY — no source, test, report, or tag. Project-level autonomy is INCOMPLETE: the plan->queue bridge, completion gate, and iterate-until-done controller are not implemented. Safe next action: execute Prompt647 to implement queue population."
+}

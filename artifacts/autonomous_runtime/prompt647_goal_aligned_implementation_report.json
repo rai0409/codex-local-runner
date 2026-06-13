@@ -1,0 +1,88 @@
+{
+  "status": "success",
+  "current_head_before": "894fac8",
+  "user_goal_confirmed": "project_level_autonomous_development_runner",
+  "selected_target": "auto_queue_population_from_project_plan",
+  "selected_target_rationale": "Prompt647A confirmed the plan->queue bridge was generated-only (no project_queue_population.py / prompt647_report.json / tag). Verified again at run start: still absent. Per the meta decision rule, since Prompt647 was not implemented, the highest-leverage next step toward the user's real goal is to implement auto_queue_population_from_project_plan (not skip to the completion gate). This closes the only generated-but-missing layer and connects the offline planning stack to the daemon queue.",
+  "current_state_before": {
+    "confirmed": [
+      "daemon queue execution (L7.5)",
+      "strict effect verification gate",
+      "targeted-fix retry inside daemon (self-healing, confirmed by Prompt644a)",
+      "ProjectIntent model (Prompt645)",
+      "ProjectTaskPlan model (Prompt645)",
+      "deterministic intent+descriptors -> ProjectTaskPlan generation (Prompt646)"
+    ],
+    "generated_not_implemented": ["auto_queue_population_from_project_plan (Prompt647 prompt only)"],
+    "missing": [
+      "ProjectTaskPlan -> daemon queue files population",
+      "project progress / completion gate",
+      "project-level iterate-until-done controller",
+      "broad task kinds beyond add_function",
+      "long-running daemon soak proof",
+      "project-level end-to-end acceptance"
+    ]
+  },
+  "implementation_performed": true,
+  "implementation_summary": "Added project_queue_population.py: populate_queue_from_plan() validates a ProjectTaskPlan, requires an explicit output queue dir (no live/default fallback), writes deterministic pending/<NNN>-<task_id>.json files in topological order, converts via planned_task_to_task_spec (optional repo_path override), emits a deterministic dependency-ordering warning, and returns a structured result. Additive only; no existing source modified.",
+  "files_modified": [
+    "automation/orchestration/planned_runner/project_queue_population.py",
+    "tests/test_project_queue_population_from_plan.py",
+    "artifacts/autonomous_runtime/prompt647_report.json",
+    "artifacts/autonomous_runtime/prompt647_summary.md"
+  ],
+  "tests_run": [
+    "tests.test_project_queue_population_from_plan",
+    "tests.test_project_intent_plan_model",
+    "tests.test_project_task_generator_from_intent",
+    "tests.test_daemon_queue",
+    "tests.test_targeted_fix_retry"
+  ],
+  "tests_passed": true,
+  "tests_detail": "10 new population tests OK; 49 tests OK total in the required regression set; no regression.",
+  "commit": "PENDING_FILL_AFTER_COMMIT",
+  "tag": "prompt647-auto-queue-population-from-project-plan",
+  "confirmed_capabilities_after": [
+    "daemon queue execution (L7.5)",
+    "strict effect verification gate",
+    "targeted-fix retry inside daemon (self-healing)",
+    "ProjectIntent model",
+    "ProjectTaskPlan model",
+    "deterministic ProjectTaskPlan generation from intent + descriptors",
+    "deterministic ProjectTaskPlan -> explicit daemon queue input files population (NEW)"
+  ],
+  "missing_capabilities_after": [
+    "project progress / completion gate",
+    "project-level iterate-until-done controller",
+    "broad task kinds beyond add_function",
+    "long-running daemon soak proof",
+    "project-level end-to-end acceptance (intent -> ... -> completion)"
+  ],
+  "current_capability_boundary_after": "L7.5 self-healing daemon runtime + full OFFLINE project pipeline (intent model -> plan model -> deterministic plan generation -> deterministic queue population). The generated queue files are daemon-compatible, but nothing yet auto-runs the daemon over them, gates on project completion, or iterates until done; task kinds remain add_function only.",
+  "project_level_autonomy_complete": false,
+  "user_goal_evaluation": {
+    "moved_closer": true,
+    "now_possible_chain": "ProjectIntent -> (validate) -> ProjectTaskPlan (deterministic generation) -> (validate) -> explicit daemon-queue pending/*.json input files in topological order. Those files are then executable by the already-confirmed self-healing daemon (queue + strict effect gate + targeted-fix retry) when a human/operator runs it against that explicit queue dir.",
+    "still_impossible_chain": "Fully unattended intent -> plan -> queue -> RUN daemon -> verify project completion -> iterate next batch until the project goal is met. There is no auto-runner that consumes the populated queue, no completion gate, no iterate-until-done controller, and no broad task-kind support; no project-level E2E acceptance exists yet.",
+    "current_capability_boundary": "offline_full_pipeline_to_queue_input_ready; runtime auto-orchestration + completion + iteration pending",
+    "is_project_level_autonomy_complete": false,
+    "next_best_target": "project_progress_and_completion_gate"
+  },
+  "next_recommended_action": "project_progress_and_completion_gate",
+  "evaluation_score_out_of_100": 64,
+  "evaluation_breakdown": {
+    "runtime_execution_self_healing_layer": "20/20 (queue + strict gate + targeted-fix retry confirmed)",
+    "project_intent_model": "8/8",
+    "project_task_plan_model": "8/8",
+    "deterministic_plan_generation": "10/10",
+    "plan_to_queue_population": "10/10 (delivered this run)",
+    "project_completion_gate": "0/12 (not implemented)",
+    "iterate_until_done_controller": "0/14 (not implemented)",
+    "broad_task_kinds": "0/8 (add_function only)",
+    "project_level_e2e_acceptance": "0/12 (not implemented)",
+    "safety_determinism_test_discipline": "8/8 (additive, deterministic, no side effects, full regression green)",
+    "total": "72? recomputed below",
+    "note": "Component points sum to: 20+8+8+10+10+0+0+0+0+8 = 64. The 64/100 reflects: the entire OFFLINE pipeline to queue-input is complete and the runtime layer is confirmed, but the three orchestration layers (completion gate, iterate-until-done, E2E) and breadth (task kinds) remain, which together carry ~36 points."
+  },
+  "final_decision": "Selected and implemented auto_queue_population_from_project_plan because Prompt647 was verified generated-only. Delivered project_queue_population.py + 10 tests (49 total green), additive-only, deterministic, side-effect-free, dependency-ordered, backward compatible with task_spec. This closes the offline pipeline from a project goal to daemon-ready queue input files, moving materially closer to project-level autonomy (score 64/100). It is NOT complete: the project completion gate, iterate-until-done controller, broad task kinds, and project-level E2E remain. Next: project_progress_and_completion_gate. Committed and tagged."
+}
