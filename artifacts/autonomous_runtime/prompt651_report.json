@@ -1,0 +1,15 @@
+{
+  "prompt651_status": "success",
+  "prompt651_base_commit": "00f2b6f",
+  "prompt651_layer": "project-level offline E2E acceptance",
+  "prompt651_e2e_created": true,
+  "prompt651_files_created": ["tests/test_project_level_e2e_acceptance.py"],
+  "prompt651_chain_proven": "ProjectIntent + descriptors -> generate_project_task_plan -> populate_queue_from_plan (explicit /tmp dir) -> simulated task results -> evaluate_project_completion -> run_project_loop final status. Materialized queue files confirmed daemon-consumable (task_spec.validate_task_spec accepts with real repo_path); topological order (dependency fa before fb) verified.",
+  "prompt651_tests_passed": true,
+  "prompt651_tests_detail": "tests/test_project_level_e2e_acceptance.py = 5 OK (step-by-step full chain + daemon-consumable specs + topological order; controller in_progress->complete; failure->fix; determinism; no side effects). Full project-layer regression: 78 OK.",
+  "prompt651_existing_runtime_regression_tests_passed": true,
+  "prompt651_main_repo_safe": true,
+  "prompt651_archive_touched": false,
+  "prompt651_handoff_reports_touched": false,
+  "prompt651_next_action": "long_running_daemon_soak_proof_or_live_auto_execution_bridge"
+}

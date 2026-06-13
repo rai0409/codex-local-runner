@@ -1,0 +1,59 @@
+{
+  "prompt651_status": "success",
+  "prompt651_base_commit": "00f2b6f",
+  "prompt651_layer": "project-level offline E2E acceptance",
+  "prompt651_e2e_created": true,
+  "prompt651_files_created": [
+    "tests/test_project_level_e2e_acceptance.py"
+  ],
+  "prompt651_chain_proven": "ProjectIntent + descriptors -> generate_project_task_plan -> populate_queue_from_plan (explicit /tmp dir) -> simulated task results -> evaluate_project_completion -> run_project_loop final status. Materialized queue files confirmed daemon-consumable (task_spec.validate_task_spec accepts with real repo_path); topological order (dependency fa before fb) verified.",
+  "prompt651_tests_passed": true,
+  "prompt651_tests_detail": "tests/test_project_level_e2e_acceptance.py = 5 OK (step-by-step full chain + daemon-consumable specs + topological order; controller in_progress->complete; failure->fix; determinism; no side effects). Full project-layer regression: 78 OK.",
+  "prompt651_existing_runtime_regression_tests_passed": true,
+  "prompt651_main_repo_safe": true,
+  "prompt651_archive_touched": false,
+  "prompt651_handoff_reports_touched": false,
+  "prompt651_next_action": "long_running_daemon_soak_proof_or_live_auto_execution_bridge",
+  "current_head_before": "00f2b6f",
+  "selected_target": "project_level_e2e_acceptance",
+  "selected_target_rationale": "Task-kind expansion deferred (cycle 3, needs live acceptance); E2E acceptance is the highest-value offline-safe proof of the full project-autonomy chain.",
+  "implementation_performed": true,
+  "files_modified": [
+    "tests/test_project_level_e2e_acceptance.py",
+    "artifacts/autonomous_runtime/prompt651_report.json",
+    "artifacts/autonomous_runtime/prompt651_summary.md"
+  ],
+  "tests_run": [
+    "tests.test_project_level_e2e_acceptance",
+    "tests.test_project_loop_controller",
+    "tests.test_project_completion_gate",
+    "tests.test_project_intent_plan_model",
+    "tests.test_project_task_generator_from_intent",
+    "tests.test_project_queue_population_from_plan",
+    "tests.test_daemon_queue",
+    "tests.test_targeted_fix_retry",
+    "tests.test_daemon_queue_targeted_fix_retry_integration"
+  ],
+  "tests_passed": true,
+  "commit": "PENDING",
+  "tag": "prompt651-project-level-e2e-acceptance",
+  "confirmed_capabilities_after": [
+    "L7.5 self-healing daemon",
+    "ProjectIntent/Plan models",
+    "plan generation",
+    "queue population",
+    "completion gate",
+    "bounded offline loop controller",
+    "offline project-level E2E acceptance (NEW)"
+  ],
+  "missing_capabilities_after": [
+    "live auto-execution bridge (controller -> run daemon -> real results -> iterate)",
+    "broad task kinds beyond add_function",
+    "long-running daemon soak proof"
+  ],
+  "current_capability_boundary_after": "OFFLINE project-autonomy chain COMPLETE and E2E-proven (intent->plan->queue->completion->controller); live auto-execution + real-result iteration still operator-triggered; add_function only",
+  "project_level_autonomy_complete": false,
+  "evaluation_score_out_of_100": 88,
+  "next_recommended_action": "live_auto_execution_bridge_or_long_running_daemon_soak",
+  "final_decision": "Offline project-level chain implemented and E2E-proven (cycle 4). Remaining work requires live runtime."
+}
