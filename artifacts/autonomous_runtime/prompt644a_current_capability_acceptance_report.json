@@ -1,0 +1,66 @@
+{
+  "prompt644a_status": "success",
+  "prompt644a_base_commit": "128d1dd",
+  "prompt644a_tags_at_head": ["prompt643-daemon-queue-targeted-fix-retry-integration"],
+  "prompt644a_validation_only": true,
+  "prompt644a_source_modified": false,
+
+  "prompt644a_smoke": "py_compile + import OK (run_task_queue_daemon, targeted_fix_retry, effect_gate, autonomous_live_loop, autonomous_cycle); MAX_FIX_ATTEMPTS_CAP=2",
+  "prompt644a_tests_result": "passed",
+  "prompt644a_tests_detail": "Ran 21 bounded tests OK across: test_daemon_queue_targeted_fix_retry_integration, test_daemon_queue_effect_failed_blocks_commit_tag, test_targeted_fix_retry, test_sandbox_commit_tag_gate, test_autonomous_live_loop_effect_failed_blocks_success.",
+
+  "prompt644a_runtime_validation_status": "passed",
+  "prompt644a_work_root": "/tmp/prompt644a_current_capability_acceptance",
+  "prompt644a_runtime_config": "live Codex, --max-fix-attempts 1, --sandbox-commit-tag, --max-jobs 3 --max-cycles 1 --max-seconds-total 800 --live-timeout-seconds 150; /tmp clones only",
+  "prompt644a_jobs_processed": 3,
+  "prompt644a_queue_done": ["a-passed.json", "b-resolved.json"],
+  "prompt644a_queue_failed": ["c-unresolved.json"],
+  "prompt644a_task_results": [
+    {"task_id": "a-passed", "scenario": "passed-effect first attempt", "per_cycle_effect_verification_statuses": ["passed"], "targeted_fix_invoked": true, "targeted_fix_converged": true, "targeted_fix_fix_attempts_used": 0, "status": "success", "stage": "done", "sandbox_commit_performed": true, "sandbox_tag_performed": true, "sandbox_new_commits": 1, "queue": "done"},
+    {"task_id": "b-resolved", "scenario": "resolved self-healing", "per_cycle_effect_verification_statuses": ["failed", "passed"], "targeted_fix_invoked": true, "targeted_fix_converged": true, "targeted_fix_fix_attempts_used": 1, "post_retry_effect_gate_passed": true, "status": "success", "stage": "done", "sandbox_commit_performed": true, "sandbox_tag_performed": true, "sandbox_new_commits": 1, "queue": "done", "note": "attempt 0 effect FAILED and was never marked success; fix attempt 1 passed; commit/tag occurred only after the post-retry passed effect"},
+    {"task_id": "c-unresolved", "scenario": "deterministic unresolved (always-failing verify)", "per_cycle_effect_verification_statuses": ["failed", "failed"], "targeted_fix_invoked": true, "targeted_fix_converged": false, "targeted_fix_fix_attempts_used": 1, "post_retry_effect_gate_passed": false, "status": "blocked", "stage": "targeted_fix_unresolved", "sandbox_commit_performed": false, "sandbox_tag_performed": false, "sandbox_new_commits": 0, "queue": "failed"}
+  ],
+
+  "prompt644a_passed_effect_task_done": true,
+  "prompt644a_resolved_self_healing_task_done": true,
+  "prompt644a_unresolved_task_failed": true,
+  "prompt644a_targeted_fix_invoked": true,
+  "prompt644a_targeted_fix_resolved": true,
+  "prompt644a_resolved_commit_tag_only_after_fixed_effect_passed": true,
+  "prompt644a_unresolved_no_commit_tag": true,
+
+  "prompt644a_effect_failed_wrongly_succeeded_count": 0,
+  "prompt644a_strict_gate_violations": 0,
+  "prompt644a_main_repo_head_unchanged_during_runtime": true,
+  "prompt644a_main_repo_tag_at_head_unchanged_during_runtime": true,
+  "prompt644a_main_repo_source_modified": false,
+  "prompt644a_runtime_only_in_tmp": true,
+  "prompt644a_generated_artifacts_leftover_count": 0,
+  "prompt644a_archive_touched": false,
+  "prompt644a_handoff_reports_touched": false,
+  "prompt644a_safety_evidence": "HEAD 128d1dd identical before/after runtime; tag at HEAD unchanged; zero modified/untracked files under automation/ scripts/ tests/; sandbox new commits exactly reflect outcome (a/b +1 committed+tagged, c +0 no commit/tag); 0 leftover generated artifacts in all 3 sandboxes; artifacts/archive and handoff_reports remain untracked dirs (not modified).",
+
+  "prompt644a_current_capability_classification": "L7.5_confirmed",
+  "prompt644a_classification_rationale": "All execution/self-healing acceptance passed: multiple queue tasks processed; the daemon auto-invoked targeted-fix retry on effect failure; a resolved task self-healed (attempt0 failed -> fix passed) and committed/tagged only after the fixed effect passed; an unresolved task was safely blocked/failed with no commit/tag; strict gates held (violations=0, no failed effect wrongly succeeded); main repo safety held. Task kinds remain limited to add_function and the project planner/orchestrator stack is absent, which matches the L7.5_confirmed definition exactly. Not labelled L8_candidate because task-kind breadth is also still missing, so the planner is not the SOLE remaining major layer.",
+  "prompt644a_confirmed_capabilities": [
+    "multi-task bounded daemon queue execution",
+    "strict effect verification gate (authoritative, violations=0)",
+    "sandbox isolation (/tmp only)",
+    "sandbox commit/tag only after a strictly-passed effect",
+    "generated-artifact cleanup (0 leftover)",
+    "daemon-integrated self-healing: automatic targeted-fix retry on effect failure (Prompt643)",
+    "resolved self-healing -> success + commit/tag + done",
+    "unresolved -> blocked/failed, no commit/tag, queue failed, evidence preserved",
+    "main repo runtime safety (HEAD/tag/source unchanged)"
+  ],
+  "prompt644a_remaining_gaps": [
+    "Project Intent Layer (intent/goal schema feeding execution)",
+    "Planner Layer (goal -> task decomposition)",
+    "Task Spec Generator + automatic queue population from a plan",
+    "Project Progress / Completion gate + project-level auto loop controller",
+    "Broad task-kind support beyond add_function",
+    "Long-running daemon soak proof"
+  ],
+  "prompt644a_next_recommended_prompt": "project_intent_schema_and_task_plan_model",
+  "prompt644a_final_decision": "Current-capability acceptance PASSED. The Prompt643 self-healing daemon works end-to-end in a live /tmp batch: passed, resolved-self-healing, and unresolved scenarios all behaved correctly under the strict effect gate, with full main-repo safety, sandbox isolation, and zero artifact leftovers. The execution/self-healing layer is confirmed at L7.5. The next step is to begin the project planner stack with a project intent schema and task plan model. Only the validation prompt/report/summary artifacts are committed/tagged for traceability; no source was changed."
+}
