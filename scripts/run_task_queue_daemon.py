@@ -53,6 +53,10 @@ from automation.orchestration.planned_runner.sandbox_cleanup import (  # noqa: E
     cleanup_generated_python_artifacts,
     evaluate_sandbox_cleanliness,
 )
+from automation.orchestration.planned_runner.targeted_fix_retry import (  # noqa: E402
+    MAX_FIX_ATTEMPTS_CAP,
+    run_targeted_fix_retry,
+)
 from automation.orchestration.planned_runner.task_planner import plan_task  # noqa: E402
 from automation.orchestration.planned_runner.task_spec import validate_task_spec  # noqa: E402
 
@@ -90,6 +94,122 @@ def _ensure_dirty_gate_repo(work_dir: Path) -> Path:
             capture_output=True,
         )
     return repo
+
+
+def _finalize_success(
+    *,
+    report: dict,
+    spec: dict,
+    args: argparse.Namespace,
+    run_dir: Path,
+) -> dict:
+    """Shared success tail: sandbox cleanup -> (optional) commit/tag -> final clean
+    check -> done. Reached ONLY after a strictly-passed effect verification, whether
+    from the single-shot loop path or the targeted-fix retry path. Commit/tag can
+    therefore never occur before a passed effect."""
+    # Verify commands may have generated Python bytecode inside the sandbox repo;
+    # remove it BEFORE the commit/tag gate and the final cleanliness evaluation.
+    report["stage"] = "sandbox_cleanup"
+    cleanup = cleanup_generated_python_artifacts(spec["repo_path"])
+    report["sandbox_generated_artifacts_removed"] = cleanup["removed_count"]
+    report["sandbox_generated_artifact_paths_removed"] = cleanup["removed_paths"]
+    if cleanup["status"] != "success":
+        report["errors"] = [f"sandbox cleanup blocked: {cleanup['blocked_reason']}"]
+        return report
+
+    if args.sandbox_commit_tag:
+        report["stage"] = "sandbox_commit_tag"
+        commit_result = execute_sandbox_commit_tag(
+            repo_path=spec["repo_path"],
+            allowed_files=[spec["target_file"]],
+            artifact_dir=run_dir / "sandbox_commit_tag",
+            task_id=spec["task_id"],
+            enabled=True,
+            explicit_enable_token=args.commit_tag_enable_token,
+        )
+        report["sandbox_commit_tag"] = {
+            k: commit_result.get(k)
+            for k in ("status", "blocked_reason", "commit_sha", "tag_name", "commit_performed", "tag_performed")
+        }
+        report["sandbox_commit_performed"] = bool(commit_result.get("commit_performed"))
+        report["sandbox_tag_performed"] = bool(commit_result.get("tag_performed"))
+        if commit_result.get("status") != "success":
+            report["errors"] = [f"sandbox commit/tag blocked: {commit_result.get('blocked_reason')}"]
+            return report
+
+    report["stage"] = "final_clean_check"
+    cleanliness = evaluate_sandbox_cleanliness(spec["repo_path"])
+    report.update(cleanliness)
+    if args.sandbox_commit_tag and not cleanliness["sandbox_final_status_clean"]:
+        report["errors"] = [
+            f"sandbox repo not clean after commit/tag: {cleanliness['sandbox_final_status_short']}"
+        ]
+        return report
+
+    report["stage"] = "done"
+    report["status"] = "success"
+    return report
+
+
+def _process_task_targeted_fix(
+    *,
+    report: dict,
+    spec: dict,
+    plan: dict,
+    args: argparse.Namespace,
+    run_dir: Path,
+) -> dict:
+    """Self-healing execution engine: run the effect-verified gate and, on a
+    retryable effect-verification failure, automatically build a fix prompt and
+    re-run (bounded by --max-fix-attempts). Used when --max-fix-attempts > 0.
+
+    The strict effect gate remains authoritative: the task proceeds to
+    cleanup/commit/tag/done ONLY when the retry converged AND the FINAL attempt's
+    effect verification strictly passed. An unresolved fix stays blocked with no
+    commit/tag and routes to queue failed, with the failure evidence preserved."""
+    report["stage"] = "execute_targeted_fix"
+    retry = run_targeted_fix_retry(
+        generated_prompt_path=plan["generated_prompt_path"],
+        effect_spec_path=plan["effect_spec_path"],
+        out_dir=run_dir / "targeted_fix",
+        live_codex_enable_token=args.live_codex_enable_token,
+        sandbox_mode="workspace-write",
+        timeout_seconds=args.live_timeout_seconds,
+        max_fix_attempts=args.max_fix_attempts,
+    )
+    attempts = list(retry.get("attempts", []) or [])
+    per_cycle = [str(a.get("effect_verification_status") or "not_run") for a in attempts]
+    report["targeted_fix_invoked"] = True
+    report["targeted_fix_converged"] = bool(retry.get("converged"))
+    report["targeted_fix_fix_attempts_used"] = int(retry.get("fix_attempts_used", 0) or 0)
+    report["targeted_fix_codex_invoked_count"] = int(retry.get("codex_invoked_count", 0) or 0)
+    report["targeted_fix_stop_reason"] = retry.get("stop_reason")
+    report["targeted_fix_state_path"] = (run_dir / "targeted_fix" / "targeted_fix_retry_state.json").as_posix()
+    report["codex_invoked_count"] = int(retry.get("codex_invoked_count", 0) or 0)
+    report["per_cycle_effect_verification_statuses"] = per_cycle
+    report["failure_digest_path"] = str(
+        (attempts[-1].get("failure_digest_path") if attempts else "") or ""
+    )
+
+    # Strict effect gate on the FINAL attempt only: a passed final effect is the
+    # sole licence to commit/tag, regardless of earlier failed attempts.
+    final_status = per_cycle[-1] if per_cycle else "not_run"
+    post_gate = evaluate_strict_effect_gate([final_status], effect_expected=True)
+    report["effect_gate_passed"] = bool(post_gate["passed"])
+    report["effect_gate_reason"] = post_gate["reason"]
+    report["post_retry_effect_gate_passed"] = bool(post_gate["passed"])
+    report["post_retry_effect_statuses"] = per_cycle
+
+    if not (retry.get("converged") and post_gate["passed"]):
+        report["stage"] = "targeted_fix_unresolved"
+        report["status"] = "blocked"
+        report["errors"] = [
+            "targeted fix did not resolve effect verification: "
+            f"{retry.get('stop_reason')}; statuses={per_cycle}"
+        ]
+        return report
+
+    return _finalize_success(report=report, spec=spec, args=args, run_dir=run_dir)
 
 
 def _process_task(
@@ -137,6 +257,17 @@ def _process_task(
         report["errors"] = plan.get("errors", ["planning failed"])
         return report
 
+    # Self-healing execution path (Prompt640/643): when fix attempts are allowed,
+    # the daemon drives run_targeted_fix_retry as the execution engine so that an
+    # effect-verification failure is automatically retried with a fix prompt. The
+    # strict effect gate stays authoritative inside that path. --max-fix-attempts 0
+    # preserves the original single-shot live-loop behavior exactly.
+    report["targeted_fix_invoked"] = False
+    if int(getattr(args, "max_fix_attempts", 0) or 0) > 0:
+        return _process_task_targeted_fix(
+            report=report, spec=spec, plan=plan, args=args, run_dir=run_dir
+        )
+
     report["stage"] = "execute"
     dirty_gate_repo = _ensure_dirty_gate_repo(work_dir)
     loop_state = run_autonomous_live_loop(
@@ -182,48 +313,7 @@ def _process_task(
         ]
         return report
 
-    # Verify commands may have generated Python bytecode inside the sandbox repo;
-    # remove it BEFORE the commit/tag gate and the final cleanliness evaluation.
-    report["stage"] = "sandbox_cleanup"
-    cleanup = cleanup_generated_python_artifacts(spec["repo_path"])
-    report["sandbox_generated_artifacts_removed"] = cleanup["removed_count"]
-    report["sandbox_generated_artifact_paths_removed"] = cleanup["removed_paths"]
-    if cleanup["status"] != "success":
-        report["errors"] = [f"sandbox cleanup blocked: {cleanup['blocked_reason']}"]
-        return report
-
-    if args.sandbox_commit_tag:
-        report["stage"] = "sandbox_commit_tag"
-        commit_result = execute_sandbox_commit_tag(
-            repo_path=spec["repo_path"],
-            allowed_files=[spec["target_file"]],
-            artifact_dir=run_dir / "sandbox_commit_tag",
-            task_id=spec["task_id"],
-            enabled=True,
-            explicit_enable_token=args.commit_tag_enable_token,
-        )
-        report["sandbox_commit_tag"] = {
-            k: commit_result.get(k)
-            for k in ("status", "blocked_reason", "commit_sha", "tag_name", "commit_performed", "tag_performed")
-        }
-        report["sandbox_commit_performed"] = bool(commit_result.get("commit_performed"))
-        report["sandbox_tag_performed"] = bool(commit_result.get("tag_performed"))
-        if commit_result.get("status") != "success":
-            report["errors"] = [f"sandbox commit/tag blocked: {commit_result.get('blocked_reason')}"]
-            return report
-
-    report["stage"] = "final_clean_check"
-    cleanliness = evaluate_sandbox_cleanliness(spec["repo_path"])
-    report.update(cleanliness)
-    if args.sandbox_commit_tag and not cleanliness["sandbox_final_status_clean"]:
-        report["errors"] = [
-            f"sandbox repo not clean after commit/tag: {cleanliness['sandbox_final_status_short']}"
-        ]
-        return report
-
-    report["stage"] = "done"
-    report["status"] = "success"
-    return report
+    return _finalize_success(report=report, spec=spec, args=args, run_dir=run_dir)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -234,6 +324,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-jobs", type=int, default=1)
     parser.add_argument("--max-seconds-total", type=int, default=600)
     parser.add_argument("--max-cycles", type=int, default=1)
+    parser.add_argument(
+        "--max-fix-attempts",
+        type=int,
+        default=0,
+        help=(
+            "Number of automatic targeted-fix retries on effect-verification failure "
+            f"(0 = disabled / original behavior; hard cap {MAX_FIX_ATTEMPTS_CAP})."
+        ),
+    )
     parser.add_argument("--live-timeout-seconds", type=int, default=90)
     parser.add_argument("--autonomous-enable-token", default="")
     parser.add_argument("--live-codex-enable-token", default="")
@@ -249,6 +348,7 @@ def main(argv: list[str] | None = None) -> int:
     args.max_jobs = min(args.max_jobs, MAX_JOBS_CAP)
     args.max_seconds_total = min(args.max_seconds_total, MAX_SECONDS_TOTAL_CAP)
     args.max_cycles = min(args.max_cycles, MAX_CYCLES_CAP)
+    args.max_fix_attempts = max(0, min(int(args.max_fix_attempts), MAX_FIX_ATTEMPTS_CAP))
 
     queue_dir = Path(args.queue_dir)
     runs_dir = Path(args.runs_dir)
@@ -319,7 +419,8 @@ def main(argv: list[str] | None = None) -> int:
             "jobs_processed": len(jobs),
             "jobs": [
                 {k: job.get(k) for k in ("task_id", "status", "stage", "codex_invoked_count",
-                                          "sandbox_commit_performed", "sandbox_tag_performed")}
+                                          "sandbox_commit_performed", "sandbox_tag_performed",
+                                          "targeted_fix_invoked", "targeted_fix_converged")}
                 for job in jobs
             ],
             "recovery": recovery,
