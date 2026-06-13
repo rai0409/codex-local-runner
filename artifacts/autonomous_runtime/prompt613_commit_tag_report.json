@@ -1,0 +1,104 @@
+{
+  "prompt613_status": "blocked",
+  "prompt613_allowed_files": [
+    "scripts/run_planned_execution.py",
+    "automation/orchestration/planned_runner/autonomous_runtime.py",
+    "automation/orchestration/planned_runner/autonomous_cycle.py",
+    "artifacts/autonomous_runtime/prompt611_runtime_wiring_report.json",
+    "artifacts/autonomous_runtime/prompt611_runtime_wiring_summary.md",
+    "artifacts/autonomous_runtime/prompt612_cycle_wiring_report.json",
+    "artifacts/autonomous_runtime/prompt612_cycle_wiring_summary.md"
+  ],
+  "prompt613_excluded_files": [
+    "artifacts/archive/",
+    "artifacts/archive/old_single_file_full_code/",
+    "old_planned_execution_runner_full.py",
+    "old_single_file_full_code.tar.gz",
+    "artifacts/legacy_success_path_extraction/prompt609_commit_tag_report.json",
+    "artifacts/legacy_success_path_extraction/prompt609_commit_tag_summary.md",
+    "artifacts/legacy_success_path_extraction/prompt610_retry_commit_tag_report.json",
+    "artifacts/legacy_success_path_extraction/prompt610_retry_commit_tag_summary.md",
+    "artifacts/autonomous_runtime/prompt613_commit_tag_report.json",
+    "artifacts/autonomous_runtime/prompt613_commit_tag_summary.md"
+  ],
+  "prompt613_staged_files": [],
+  "prompt613_commit_created": false,
+  "prompt613_commit_sha": null,
+  "prompt613_tag_created": false,
+  "prompt613_tag_name": "prompt613-autonomous-runtime-cycle-wiring",
+  "prompt613_py_compile_results": {
+    "scripts/run_planned_execution.py": "passed",
+    "automation/orchestration/planned_runner/autonomous_runtime.py": "passed",
+    "automation/orchestration/planned_runner/autonomous_cycle.py": "passed",
+    "automation/orchestration/planned_runner/loop_controller.py": "passed",
+    "automation/orchestration/planned_runner/daemon.py": "passed",
+    "automation/orchestration/planned_runner/commit_tag.py": "passed"
+  },
+  "prompt613_import_results": {
+    "automation.orchestration.planned_runner.autonomous_runtime": "passed",
+    "automation.orchestration.planned_runner.autonomous_cycle": "passed",
+    "automation.orchestration.planned_runner.loop_controller": "passed",
+    "automation.orchestration.planned_runner.daemon": "passed",
+    "automation.orchestration.planned_runner.commit_tag": "passed"
+  },
+  "prompt613_help_flags_confirmed": [
+    "--autonomous-loop",
+    "--daemon-lite",
+    "--max-cycles",
+    "--max-seconds",
+    "--autonomous-enable-token",
+    "--autonomous-cycle-metadata",
+    "--generated-prompt-path",
+    "--codex-result-path"
+  ],
+  "prompt613_disabled_cycle_smoke": {
+    "returncode": 0,
+    "status": "disabled",
+    "stop_reason": "disabled_missing_enable_token",
+    "codex_invoked": false,
+    "commit_performed": false,
+    "tag_performed": false
+  },
+  "prompt613_missing_prompt_smoke": {
+    "returncode": 0,
+    "status": "blocked",
+    "stop_reason": "missing_generated_prompt",
+    "codex_invoked": false,
+    "commit_performed": false,
+    "tag_performed": false
+  },
+  "prompt613_success_result_smoke": {
+    "returncode": 0,
+    "status": "success",
+    "codex_invoked": false,
+    "result_assimilation_status": "assimilated",
+    "next_action": "commit_tag_gate",
+    "commit_performed": false,
+    "tag_performed": false
+  },
+  "prompt613_archive_exclusion_confirmed": true,
+  "prompt613_receipt_artifacts_committed": false,
+  "prompt613_final_git_status": [
+    " M scripts/run_planned_execution.py",
+    "?? artifacts/archive/old_single_file_full_code/byte_count.txt",
+    "?? artifacts/archive/old_single_file_full_code/line_count.txt",
+    "?? artifacts/archive/old_single_file_full_code/old_planned_execution_runner_full.py",
+    "?? artifacts/archive/old_single_file_full_code/old_single_file_full_code.tar.gz",
+    "?? artifacts/archive/old_single_file_full_code/sha256.txt",
+    "?? artifacts/archive/old_single_file_full_code/source.txt",
+    "?? artifacts/autonomous_runtime/prompt611_runtime_wiring_report.json",
+    "?? artifacts/autonomous_runtime/prompt611_runtime_wiring_summary.md",
+    "?? artifacts/autonomous_runtime/prompt612_cycle_wiring_report.json",
+    "?? artifacts/autonomous_runtime/prompt612_cycle_wiring_summary.md",
+    "?? artifacts/autonomous_runtime/prompt613_commit_tag_report.json",
+    "?? artifacts/autonomous_runtime/prompt613_commit_tag_summary.md",
+    "?? artifacts/legacy_success_path_extraction/prompt609_commit_tag_report.json",
+    "?? artifacts/legacy_success_path_extraction/prompt609_commit_tag_summary.md",
+    "?? artifacts/legacy_success_path_extraction/prompt610_retry_commit_tag_report.json",
+    "?? artifacts/legacy_success_path_extraction/prompt610_retry_commit_tag_summary.md",
+    "?? automation/orchestration/planned_runner/autonomous_cycle.py",
+    "?? automation/orchestration/planned_runner/autonomous_runtime.py"
+  ],
+  "prompt613_final_decision": "blocked: local git commit/tag execution could not proceed because .git/index.lock could not be created; .git is read-only in the current sandbox",
+  "prompt613_next_action": "manual_review_required"
+}
