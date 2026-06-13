@@ -1,0 +1,16 @@
+{
+  "prompt650_status": "blocked",
+  "prompt650_base_commit": "53966a1",
+  "prompt650_target": "task_kind_expansion_minimal_safe",
+  "prompt650_decision": "deferred_blocked_by_safety_scope",
+  "prompt650_implementation_performed": false,
+  "prompt650_rationale": "A new executable task kind (e.g. add_file/modify_file) must be wired into the Codex-facing prompt and effect-spec generation (task_planner.build_task_prompt / build_task_effect_spec) and task_spec validation. That places a NEW code path on the safety-critical live execution surface. Per the project's own precedent, add_function was only accepted after live effect-verified runtime acceptance (prompt638d/639/644a). Accepting a new kind responsibly therefore requires a live, bounded /tmp runtime acceptance under the strict effect gate — which is OUTSIDE this loop's offline, no-uncontrolled-daemon, no-Codex scope. The meta prompt explicitly permits marking this target blocked if too risky/broad.",
+  "prompt650_why_not_blocking_goal": "Every project-orchestration layer above task_spec (intent model, plan model, plan generation, queue population, completion gate, loop controller) is kind-agnostic. add_function already exercises the entire offline project-autonomy chain end to end. Task-kind breadth widens WHAT can be changed but is not required to PROVE project-level autonomous orchestration offline.",
+  "prompt650_safety_constraints_observed": ["no task_spec change", "no task_planner change", "no Codex run", "no daemon run", "no path-traversal/secret/shell surface added", "strict effect verification untouched"],
+  "prompt650_recommended_followup": "A dedicated prompt that implements add_file (strict path validation, no traversal/secrets/shell/deletion) AND runs a bounded live /tmp effect-verified acceptance, mirroring prompt638d/639/644a, before tagging.",
+  "prompt650_files_modified": ["artifacts/autonomous_runtime/prompt650_report.json", "artifacts/autonomous_runtime/prompt650_summary.md"],
+  "prompt650_main_repo_safe": true,
+  "prompt650_archive_touched": false,
+  "prompt650_handoff_reports_touched": false,
+  "prompt650_next_action": "project_level_e2e_acceptance"
+}
