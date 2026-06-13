@@ -1,0 +1,14 @@
+{
+  "prompt652_status": "blocked",
+  "prompt652_base_commit": "dfbd66e",
+  "prompt652_target": "long_running_daemon_soak_proof",
+  "prompt652_decision": "deferred_not_required_now",
+  "prompt652_implementation_performed": false,
+  "prompt652_rationale": "A long-running soak exercises daemon stability over time and requires live daemon runtime. The daemon's bounded execution + self-healing were already accepted live (prompt644a), and soak is hardening rather than a prerequisite for proving project-level orchestration. The genuine remaining gap toward FULL unattended autonomy is the live auto-execution bridge (controller -> run daemon over the populated queue -> feed REAL results back -> iterate), which requires live Codex/daemon runtime that this offline loop must not run uncontrolled.",
+  "prompt652_safety_constraints_observed": ["no daemon run", "no Codex run", "no uncontrolled long loop", "no live/default queue mutation"],
+  "prompt652_recommended_followup": "An operator-triggered live /tmp prompt that (a) wires run_project_loop to actually run scripts/run_task_queue_daemon.py over the populated explicit queue dir with --max-fix-attempts, (b) feeds real run_reports back into evaluate_project_completion, and (c) optionally a bounded soak; all under the existing strict effect gate and main-repo safety.",
+  "prompt652_main_repo_safe": true,
+  "prompt652_archive_touched": false,
+  "prompt652_handoff_reports_touched": false,
+  "prompt652_next_action": "live_auto_execution_bridge"
+}
