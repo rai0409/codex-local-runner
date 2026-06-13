@@ -1,0 +1,60 @@
+{
+  "prompt648_status": "success",
+  "prompt648_base_commit": "1dae3f7",
+  "prompt648_layer": "project progress / completion gate (offline, deterministic)",
+  "prompt648_completion_gate_created": true,
+  "prompt648_files_created": [
+    "automation/orchestration/planned_runner/project_completion_gate.py",
+    "tests/test_project_completion_gate.py"
+  ],
+  "prompt648_api": "evaluate_project_completion(plan, task_results=None, *, completion_criteria=None, required_task_ids=None) -> {status, complete, counts, task_states, required_task_ids, criteria_evaluated, reasons, errors}; never raises.",
+  "prompt648_behavior": "Validates plan; maps per-task status (results override, else plan status) to done/failed/blocked/pending/unknown; status = failed if any required failed, blocked if any required blocked, in_progress if any required pending/unknown, complete only if all required done; supported criteria all_tasks_done + no_failed_required_tasks; NEVER complete while a required task is failed/blocked/pending/unknown.",
+  "prompt648_no_execution": "no daemon, no Codex, no queue mutation, no network",
+  "prompt648_tests_passed": true,
+  "prompt648_tests_detail": "tests/test_project_completion_gate.py = 10 OK (all-done complete; failed/blocked required not complete; pending/unknown in_progress; failed-non-required ok; invalid plan safe; plan-status fallback; deterministic; unsupported criteria recorded). Regression set: 59 OK.",
+  "prompt648_existing_runtime_regression_tests_passed": true,
+  "prompt648_main_repo_safe": true,
+  "prompt648_archive_touched": false,
+  "prompt648_handoff_reports_touched": false,
+  "prompt648_next_action": "project_level_iterate_until_done_controller",
+  "current_head_before": "1dae3f7",
+  "selected_target": "project_progress_and_completion_gate",
+  "selected_target_rationale": "Earliest missing roadmap layer; completion_gate + loop_controller both absent. Gate is prerequisite for the iterate-until-done controller.",
+  "implementation_performed": true,
+  "files_modified": [
+    "automation/orchestration/planned_runner/project_completion_gate.py",
+    "tests/test_project_completion_gate.py",
+    "artifacts/autonomous_runtime/prompt648_report.json",
+    "artifacts/autonomous_runtime/prompt648_summary.md"
+  ],
+  "tests_run": [
+    "tests.test_project_completion_gate",
+    "tests.test_project_intent_plan_model",
+    "tests.test_project_task_generator_from_intent",
+    "tests.test_project_queue_population_from_plan",
+    "tests.test_daemon_queue",
+    "tests.test_targeted_fix_retry"
+  ],
+  "tests_passed": true,
+  "commit": "PENDING",
+  "tag": "prompt648-project-progress-completion-gate",
+  "confirmed_capabilities_after": [
+    "L7.5 self-healing daemon",
+    "ProjectIntent model",
+    "ProjectTaskPlan model",
+    "plan generation",
+    "queue population",
+    "project completion gate (NEW)"
+  ],
+  "missing_capabilities_after": [
+    "project-level iterate-until-done controller",
+    "broad task kinds",
+    "project-level E2E acceptance",
+    "long-running daemon soak"
+  ],
+  "current_capability_boundary_after": "offline pipeline intent->plan->queue + completion evaluation; no controller/iteration yet",
+  "project_level_autonomy_complete": false,
+  "evaluation_score_out_of_100": 70,
+  "next_recommended_action": "project_level_iterate_until_done_controller",
+  "final_decision": "Implemented completion gate (cycle 1). Continue to loop controller."
+}
