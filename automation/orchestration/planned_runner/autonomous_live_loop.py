@@ -14,6 +14,9 @@ from automation.orchestration.planned_runner.live_codex_gate import (
     LIVE_CODEX_GATE_ENABLE_TOKEN,
     run_live_codex_gate,
 )
+from automation.orchestration.planned_runner.effect_gate import (
+    evaluate_strict_effect_gate,
+)
 from automation.orchestration.planned_runner.failure_digest import build_failure_digest
 from automation.orchestration.planned_runner.loop_controller import (
     dirty_paths_outside_allowed_artifacts,
@@ -574,6 +577,23 @@ def run_autonomous_live_loop(
         if stop_state["stop"]:
             break
 
+    # Prompt638B strict effect-verification success gate (defense in depth):
+    # the loop must NEVER end as success if any cycle's effect verification did
+    # not strictly pass. effect_expected is true whenever an effect spec was
+    # provided (directly or per manifest entry); legacy no-effect-spec runs are
+    # unaffected unless a hard failure status appears.
+    effect_expected = bool(effect_spec_text) or any(
+        bool(entry.get("effect_spec_path")) for entry in manifest_entries
+    )
+    effect_gate = evaluate_strict_effect_gate(
+        per_cycle_effect_statuses, effect_expected=effect_expected
+    )
+    if not effect_gate["passed"]:
+        final_status = "blocked"
+        stop_reason = "effect_verification_failed"
+        blocked_reason = "effect_verification_failed"
+        next_action = "inspect_missing_expected_effects"
+
     payload = {
         "status": "success" if final_status == "success" else "blocked",
         "enabled": True,
@@ -608,6 +628,9 @@ def run_autonomous_live_loop(
         "manifest_errors": list(manifest_errors),
         "effective_max_cycles": effective_max_cycles,
         "per_cycle_effect_verification_statuses": list(per_cycle_effect_statuses),
+        "effect_verification_expected": effect_expected,
+        "effect_gate_passed": bool(effect_gate["passed"]),
+        "effect_gate_reason": effect_gate["reason"],
         "per_cycle_generated_prompt_paths": list(per_cycle_prompt_paths),
         "commit_performed": False,
         "tag_performed": False,

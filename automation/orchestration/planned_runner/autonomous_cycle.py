@@ -100,16 +100,25 @@ def _result_status(payload: Mapping[str, Any], assimilation_status: str) -> str:
     classification = _normalize_text(
         payload.get("returncode_classification", payload.get("execution_returncode_classification"))
     ).lower()
+    effect_status = _normalize_text(payload.get("effect_verification_status")).lower()
+    # Prompt638B strict effect gate: an explicit failure signal is authoritative
+    # and MUST beat a zero returncode or success-looking JSON. This closes the
+    # Prompt638A bug where effect_verification_failed (Codex returncode 0,
+    # status="failed", returncode_classification="failed") was classified as
+    # success because the returncode==0 shortcut was evaluated first.
+    if status in {"failed", "failure", "blocked", "timeout", "execution_error", "error"}:
+        return "failed"
+    if classification in {"failed", "failure", "timeout", "execution_error", "error"}:
+        return "failed"
+    if effect_status and effect_status != "passed":
+        # Effect verification ran (status present) but did not pass — never a success.
+        return "failed"
     if status in {"success", "succeeded", "completed", "passed", "ok"}:
         return "success"
     if classification == "success":
         return "success"
     if isinstance(returncode, int) and not isinstance(returncode, bool) and returncode == 0:
         return "success"
-    if status in {"failed", "failure", "blocked", "timeout", "execution_error", "error"}:
-        return "failed"
-    if classification in {"failed", "failure", "timeout", "execution_error", "error"}:
-        return "failed"
     if isinstance(returncode, int) and not isinstance(returncode, bool) and returncode != 0:
         return "failed"
     return "unknown"

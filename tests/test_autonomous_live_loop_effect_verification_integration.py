@@ -185,8 +185,12 @@ class AutonomousLiveLoopEffectVerificationIntegrationTests(unittest.TestCase):
             )
         self.assertEqual(payload["status"], "blocked")
         self.assertEqual(payload["cycle_count"], 1)
-        self.assertEqual(payload["stop_reason"], "targeted_fix_required")
+        # Prompt638B strict effect gate: a failed effect verification now surfaces
+        # an effect-specific stop/blocked reason (was "targeted_fix_required").
+        self.assertEqual(payload["stop_reason"], "effect_verification_failed")
+        self.assertEqual(payload["blocked_reason"], "effect_verification_failed")
         self.assertEqual(payload["per_cycle_effect_verification_statuses"], ["failed"])
+        self.assertFalse(payload["effect_gate_passed"])
         self.assertFalse(payload["commit_performed"])
         self.assertFalse(payload["tag_performed"])
 

@@ -46,6 +46,9 @@ from automation.orchestration.planned_runner.daemon_state import (  # noqa: E402
     recover_interrupted_tasks,
     write_daemon_state,
 )
+from automation.orchestration.planned_runner.effect_gate import (  # noqa: E402
+    evaluate_strict_effect_gate,
+)
 from automation.orchestration.planned_runner.sandbox_cleanup import (  # noqa: E402
     cleanup_generated_python_artifacts,
     evaluate_sandbox_cleanliness,
@@ -157,6 +160,26 @@ def _process_task(
     report["failure_digest_path"] = str(loop_state.get("failure_digest_path") or "")
     if loop_state.get("status") != "success":
         report["errors"] = [f"loop status {loop_state.get('status')}: {loop_state.get('stop_reason')}"]
+        return report
+
+    # Prompt638B strict effect-verification success gate (defense in depth): even
+    # if the loop reported success, a failed/non-passed effect verification must
+    # block final success, the sandbox commit/tag, and the move to queue done.
+    # The task always plans an effect spec, so effect verification is expected.
+    effect_expected = bool(plan.get("effect_spec_path"))
+    effect_gate = evaluate_strict_effect_gate(
+        report["per_cycle_effect_verification_statuses"], effect_expected=effect_expected
+    )
+    report["effect_gate_passed"] = bool(effect_gate["passed"])
+    report["effect_gate_reason"] = effect_gate["reason"]
+    if not effect_gate["passed"]:
+        report["stage"] = "effect_verification_gate"
+        report["status"] = "blocked"
+        report["errors"] = [
+            "effect verification not strictly passed: "
+            f"{effect_gate['reason']} "
+            f"statuses={report['per_cycle_effect_verification_statuses']}"
+        ]
         return report
 
     # Verify commands may have generated Python bytecode inside the sandbox repo;

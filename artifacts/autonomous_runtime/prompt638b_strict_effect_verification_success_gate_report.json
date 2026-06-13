@@ -1,0 +1,83 @@
+{
+  "prompt638b_status": "success",
+  "prompt638b_base_commit": "2a87cb17a999984c6b33b970201d8ed21178013f",
+  "prompt638b_base_commit_subject": "Record Fable runtime validation and commit-tag reports",
+  "prompt638b_base_tags_at_head": [
+    "codex-runner-fable-runtime-evidence-20260613"
+  ],
+  "prompt638b_modified_files": [
+    "automation/orchestration/planned_runner/autonomous_cycle.py",
+    "automation/orchestration/planned_runner/autonomous_live_loop.py",
+    "scripts/run_task_queue_daemon.py",
+    "tests/test_autonomous_live_loop_effect_verification_integration.py"
+  ],
+  "prompt638b_new_files": [
+    "automation/orchestration/planned_runner/effect_gate.py",
+    "tests/test_autonomous_cycle_result_status_failed_with_zero_returncode.py",
+    "tests/test_autonomous_live_loop_effect_failed_blocks_success.py",
+    "tests/test_daemon_queue_effect_failed_blocks_commit_tag.py"
+  ],
+  "prompt638b_root_cause_fixed": "effect_failed_not_gated_before_success_commit_tag",
+  "prompt638b_general_safety_bug_fixed": true,
+  "prompt638b_strict_effect_gate_added": true,
+  "prompt638b_strict_effect_gate_module": "automation/orchestration/planned_runner/effect_gate.py",
+  "prompt638b_strict_effect_gate_policy": "Any explicit hard-failure status (failed/blocked/timeout/error/missing) blocks success unconditionally; when effect verification is expected, every per-cycle status must be exactly 'passed' (empty/not_run/''/null all block); when effect verification is not expected and no hard failure is present, legacy no-effect-spec flows still pass.",
+  "prompt638b_autonomous_cycle_fixed": true,
+  "prompt638b_autonomous_cycle_fix_detail": "_result_status now evaluates explicit failed status/classification and any non-passed effect_verification_status BEFORE the returncode==0 success shortcut, so a zero Codex returncode or success-looking JSON can no longer override an effect_verification_failed result.",
+  "prompt638b_autonomous_live_loop_fixed": true,
+  "prompt638b_autonomous_live_loop_fix_detail": "After the cycle loop, the loop evaluates the strict effect gate over per_cycle_effect_verification_statuses (effect_expected = effect spec provided directly or via manifest). If the gate fails, final_status is forced to blocked with stop_reason=blocked_reason='effect_verification_failed' and next_action='inspect_missing_expected_effects'. per_cycle_effect_verification_statuses, effect_gate_passed, effect_gate_reason, and effect_verification_expected are all surfaced in loop state.",
+  "prompt638b_daemon_queue_commit_tag_gate_fixed": true,
+  "prompt638b_daemon_queue_fix_detail": "_process_task evaluates the strict effect gate (effect_expected = plan effect_spec_path present) immediately after the loop-status check and before sandbox cleanup/commit/tag. On failure it sets stage='effect_verification_gate', status='blocked', records effect_gate_passed/effect_gate_reason, and returns early so commit/tag never runs; main() then routes the task to queue failed/.",
+  "prompt638b_effect_failed_blocks_success": true,
+  "prompt638b_effect_failed_blocks_commit": true,
+  "prompt638b_effect_failed_blocks_tag": true,
+  "prompt638b_effect_failed_goes_to_queue_failed": true,
+  "prompt638b_tests_added": [
+    "tests/test_autonomous_cycle_result_status_failed_with_zero_returncode.py",
+    "tests/test_autonomous_live_loop_effect_failed_blocks_success.py",
+    "tests/test_daemon_queue_effect_failed_blocks_commit_tag.py"
+  ],
+  "prompt638b_tests_added_count": 7,
+  "prompt638b_tests_result": "passed",
+  "prompt638b_tests_command": "python -m unittest (3 new suites + 8 affected/related suites) = 57 tests OK",
+  "prompt638b_regression_proof_status": "passed",
+  "prompt638b_regression_proof_detail": {
+    "scenario": "/tmp/prompt638b_regression — live Codex (codex_invoked_count=1) with an always-failing verify command, reproducing the Prompt638A unsafe pattern (Codex returncode 0 + effect verification failed).",
+    "before_fix_behavior": "Identical pattern previously produced status=success + sandbox commit + tag (Prompt638 Task1).",
+    "after_fix_observed": {
+      "per_cycle_effect_verification_statuses": ["failed"],
+      "loop_status": "blocked",
+      "run_report_status": "blocked",
+      "run_report_stage": "execute",
+      "sandbox_commit_performed": false,
+      "sandbox_tag_performed": false,
+      "queue_failed_contains_task": true,
+      "queue_done_contains_task": false,
+      "sandbox_repo_commits": "711 == 711 (unchanged)",
+      "sandbox_repo_task_tag_added": false
+    }
+  },
+  "prompt638b_prompt638_batch_rerun_status": "passed",
+  "prompt638b_prompt638_batch_rerun_detail": {
+    "scenario": "/tmp/prompt638b_batch_rerun — live Codex rerun of the original 3 task specs against 3 fresh /tmp clones, max-jobs=3, max-cycles=1, sandbox-commit-tag enabled.",
+    "task1-cleanup-add-function": {"status": "success", "effect": "passed", "committed": true, "tagged": true},
+    "task2-queue-add-function": {"status": "success", "effect": "passed", "committed": true, "tagged": true},
+    "task3-spec-add-function": {"status": "blocked", "effect": "failed", "committed": false, "tagged": false, "failure": "required text missing 'def choose_validated_value(a, b):' (Codex emitted a type-annotated signature)"},
+    "queue_done": ["task1-cleanup-add-function.json", "task2-queue-add-function.json"],
+    "queue_failed": ["task3-spec-add-function.json"],
+    "note": "Codex non-determinism flipped which task hit the brittle required_text check (Task1 passed this run, Task3 failed). The gate behaved correctly in both directions: passed-effect tasks succeeded and committed/tagged; the failed-effect task was blocked with no commit/tag and routed to failed/."
+  },
+  "prompt638b_prompt638_batch_successful_task_count": 2,
+  "prompt638b_prompt638_batch_failed_task_count": 1,
+  "prompt638b_main_repo_source_modified": true,
+  "prompt638b_main_repo_commit_performed": false,
+  "prompt638b_main_repo_tag_performed": false,
+  "prompt638b_main_repo_stage_performed": false,
+  "prompt638b_archive_touched": false,
+  "prompt638b_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt638b_strict_effect_verification_success_gate_report.json",
+    "artifacts/autonomous_runtime/prompt638b_strict_effect_verification_success_gate_summary.md"
+  ],
+  "prompt638b_final_decision": "Strict effect-verification success gate implemented as defense in depth across the cycle classifier (autonomous_cycle._result_status), the autonomous live loop (final status), and the daemon queue runner (commit/tag + queue routing), with a shared effect_gate helper. A failed/non-passed effect verification can no longer reach final success, sandbox commit, sandbox tag, or queue done. Proven by 3 new unit/regression suites (57 tests OK), a deterministic live-Codex regression, and a live 3-task batch rerun where the failed-effect task was correctly blocked and only passed-effect tasks committed/tagged. No main-repo commit/tag/stage and artifacts/archive untouched.",
+  "prompt638b_next_action": "commit_tag_strict_effect_verification_success_gate"
+}
