@@ -18,8 +18,46 @@ def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     )
 
 
+SUPPORTED_PLAN_KINDS = ("add_function", "add_file")
+
+
+def _build_add_file_prompt(spec: Mapping[str, Any]) -> str:
+    repo_path = spec["repo_path"]
+    content = spec["content"]
+    parent = (
+        "Create any parent directories required for the target file.\n"
+        if spec.get("create_parent_dirs")
+        else "Do not create directories other than what the target file strictly requires.\n"
+    )
+    overwrite = (
+        ""
+        if spec.get("allow_overwrite")
+        else f"Do not overwrite any existing file; {spec['target_file']} must be a new file.\n"
+    )
+    return (
+        f"You are operating only inside {repo_path}.\n"
+        f"Create a new text file at {spec['target_file']} with EXACTLY the following content:\n"
+        "--- BEGIN CONTENT ---\n"
+        f"{content}\n"
+        "--- END CONTENT ---\n"
+        + parent
+        + overwrite
+        + "Do not modify any other file.\n"
+        + "".join(
+            f"Do not modify {rel}.\n" for rel in spec.get("expected_unmodified_files", [])
+        )
+        + "Do not commit.\n"
+        "Do not tag.\n"
+        "Do not push.\n"
+        "After editing, reply only with:\n"
+        f'{{"status":"success","summary":"{spec["task_id"]} applied"}}\n'
+    )
+
+
 def build_task_prompt(spec: Mapping[str, Any]) -> str:
     repo_path = spec["repo_path"]
+    if spec.get("kind") == "add_file":
+        return _build_add_file_prompt(spec)
     return (
         f"You are operating only inside {repo_path}.\n"
         f"Modify only {spec['target_file']}.\n"
@@ -37,6 +75,19 @@ def build_task_prompt(spec: Mapping[str, Any]) -> str:
 
 
 def build_task_effect_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
+    if spec.get("kind") == "add_file":
+        # Require the file to contain its content (trailing newline tolerated). The
+        # strict effect gate verifies ONLY the target file is created/modified.
+        required_snippet = str(spec["content"]).rstrip("\n")
+        return {
+            "repo_path": spec["repo_path"],
+            "expected_modified_files": [spec["target_file"]],
+            "expected_unmodified_files": list(spec.get("expected_unmodified_files", [])),
+            "required_text": {spec["target_file"]: [required_snippet]},
+            "forbidden_paths": [],
+            "allow_extra_files": bool(spec.get("allow_extra_files", False)),
+            "verify_commands": list(spec.get("verify_commands", [])),
+        }
     return {
         "repo_path": spec["repo_path"],
         "expected_modified_files": [spec["target_file"]],
@@ -54,8 +105,9 @@ def build_task_effect_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def plan_task(spec: Mapping[str, Any], work_dir: str | Path) -> dict[str, Any]:
-    """Turn a validated add_function task spec into per-cycle prompt/effect-spec/manifest files."""
-    if spec.get("kind") != "add_function":
+    """Turn a validated task spec (add_function or add_file) into per-cycle
+    prompt/effect-spec/manifest files."""
+    if spec.get("kind") not in SUPPORTED_PLAN_KINDS:
         return {
             "status": "blocked",
             "errors": [f"unsupported task kind: {spec.get('kind')}"],

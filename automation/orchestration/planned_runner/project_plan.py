@@ -44,6 +44,10 @@ _TASK_SPEC_PAYLOAD_FIELDS = (
     "target_file",
     "function_name",
     "expression",
+    # add_file (Prompt656) payload fields:
+    "content",
+    "allow_overwrite",
+    "create_parent_dirs",
     "description",
     "verify_commands",
     "expected_unmodified_files",

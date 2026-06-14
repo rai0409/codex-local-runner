@@ -6,8 +6,14 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
-SUPPORTED_TASK_KINDS = ("add_function",)
+SUPPORTED_TASK_KINDS = ("add_function", "add_file")
 _TASK_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+
+# add_file safety limits.
+ADD_FILE_MAX_CONTENT_BYTES = 100 * 1024  # 100 KB
+# Secret-looking path patterns rejected for add_file (case-insensitive).
+_SECRET_BASENAME_EXACT = {".env", "id_rsa", "id_ed25519", "id_rsa.pub", "id_ed25519.pub"}
+_SECRET_SUBSTRINGS = ("secret", "token", "credential")
 
 
 def _normalize_text(value: Any, *, default: str = "") -> str:
@@ -17,12 +23,29 @@ def _normalize_text(value: Any, *, default: str = "") -> str:
     return text if text else default
 
 
-def validate_task_spec(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
-    """Validate a task spec object; returns (normalized spec, errors)."""
-    errors: list[str] = []
-    if not isinstance(payload, Mapping):
-        return {}, ["task spec must be a JSON object"]
+def _is_unsafe_relpath(target_file: str) -> bool:
+    """True if the repo-relative target path is empty, absolute, or has traversal."""
+    if not target_file or target_file.startswith("/") or ".." in target_file:
+        return True
+    if target_file.startswith("~") or "\x00" in target_file:
+        return True
+    return False
 
+
+def _is_secret_path(target_file: str) -> bool:
+    """True if the path looks like a secret/credentials file (add_file only)."""
+    lowered = target_file.lower()
+    name = Path(lowered).name
+    if name in _SECRET_BASENAME_EXACT:
+        return True
+    if name == ".env" or name.startswith(".env."):
+        return True
+    if any(sub in lowered for sub in _SECRET_SUBSTRINGS):
+        return True
+    return False
+
+
+def _validate_common(payload: Mapping[str, Any], errors: list[str]) -> dict[str, Any]:
     task_id = _normalize_text(payload.get("task_id"))
     if not task_id or not _TASK_ID_PATTERN.match(task_id):
         errors.append("task_id must match ^[a-z0-9][a-z0-9._-]{0,63}$")
@@ -38,16 +61,8 @@ def validate_task_spec(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list
         errors.append(f"repo_path is not a directory: {repo_path}")
 
     target_file = _normalize_text(payload.get("target_file"))
-    if not target_file or target_file.startswith("/") or ".." in target_file:
+    if _is_unsafe_relpath(target_file):
         errors.append("target_file must be a repo-relative path without '..'")
-
-    function_name = _normalize_text(payload.get("function_name"))
-    if not function_name or not function_name.isidentifier():
-        errors.append("function_name must be a valid Python identifier")
-
-    expression = _normalize_text(payload.get("expression"))
-    if not expression:
-        errors.append("expression is required")
 
     verify_commands = payload.get("verify_commands", [])
     if verify_commands and not (
@@ -60,13 +75,11 @@ def validate_task_spec(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list
     if expected_unmodified and not isinstance(expected_unmodified, list):
         errors.append("expected_unmodified_files must be a list")
 
-    spec = {
+    return {
         "task_id": task_id,
         "kind": kind,
         "repo_path": repo_path,
         "target_file": target_file,
-        "function_name": function_name,
-        "expression": expression,
         "description": _normalize_text(payload.get("description")),
         "verify_commands": [
             [str(item) for item in cmd] for cmd in (verify_commands or [])
@@ -76,6 +89,47 @@ def validate_task_spec(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list
         ],
         "allow_extra_files": bool(payload.get("allow_extra_files", False)),
     }
+
+
+def validate_task_spec(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Validate a task spec object; returns (normalized spec, errors). Never raises."""
+    errors: list[str] = []
+    if not isinstance(payload, Mapping):
+        return {}, ["task spec must be a JSON object"]
+
+    spec = _validate_common(payload, errors)
+    kind = spec["kind"]
+
+    if kind == "add_function":
+        function_name = _normalize_text(payload.get("function_name"))
+        if not function_name or not function_name.isidentifier():
+            errors.append("function_name must be a valid Python identifier")
+        expression = _normalize_text(payload.get("expression"))
+        if not expression:
+            errors.append("expression is required")
+        spec["function_name"] = function_name
+        spec["expression"] = expression
+
+    elif kind == "add_file":
+        # add_file: create a NEW repo-relative text file via the existing
+        # Codex/effect-gated path. Strict path + content safety here; the strict
+        # effect gate enforces that ONLY the target file is created.
+        target_file = spec["target_file"]
+        if target_file and not _is_unsafe_relpath(target_file) and _is_secret_path(target_file):
+            errors.append("target_file looks like a secret/credentials path and is rejected")
+        content = payload.get("content")
+        if not isinstance(content, str) or content == "":
+            errors.append("content is required and must be a non-empty string")
+            content = "" if not isinstance(content, str) else content
+        else:
+            if "\x00" in content:
+                errors.append("content must be text (binary/NUL bytes rejected)")
+            if len(content.encode("utf-8", errors="ignore")) > ADD_FILE_MAX_CONTENT_BYTES:
+                errors.append(f"content exceeds max size {ADD_FILE_MAX_CONTENT_BYTES} bytes")
+        spec["content"] = content
+        spec["allow_overwrite"] = bool(payload.get("allow_overwrite", False))
+        spec["create_parent_dirs"] = bool(payload.get("create_parent_dirs", False))
+
     return spec, errors
 
 
@@ -89,4 +143,9 @@ def load_task_spec(path: str | Path) -> tuple[dict[str, Any], list[str]]:
     return validate_task_spec(payload)
 
 
-__all__ = ["SUPPORTED_TASK_KINDS", "load_task_spec", "validate_task_spec"]
+__all__ = [
+    "SUPPORTED_TASK_KINDS",
+    "ADD_FILE_MAX_CONTENT_BYTES",
+    "load_task_spec",
+    "validate_task_spec",
+]

@@ -134,6 +134,27 @@ def generate_project_task_plan(
             missing = [f for f in _ADD_FUNCTION_REQUIRED if not _normalize_text(payload.get(f))]
             if missing:
                 errors.append(f"descriptor[{loc}] missing required add_function fields: {missing}")
+        elif kind == "add_file":
+            payload["repo_path"] = repo_target
+            payload["target_file"] = _normalize_text(descriptor.get("target_file"))
+            raw_content = descriptor.get("content")
+            payload["content"] = raw_content if isinstance(raw_content, str) else ""
+            payload["allow_overwrite"] = bool(descriptor.get("allow_overwrite", False))
+            payload["create_parent_dirs"] = bool(descriptor.get("create_parent_dirs", False))
+            description = _normalize_text(descriptor.get("description"))
+            if description:
+                payload["description"] = description
+            if descriptor.get("verify_commands") is not None:
+                payload["verify_commands"] = descriptor.get("verify_commands")
+            if descriptor.get("expected_unmodified_files") is not None:
+                payload["expected_unmodified_files"] = descriptor.get("expected_unmodified_files")
+            if descriptor.get("allow_extra_files") is not None:
+                payload["allow_extra_files"] = bool(descriptor.get("allow_extra_files"))
+            missing = [f for f in ("target_file",) if not _normalize_text(payload.get(f))]
+            if not payload.get("content"):
+                missing.append("content")
+            if missing:
+                errors.append(f"descriptor[{loc}] missing required add_file fields: {missing}")
         else:
             # Unsupported/not-allowed kind: still record the kind so the plan
             # validator flags it; provide a ref stub so the plan stays structurally valid.
