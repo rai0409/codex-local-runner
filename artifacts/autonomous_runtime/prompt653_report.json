@@ -1,0 +1,22 @@
+{
+  "prompt653_status": "success",
+  "prompt653_base_commit": "650c2b7",
+  "prompt653_layer": "live auto-execution bridge (operator-triggered, dry-run-default, token-gated, bounded)",
+  "prompt653_live_execution_bridge_created": true,
+  "prompt653_files_created": ["automation/orchestration/planned_runner/project_live_execution_bridge.py", "tests/test_project_live_execution_bridge.py"],
+  "prompt653_api": "run_project_live_execution_bridge(intent, task_descriptors, output_queue_dir, *, enable_live=False, enable_token='', expected_enable_token='I_UNDERSTAND_THIS_RUNS_LIVE_CODEX', max_project_cycles=1, max_daemon_jobs=1, max_fix_attempts=1, repo_path_override=None, dry_run=True, daemon_runner=None) -> {status, live_execution_performed, dry_run, errors, warnings, queue_dir, plan_result, queue_population_result, daemon_run_summary, completion_gate_result, project_complete, next_action}; never raises.",
+  "prompt653_behavior": "Generates plan -> populates explicit queue dir (no live/default fallback) -> dry-run by default (no daemon). Live path requires dry_run=False AND enable_live=True AND enable_token==expected AND explicit dir AND bounded caps; otherwise safe dry-run (or blocked if live was explicitly requested with a bad token). Live path runs the daemon via an INJECTABLE adapter (default real adapter lazily calls scripts.run_task_queue_daemon.main; tests inject a FAKE adapter), ingests REAL run_reports (mapped by clean task_id), feeds evaluate_project_completion, iterates bounded by max_project_cycles (cap 5). Failures never mark complete; unreadable outcomes -> partial + manual_review_required.",
+  "prompt653_dry_run_default_proven": true,
+  "prompt653_live_path_gated_proven": true,
+  "prompt653_real_run_report_ingestion_proven": true,
+  "prompt653_failure_never_marked_complete_proven": true,
+  "prompt653_bounded_execution_proven": true,
+  "prompt653_no_execution_side_effects_in_tests": true,
+  "prompt653_tests_passed": true,
+  "prompt653_tests_detail": "tests/test_project_live_execution_bridge.py = 12 OK (dry-run default no execution; enable_live=false blocks; wrong token blocks; missing output dir blocks; fake success completes; fake failure never completes; unreadable outcome -> partial/manual_review; iterate-until-complete across cycles; bounds clamped; deterministic dry-run; invalid intent blocked; no side effects). Full project-layer + daemon regression: 86 OK.",
+  "prompt653_existing_project_layer_tests_passed": true,
+  "prompt653_main_repo_safe": true,
+  "prompt653_archive_touched": false,
+  "prompt653_handoff_reports_touched": false,
+  "prompt653_next_action": "project_level_live_e2e_acceptance"
+}

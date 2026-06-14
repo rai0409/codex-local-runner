@@ -1,0 +1,62 @@
+{
+  "prompt653_generator_status": "success",
+  "prompt653_generator_base_commit": "650c2b7",
+  "prompt653_generator_tags_at_head": [],
+  "prompt653_generator_tags_at_head_note": "HEAD 650c2b7 is the loop-final commit (untagged); latest implementation tag is prompt651-project-level-e2e-acceptance.",
+  "prompt653_generator_latest_confirmed_implementation": "prompt651",
+  "prompt653_generator_current_capability_boundary": "offline_project_autonomy_chain_complete_and_e2e_proven_live_auto_execution_pending",
+  "prompt653_generator_project_level_autonomy_complete": false,
+  "prompt653_generator_next_target_selected": "live_auto_execution_bridge",
+  "prompt653_generator_next_target_rationale": "Verified the bridge is genuinely missing: project_live_execution_bridge.py, tests/test_project_live_execution_bridge.py, scripts/run_project_live_bridge.py, prompt653_report.json, and tag prompt653-live-auto-execution-bridge are all ABSENT. It is the single critical gap turning the proven OFFLINE chain into a real autonomous loop (controller -> populated queue -> bounded live daemon -> REAL run_reports -> completion gate -> next decision). Higher leverage than task-kind expansion or soak (both deferred).",
+  "prompt653_generator_prompt_path": "prompts/generated/prompt653_live_auto_execution_bridge.md",
+  "prompt653_generator_prompt_created": true,
+  "prompt653_generator_repo_inspected": [
+    "git log/tag/status/show --stat HEAD (HEAD 650c2b7, clean source)",
+    "artifacts/autonomous_runtime/prompt653_current_completion_and_next_action_analysis_report.json (next_target live_auto_execution_bridge)",
+    "artifacts/autonomous_runtime/project_level_autonomy_loop_final_report.json (partial, complete=false, score 88)",
+    "project_loop_controller.py / project_completion_gate.py / project_queue_population.py / project_task_generator.py (public APIs)",
+    "scripts/run_task_queue_daemon.py (main(argv)->int; args incl --max-fix-attempts; writes runs/<stem>/run_report.json with clean task_id + runs/daemon_run_report.json; live tokens)",
+    "daemon_queue.py, targeted_fix_retry.py, task_spec.py",
+    "confirmed absence of bridge module/test/script/report/tag"
+  ],
+  "prompt653_generator_scope": "Implement project_live_execution_bridge.run_project_live_execution_bridge(): dry-run by default; token-gated + bounded live path that runs the daemon via an INJECTABLE adapter over an explicit /tmp queue dir; ingest REAL run_reports (map by clean run_report['task_id']) into evaluate_project_completion; structured result with project_complete + next_action; fake-adapter tests; report/summary; optional thin operator CLI.",
+  "prompt653_generator_excluded_scope": [
+    "running a live daemon/Codex in tests or CI",
+    "task-kind expansion",
+    "long-running daemon soak",
+    "live/default queue mutation",
+    "any network/git runtime beyond final local commit/tag on all-PASS",
+    "modifying daemon_queue/task_spec/effect_gate/run_task_queue_daemon behavior"
+  ],
+  "prompt653_generator_recommended_files": [
+    "automation/orchestration/planned_runner/project_live_execution_bridge.py (new)",
+    "tests/test_project_live_execution_bridge.py (new)",
+    "artifacts/autonomous_runtime/prompt653_report.json + prompt653_summary.md",
+    "artifacts/autonomous_runtime/prompt653_goal_aligned_implementation_report.json + summary.md",
+    "optional scripts/run_project_live_bridge.py (thin, dry-run default)"
+  ],
+  "prompt653_generator_recommended_tests": [
+    "dry_run default -> live_execution_performed=false, no adapter call, deterministic",
+    "enable_live=false blocks live (falls back to dry-run with warning)",
+    "wrong/missing enable_token blocks live",
+    "missing/empty output_queue_dir blocks (no queue written)",
+    "fake adapter success run_reports -> completion gate -> project_complete=true",
+    "fake adapter failure run_report -> project not complete -> manual_review/continue",
+    "missing/unreadable run_report -> task unknown -> not complete -> partial",
+    "bounds clamped (cycles/jobs/fix attempts); no uncontrolled loop",
+    "deterministic dry-run output for identical inputs",
+    "no live daemon/Codex/network/git side effects in tests",
+    "existing project-layer tests remain green"
+  ],
+  "prompt653_generator_safety_constraints_included": true,
+  "prompt653_generator_safety_constraints_summary": "Dry-run default; live path requires dry_run=False + enable_live=True + matching enable_token + explicit output dir + bounded positive caps (clamped to daemon caps); injectable daemon adapter with explicit/isolated real boundary and fake adapter for tests; never mutate live/default queue; never bypass strict effect gate; never invent success without real run_reports; no live daemon/Codex/network in tests; additive only; no task-kind expansion; no soak; no push/PR/merge; commit/tag only on all-PASS; artifacts/archive + handoff_reports untouched.",
+  "prompt653_generator_prompt_includes": {
+    "goal": true, "current_state": true, "root_gap": true, "scope": true,
+    "primary_function_signature": true, "structured_return": true, "required_behavior": true,
+    "integration_boundary": true, "required_tests": true, "hard_safety_boundaries": true,
+    "report_requirements": true, "final_stdout_contract": true, "decision_rules": true,
+    "commit_tag_policy": true, "out_of_scope": true
+  },
+  "prompt653_generator_final_decision": "Generated a complete, executable implementation prompt for live_auto_execution_bridge — the critical-path layer that converts the proven offline chain into a safe, operator-triggered, bounded, token-gated live autonomous loop with REAL run_report ingestion into the completion gate. The bridge is genuinely missing (no module/test/script/report/tag). No source modified, nothing staged/committed/tagged in this generation run.",
+  "prompt653_generator_next_action": "execute_prompt653_live_auto_execution_bridge"
+}
