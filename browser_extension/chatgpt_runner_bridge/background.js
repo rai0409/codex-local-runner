@@ -1,4 +1,6 @@
-const BRIDGE_BASE_URL = "http://172.25.238.255:8765";
+// Prompt658 keeps the bridge local by default. The repo-side adapter validates
+// response envelopes offline; this extension only relays explicit operator actions.
+const BRIDGE_BASE_URL = "http://127.0.0.1:8765";
 const AUTO_RUN_ALARM_NAME = "chatgpt_runner_bridge_auto_run_poll";
 const AUTO_RUN_POLL_PERIOD_MINUTES = 1;
 
