@@ -1,0 +1,64 @@
+{
+  "prompt659a_status": "success",
+  "current_head_before": "f15d6a9",
+  "selected_target": "chatgpt_runner_bridge_server_compatibility_investigation_and_adapter",
+  "implementation_performed": true,
+  "historical_candidate_commit": "d698389",
+  "historical_candidate_path": "browser_extension/chatgpt_runner_bridge/content.js",
+  "old_protocol_classification": "local_runner_server_protocol_found",
+  "old_endpoints_found": true,
+  "compatibility_server_created": true,
+  "request_serving_created": true,
+  "response_receiving_created": true,
+  "response_validation_created": true,
+  "analysis_artifact_normalization_created": true,
+  "prompt657_validation_compatibility_verified": true,
+  "prompt655_batch_conversion_compatibility_verified": true,
+  "next_prompt_selection_verified": true,
+  "credential_storage_prevented": true,
+  "browser_live_run_performed": false,
+  "tests_run": [
+    "python -m unittest tests.test_chatgpt_runner_bridge_server",
+    "python -m unittest tests.test_chatgpt_runner_bridge_server tests.test_browser_chatgpt_operator_adapter tests.test_operator_controlled_browser_live_acceptance tests.test_external_analysis_handoff tests.test_project_prompt_batch_controller tests.test_project_live_execution_bridge tests.test_project_level_live_e2e_acceptance tests.test_project_loop_controller tests.test_project_completion_gate tests.test_project_queue_population_from_plan tests.test_project_task_generator_from_intent tests.test_project_intent_plan_model tests.test_daemon_queue tests.test_targeted_fix_retry",
+    "python scripts/run_chatgpt_runner_bridge_server.py inspect-protocol --repo-root /home/rai/codex-local-runner",
+    "python scripts/run_chatgpt_runner_bridge_server.py prepare --repo-root /home/rai/codex-local-runner --work-root /tmp/codex-local-runner-chatgpt-bridge",
+    "python scripts/run_chatgpt_runner_bridge_server.py run-once-if-response-present --repo-root /home/rai/codex-local-runner --work-root /tmp/codex-local-runner-chatgpt-bridge",
+    "python scripts/run_chatgpt_runner_bridge_server.py print-extension-steps --repo-root /home/rai/codex-local-runner --work-root /tmp/codex-local-runner-chatgpt-bridge"
+  ],
+  "tests_passed": true,
+  "files_modified": [
+    "automation/orchestration/planned_runner/chatgpt_runner_bridge_server.py",
+    "scripts/run_chatgpt_runner_bridge_server.py",
+    "tests/test_chatgpt_runner_bridge_server.py",
+    "artifacts/autonomous_runtime/prompt659a_report.json",
+    "artifacts/autonomous_runtime/prompt659a_summary.md",
+    "artifacts/autonomous_runtime/prompt659a_goal_aligned_implementation_report.json",
+    "artifacts/autonomous_runtime/prompt659a_goal_aligned_implementation_summary.md"
+  ],
+  "commit": "pending",
+  "tag": "pending",
+  "current_capability_boundary_after": "chatgpt_runner_bridge_server_compatibility_ready",
+  "project_level_autonomy_complete": false,
+  "evaluation_score_out_of_100": 93,
+  "next_recommended_action": "run_bridge_server_with_browser_extension",
+  "final_decision": "success: historical local runner server protocol was found and a loopback-only compatibility server was implemented for /next-task, /status, /result plus /health, /request, and /response. Local tests validate request serving, response receiving, response validation, Prompt657 artifact normalization, Prompt655 batch conversion, and next prompt selection. No browser live success was claimed.",
+  "protocol_evidence": [
+    "d698389 browser_extension/chatgpt_runner_bridge/background.js used BRIDGE_BASE_URL and fetched /next-task, /status, /result",
+    "d698389 scripts/chatgpt_bridge_server.py served /next-task, /status, /result using request.md and response.md",
+    "current Prompt658 extension uses 127.0.0.1:8765 and relays content-script messages through background.js"
+  ],
+  "expected_endpoints": {
+    "legacy": [
+      "/next-task",
+      "/status",
+      "/result"
+    ],
+    "envelope_native": [
+      "/health",
+      "/request",
+      "/response",
+      "/status"
+    ]
+  },
+  "serve_command": "python scripts/run_chatgpt_runner_bridge_server.py serve --repo-root /home/rai/codex-local-runner --work-root /tmp/codex-local-runner-chatgpt-bridge --host 127.0.0.1 --port 8765"
+}
