@@ -158,6 +158,44 @@ class BrowserChatgptOperatorAdapterTests(unittest.TestCase):
         self.assertIn("Prompt658", readme)
         self.assertIn("does not store browser credentials", readme)
 
+    def test_extension_default_bridge_url_and_private_wsl_configuration(self):
+        background = Path("browser_extension/chatgpt_runner_bridge/background.js").read_text(encoding="utf-8")
+        manifest = Path("browser_extension/chatgpt_runner_bridge/manifest.json").read_text(encoding="utf-8")
+        options_html = Path("browser_extension/chatgpt_runner_bridge/options.html").read_text(encoding="utf-8")
+        options_js = Path("browser_extension/chatgpt_runner_bridge/options.js").read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_BRIDGE_BASE_URL = "http://127.0.0.1:8765"', background)
+        self.assertIn("BRIDGE_BASE_URL_STORAGE_KEY", background)
+        self.assertIn("isPrivateBridgeHost", background)
+        self.assertIn("nums[0] === 10", background)
+        self.assertIn("nums[0] === 172 && nums[1] >= 16 && nums[1] <= 31", background)
+        self.assertIn("nums[0] === 192 && nums[1] === 168", background)
+        self.assertIn("bridge_base_url_must_use_loopback_or_private_ipv4", background)
+        self.assertIn("bridge_base_url_must_not_include_credentials", background)
+        self.assertIn("bridge_base_url_must_not_use_wildcard_host", background)
+        self.assertIn("BRIDGE_HEALTH_CHECK", background)
+        self.assertIn('"http://*/*"', manifest)
+        self.assertIn('"options_page": "options.html"', manifest)
+        self.assertIn("bridgeBaseUrl", options_html)
+        self.assertIn("BRIDGE_SET_BASE_URL", options_js)
+        self.assertIn("BRIDGE_HEALTH_CHECK", options_js)
+
+    def test_extension_rejects_unsafe_external_bridge_urls_by_source_policy(self):
+        background = Path("browser_extension/chatgpt_runner_bridge/background.js").read_text(encoding="utf-8")
+        self.assertIn('parsed.protocol !== "http:"', background)
+        self.assertIn("!isPrivateBridgeHost(parsed.hostname)", background)
+        self.assertIn("parsed.username || parsed.password", background)
+        self.assertIn('parsed.hostname === "0.0.0.0"', background)
+        self.assertNotIn("https://api.openai.com", background)
+
+    def test_readme_documents_windows_wsl_workflow(self):
+        readme = Path("browser_extension/chatgpt_runner_bridge/README.md").read_text(encoding="utf-8")
+        self.assertIn("Windows + WSL Bridge URL", readme)
+        self.assertIn("hostname -I | awk '{print $1}'", readme)
+        self.assertIn("--allow-private-host-bind", readme)
+        self.assertIn("curl.exe http://<WSL_IP>:8765/health", readme)
+        self.assertIn("http://<WSL_IP>:8765", readme)
+        self.assertIn("0.0.0.0", readme)
+
     def test_content_js_does_not_extract_credentials(self):
         content = Path("browser_extension/chatgpt_runner_bridge/content.js").read_text(encoding="utf-8")
         self.assertIn("reused_from_commit: d698389", content)

@@ -19,6 +19,7 @@ from automation.orchestration.planned_runner.chatgpt_runner_bridge_server import
     dispatch_local_request,
     dispatch_raw_local_request,
     inspect_protocol,
+    is_safe_bridge_bind_host,
     prepare_bridge_work,
     run_once_if_response_present,
 )
@@ -101,6 +102,25 @@ class ChatgptRunnerBridgeServerTests(unittest.TestCase):
             self.assertEqual(DEFAULT_HOST, "127.0.0.1")
             self.assertEqual(status, 200)
             self.assertEqual(payload["status"], "ok")
+
+    def test_bind_host_policy_preserves_loopback_default(self):
+        self.assertTrue(is_safe_bridge_bind_host("127.0.0.1"))
+        self.assertTrue(is_safe_bridge_bind_host("localhost"))
+
+    def test_bind_host_policy_rejects_wildcard_and_public_hosts(self):
+        self.assertFalse(is_safe_bridge_bind_host("0.0.0.0"))
+        self.assertFalse(is_safe_bridge_bind_host("0.0.0.0", allow_private_host_bind=True))
+        self.assertFalse(is_safe_bridge_bind_host("8.8.8.8", allow_private_host_bind=True))
+        self.assertFalse(is_safe_bridge_bind_host("example.com", allow_private_host_bind=True))
+        self.assertFalse(is_safe_bridge_bind_host(""))
+
+    def test_bind_host_policy_requires_flag_for_private_wsl_ip(self):
+        self.assertFalse(is_safe_bridge_bind_host("172.20.10.2"))
+        self.assertFalse(is_safe_bridge_bind_host("10.12.0.5"))
+        self.assertFalse(is_safe_bridge_bind_host("192.168.56.2"))
+        self.assertTrue(is_safe_bridge_bind_host("172.20.10.2", allow_private_host_bind=True))
+        self.assertTrue(is_safe_bridge_bind_host("10.12.0.5", allow_private_host_bind=True))
+        self.assertTrue(is_safe_bridge_bind_host("192.168.56.2", allow_private_host_bind=True))
 
     def test_request_endpoint_returns_prepared_envelope(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as raw:
@@ -213,6 +233,17 @@ class ChatgptRunnerBridgeServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir="/tmp") as raw:
             with self.assertRaises(ValueError):
                 create_server(repo_root=REPO_ROOT, work_root=raw, host="0.0.0.0", port=0)
+
+    def test_server_rejects_public_host_even_with_private_bind_flag(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            with self.assertRaises(ValueError):
+                create_server(
+                    repo_root=REPO_ROOT,
+                    work_root=raw,
+                    host="8.8.8.8",
+                    port=0,
+                    allow_private_host_bind=True,
+                )
 
 
 if __name__ == "__main__":

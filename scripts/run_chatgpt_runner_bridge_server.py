@@ -21,6 +21,7 @@ from automation.orchestration.planned_runner.chatgpt_runner_bridge_server import
     create_server,
     extension_steps,
     inspect_protocol,
+    is_safe_bridge_bind_host,
     prepare_bridge_work,
     run_once_if_response_present,
 )
@@ -59,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
             "validate-response",
             "run-once-if-response-present",
             "print-extension-steps",
+            "diagnose-windows-wsl-reachability",
         ],
     )
     parser.add_argument("--repo-root", default=Path.cwd().as_posix())
@@ -67,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--request-id", default=DEFAULT_REQUEST_ID)
     parser.add_argument("--response-envelope", default="")
+    parser.add_argument(
+        "--allow-private-host-bind",
+        action="store_true",
+        help="Allow binding to explicit RFC1918 private IPv4 addresses for Windows/WSL browser reachability.",
+    )
     return parser
 
 
@@ -120,6 +127,32 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
         return 0
+    if args.mode == "diagnose-windows-wsl-reachability":
+        safe = is_safe_bridge_bind_host(args.host, allow_private_host_bind=args.allow_private_host_bind)
+        _print_json(
+            {
+                "status": "ok",
+                "host": args.host,
+                "port": args.port,
+                "host_allowed": safe,
+                "allow_private_host_bind": bool(args.allow_private_host_bind),
+                "loopback_default_preserved": is_safe_bridge_bind_host("127.0.0.1"),
+                "zero_zero_zero_zero_rejected": not is_safe_bridge_bind_host(
+                    "0.0.0.0",
+                    allow_private_host_bind=True,
+                ),
+                "wsl_ip_detection_command": "hostname -I | awk '{print $1}'",
+                "serve_private_wsl_command": (
+                    "python scripts/run_chatgpt_runner_bridge_server.py serve "
+                    "--repo-root /home/rai/codex-local-runner "
+                    "--work-root /tmp/codex-local-runner-chatgpt-bridge "
+                    "--host <WSL_IP> --port 8765 --allow-private-host-bind"
+                ),
+                "powershell_health_check": "curl.exe http://<WSL_IP>:8765/health",
+                "extension_bridge_url": "http://<WSL_IP>:8765",
+            }
+        )
+        return 0
     if args.mode == "serve":
         server = create_server(
             repo_root=args.repo_root,
@@ -127,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             request_id=args.request_id,
+            allow_private_host_bind=args.allow_private_host_bind,
         )
         print(f"ChatGPT Runner Bridge server listening on http://{args.host}:{args.port}")
         print(f"work_root={Path(args.work_root).as_posix()}")

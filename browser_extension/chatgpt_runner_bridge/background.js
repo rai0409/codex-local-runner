@@ -1,6 +1,7 @@
 // Prompt658 keeps the bridge local by default. The repo-side adapter validates
 // response envelopes offline; this extension only relays explicit operator actions.
-const BRIDGE_BASE_URL = "http://127.0.0.1:8765";
+const DEFAULT_BRIDGE_BASE_URL = "http://127.0.0.1:8765";
+const BRIDGE_BASE_URL_STORAGE_KEY = "bridge_base_url";
 const AUTO_RUN_ALARM_NAME = "chatgpt_runner_bridge_auto_run_poll";
 const AUTO_RUN_POLL_PERIOD_MINUTES = 1;
 
@@ -25,6 +26,7 @@ const STATE_DEFAULTS = {
   auto_run_enabled: false,
   auto_run_polling: false,
   target_tab_found: false,
+  bridge_base_url: DEFAULT_BRIDGE_BASE_URL,
   run_in_progress: false,
   last_task_id: "",
   last_task_fingerprint: "",
@@ -41,6 +43,77 @@ let autoRunTickInFlight = false;
 
 function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function isPrivateBridgeHost(hostname) {
+  const normalized = normalizeText(hostname).toLowerCase();
+  if (normalized === "localhost" || normalized === "127.0.0.1") {
+    return true;
+  }
+  const parts = normalized.split(".");
+  if (parts.length !== 4) {
+    return false;
+  }
+  if (parts.some((part) => !/^\d+$/.test(part))) {
+    return false;
+  }
+  const nums = parts.map((part) => Number.parseInt(part, 10));
+  if (nums.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+  if (nums[0] === 10) {
+    return true;
+  }
+  if (nums[0] === 172 && nums[1] >= 16 && nums[1] <= 31) {
+    return true;
+  }
+  if (nums[0] === 192 && nums[1] === 168) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeBridgeBaseUrl(value) {
+  const text = normalizeText(value || DEFAULT_BRIDGE_BASE_URL);
+  let parsed;
+  try {
+    parsed = new URL(text);
+  } catch (_error) {
+    throw new Error("bridge_base_url_invalid");
+  }
+  if (parsed.protocol !== "http:") {
+    throw new Error("bridge_base_url_must_use_http");
+  }
+  if (!isPrivateBridgeHost(parsed.hostname)) {
+    throw new Error("bridge_base_url_must_use_loopback_or_private_ipv4");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("bridge_base_url_must_not_include_credentials");
+  }
+  if (parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    throw new Error("bridge_base_url_must_not_include_path_query_or_hash");
+  }
+  if (parsed.hostname === "0.0.0.0") {
+    throw new Error("bridge_base_url_must_not_use_wildcard_host");
+  }
+  return `${parsed.protocol}//${parsed.host}`;
+}
+
+async function getBridgeBaseUrl() {
+  const stored = await chrome.storage.local.get([BRIDGE_BASE_URL_STORAGE_KEY]);
+  try {
+    return normalizeBridgeBaseUrl(stored[BRIDGE_BASE_URL_STORAGE_KEY] || DEFAULT_BRIDGE_BASE_URL);
+  } catch (_error) {
+    await chrome.storage.local.set({ [BRIDGE_BASE_URL_STORAGE_KEY]: DEFAULT_BRIDGE_BASE_URL });
+    return DEFAULT_BRIDGE_BASE_URL;
+  }
+}
+
+async function setBridgeBaseUrl(value) {
+  const normalized = normalizeBridgeBaseUrl(value);
+  await chrome.storage.local.set({ [BRIDGE_BASE_URL_STORAGE_KEY]: normalized });
+  await setStatePatch({ bridge_base_url: normalized });
+  return normalized;
 }
 
 function normalizeTaskIdentityFromPayload(payload = {}) {
@@ -183,7 +256,8 @@ async function pauseAutoRunOnTerminal(status, reason, extraPatch = {}) {
 
 async function bridgeFetch(path, options = {}) {
   try {
-    const response = await fetch(`${BRIDGE_BASE_URL}${path}`, options);
+    const bridgeBaseUrl = await getBridgeBaseUrl();
+    const response = await fetch(`${bridgeBaseUrl}${path}`, options);
     const text = await response.text();
     let parsed = null;
     if (text) {
@@ -415,6 +489,33 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "BRIDGE_GET_NEXT_TASK") {
     void bridgeFetch("/next-task", { method: "GET" }).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "BRIDGE_HEALTH_CHECK") {
+    void bridgeFetch("/health", { method: "GET" }).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "BRIDGE_GET_BASE_URL") {
+    void getBridgeBaseUrl()
+      .then((bridgeBaseUrl) => sendResponse({ ok: true, bridge_base_url: bridgeBaseUrl }))
+      .catch((error) => sendResponse({
+        ok: false,
+        error: "bridge_base_url_error",
+        detail: String(error?.message || error || "bridge_base_url_failed")
+      }));
+    return true;
+  }
+
+  if (message.type === "BRIDGE_SET_BASE_URL") {
+    void setBridgeBaseUrl(message.bridge_base_url)
+      .then((bridgeBaseUrl) => sendResponse({ ok: true, bridge_base_url: bridgeBaseUrl }))
+      .catch((error) => sendResponse({
+        ok: false,
+        error: "bridge_base_url_rejected",
+        detail: String(error?.message || error || "bridge_base_url_rejected")
+      }));
     return true;
   }
 

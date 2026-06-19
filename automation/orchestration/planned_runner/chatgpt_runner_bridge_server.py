@@ -8,6 +8,7 @@ through the Prompt658/657/655 artifact path.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -42,6 +43,11 @@ HISTORICAL_CANDIDATE_PATH = "browser_extension/chatgpt_runner_bridge/content.js"
 PROTOCOL_CLASSIFICATION = "local_runner_server_protocol_found"
 LEGACY_ENDPOINTS = ["/next-task", "/status", "/result"]
 ENVELOPE_ENDPOINTS = ["/health", "/request", "/response", "/status"]
+PRIVATE_BIND_RANGES = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+)
 
 
 def _now_iso() -> str:
@@ -74,6 +80,26 @@ def _read_json(path: Path) -> tuple[dict[str, Any], list[str]]:
     if not isinstance(loaded, Mapping):
         return {}, ["JSON payload must be an object"]
     return dict(loaded), []
+
+
+def is_safe_bridge_bind_host(host: str, *, allow_private_host_bind: bool = False) -> bool:
+    """Return whether a bridge bind host is safe under the current mode."""
+    normalized = _txt(host).lower()
+    if normalized in {"127.0.0.1", "localhost"}:
+        return True
+    if not normalized or normalized == "0.0.0.0":
+        return False
+    try:
+        address = ipaddress.ip_address(normalized)
+    except ValueError:
+        return False
+    if address.version != 4:
+        return False
+    if address.is_loopback:
+        return True
+    if not allow_private_host_bind:
+        return False
+    return any(address in network for network in PRIVATE_BIND_RANGES)
 
 
 def inspect_protocol(repo_root: str | Path = ".") -> dict[str, Any]:
@@ -450,6 +476,10 @@ def extension_steps(
     extension_dir = Path(repo_root) / "browser_extension" / "chatgpt_runner_bridge"
     return [
         f"Start the local bridge server on http://{host}:{port} with mode=serve.",
+        "For Windows/WSL, discover the WSL IP with: hostname -I | awk '{print $1}'",
+        f"Use: python scripts/run_chatgpt_runner_bridge_server.py serve --repo-root {Path(repo_root).as_posix()} --work-root {Path(work_root).as_posix()} --host <WSL_IP> --port {port} --allow-private-host-bind",
+        f"From PowerShell, test: curl.exe http://<WSL_IP>:{port}/health",
+        f"Configure the extension bridge URL to: http://<WSL_IP>:{port}",
         f"Load the unpacked extension from: {extension_dir.as_posix()}",
         "Open ChatGPT in a normal browser tab using an already logged-in operator session.",
         "Click the ChatGPT Runner Bridge extension action on the visible ChatGPT tab.",
@@ -545,9 +575,12 @@ def create_server(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
     request_id: str = DEFAULT_REQUEST_ID,
+    allow_private_host_bind: bool = False,
 ) -> ThreadingHTTPServer:
-    if host not in {"127.0.0.1", "localhost"}:
-        raise ValueError("bridge server host must be loopback: 127.0.0.1 or localhost")
+    if not is_safe_bridge_bind_host(host, allow_private_host_bind=allow_private_host_bind):
+        raise ValueError(
+            "bridge server host must be loopback by default; private IPv4 WSL binds require --allow-private-host-bind"
+        )
     prepare_bridge_work(repo_root=repo_root, work_root=work_root, request_id=request_id)
     handler = make_handler(repo_root=repo_root, work_root=work_root, request_id=request_id)
     return ThreadingHTTPServer((host, port), handler)
@@ -559,6 +592,7 @@ __all__ = [
     "DEFAULT_REQUEST_ID",
     "DEFAULT_WORK_ROOT",
     "PROTOCOL_CLASSIFICATION",
+    "is_safe_bridge_bind_host",
     "inspect_protocol",
     "prepare_bridge_work",
     "load_prepared_request",
