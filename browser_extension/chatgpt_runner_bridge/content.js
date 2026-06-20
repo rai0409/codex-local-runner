@@ -7,6 +7,106 @@
 // It does not inspect browser profile/session storage or account data.
 
 const RESPONSE_ENVELOPE_SCHEMA = "browser_chatgpt_response_envelope_v1";
+
+const ALLOWED_STRUCTURED_ARTIFACT_SCHEMA_VERSIONS = new Set([
+  "analysis_artifact_v1",
+  "analysis_artifact_v2",
+  "project_analysis_artifact_v1",
+  "browser_analysis_artifact_v1",
+  "task_batch_recommendation_v1"
+]);
+
+function extractJsonObjectsFromText(text) {
+  const source = String(text || "");
+  const results = [];
+
+  for (let start = 0; start < source.length; start += 1) {
+    if (source[start] !== "{") {
+      continue;
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = start; index < source.length; index += 1) {
+      const char = source[index];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) {
+        continue;
+      }
+
+      if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          results.push(source.slice(start, index + 1));
+          start = index;
+          break;
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+function normalizeStructuredArtifactJson(parsed) {
+  return JSON.stringify(parsed, null, 2);
+}
+
+function findAllowedStructuredArtifact(text, requestId) {
+  for (const candidate of extractJsonObjectsFromText(text)) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        continue;
+      }
+
+      if (!ALLOWED_STRUCTURED_ARTIFACT_SCHEMA_VERSIONS.has(parsed.schema_version)) {
+        continue;
+      }
+
+      if (requestId && parsed.request_id !== requestId) {
+        continue;
+      }
+
+      return {
+        ok: true,
+        schema_version: parsed.schema_version,
+        request_id: parsed.request_id || "",
+        normalized_json: normalizeStructuredArtifactJson(parsed)
+      };
+    } catch (_error) {
+      continue;
+    }
+  }
+
+  return {
+    ok: false,
+    schema_version: "",
+    request_id: "",
+    normalized_json: ""
+  };
+}
+
+
 const ADAPTER_NAME = "browser_chatgpt_operator_adapter";
 const RESPONSE_TIMEOUT_MS = 600000;
 const RESPONSE_POLL_INTERVAL_MS = 10000;
@@ -930,9 +1030,31 @@ async function waitForStableAssistantResponse() {
       continue;
     }
 
+    const structuredArtifact = findAllowedStructuredArtifact(current.text, currentTaskId || "");
+    const comparableText = structuredArtifact.ok ? structuredArtifact.normalized_json : current.text;
+
     if (stopButtonVisible || loadingIndicatorVisible) {
-      stableCount = 0;
-      previous = current.text;
+      if (structuredArtifact.ok && comparableText === previous) {
+        stableCount += 1;
+        if (stableCount >= STABLE_POLLS_REQUIRED) {
+          return {
+            text: structuredArtifact.normalized_json,
+            selector_used: current.selector_used,
+            stable_polls: stableCount,
+            transient_candidate_seen: transientCandidateSeen,
+            structured_artifact_detected: true,
+            structured_artifact_schema_version: structuredArtifact.schema_version,
+            structured_artifact_request_id: structuredArtifact.request_id,
+            loading_indicator_ignored_for_structured_artifact: Boolean(loadingIndicatorVisible),
+            stop_button_ignored_for_structured_artifact: Boolean(stopButtonVisible)
+          };
+        }
+      } else {
+        stableCount = 1;
+        previous = comparableText;
+        responseSelectorUsed = current.selector_used;
+      }
+
       await sleep(RESPONSE_POLL_INTERVAL_MS);
       continue;
     }
@@ -975,6 +1097,7 @@ async function postResult(responseText, metadata) {
     request_id: currentTaskId || "",
     status: "response_captured",
     chatgpt_output: responseText,
+    captured_at: new Date().toISOString(),
     require_structured_artifact: currentRequireStructuredArtifact,
     metadata: {
       ...metadata,
@@ -1273,6 +1396,11 @@ async function runChatGptBridgeOnce(options = {}) {
       response_selector_used: response.selector_used,
       stable_polls: response.stable_polls,
       transient_candidate_seen: response.transient_candidate_seen,
+      structured_artifact_detected: Boolean(response.structured_artifact_detected),
+      structured_artifact_schema_version: response.structured_artifact_schema_version || undefined,
+      structured_artifact_request_id: response.structured_artifact_request_id || undefined,
+      loading_indicator_ignored_for_structured_artifact: Boolean(response.loading_indicator_ignored_for_structured_artifact),
+      stop_button_ignored_for_structured_artifact: Boolean(response.stop_button_ignored_for_structured_artifact),
       task_id: currentTaskId || undefined,
       request_fingerprint: currentTaskFingerprint || undefined
     };
