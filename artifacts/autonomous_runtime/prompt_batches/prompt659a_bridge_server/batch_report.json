@@ -1,0 +1,9 @@
+{
+  "batch_complete": true,
+  "batch_id": "prompt659a_bridge_server",
+  "errors": [],
+  "next_instruction": "",
+  "next_prompt_id": "",
+  "reason": "batch_complete",
+  "status": "complete"
+}
