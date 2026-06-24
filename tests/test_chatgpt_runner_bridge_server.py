@@ -101,6 +101,25 @@ def _request_envelope(**overrides):
     return payload
 
 
+def _instruction_request(**overrides):
+    payload = {
+        "schema_version": BROWSER_REQUEST_ENVELOPE_SCHEMA,
+        "request_id": "prompt660c_next_analysis",
+        "source": "codex_local_runner",
+        "current_capability_boundary": "one_safe_browser_to_codex_cycle_proven_multi_cycle_unattended_loop_not_proven",
+        "requested_output_schema_versions": [
+            "analysis_artifact_v1",
+            "analysis_artifact_v2",
+        ],
+        "instruction": (
+            "Recommend the next safe step toward multi-cycle browser-to-Codex autonomy. "
+            "Keep the recommendation bounded, local-first, evidence-gated, and free of secrets."
+        ),
+    }
+    payload.update(overrides)
+    return payload
+
+
 class ChatgptRunnerBridgeServerTests(unittest.TestCase):
     def test_historical_protocol_inspection_returns_deterministic_classification(self):
         result = inspect_protocol(REPO_ROOT)
@@ -181,7 +200,7 @@ class ChatgptRunnerBridgeServerTests(unittest.TestCase):
             saved = json.loads((work / "request_envelope.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["request_id"], "prompt660c_next_analysis")
             self.assertNotEqual(saved["request_id"], DEFAULT_REQUEST_ID)
-            self.assertEqual((work / "request.md").read_text(encoding="utf-8").strip(), original["prompt_text"])
+            self.assertEqual((work / "request.md").read_text(encoding="utf-8"), original["prompt_text"])
             status_payload = json.loads((work / "status.json").read_text(encoding="utf-8"))
             self.assertEqual(status_payload["request_id"], "prompt660c_next_analysis")
 
@@ -197,6 +216,54 @@ class ChatgptRunnerBridgeServerTests(unittest.TestCase):
             self.assertEqual(task["task_id"], "prompt660c_next_analysis")
             self.assertNotIn(DEFAULT_REQUEST_ID, task["prompt"])
 
+    def test_instruction_style_request_envelope_is_accepted_and_normalized(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw, tempfile.TemporaryDirectory(dir="/tmp") as src_raw:
+            src = Path(src_raw) / "request_envelope.json"
+            src.write_text(json.dumps(_instruction_request(), indent=2), encoding="utf-8")
+            result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=raw, request_envelope_path=src)
+            self.assertEqual(result["status"], "success", msg=result["errors"])
+            self.assertEqual(result["request_id"], "prompt660c_next_analysis")
+            saved = json.loads((Path(raw) / "request_envelope.json").read_text(encoding="utf-8"))
+            self.assertIn("prompt_text", saved)
+            self.assertIn("ANALYSIS REQUEST: prompt660c_next_analysis", saved["prompt_text"])
+            self.assertIn("Current capability boundary:", saved["prompt_text"])
+            self.assertIn("analysis_artifact_v1", saved["prompt_text"])
+            self.assertIn("no browser profile data".lower(), saved["prompt_text"].lower())
+            self.assertEqual((Path(raw) / "request.md").read_text(encoding="utf-8"), saved["prompt_text"])
+            status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(status, 200)
+            self.assertEqual(task["task_id"], "prompt660c_next_analysis")
+            self.assertIn("prompt660c_next_analysis", task["prompt"])
+            self.assertNotIn(DEFAULT_REQUEST_ID, task["prompt"])
+
+    def test_explicit_prompt_text_remains_unchanged_during_normalization(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw, tempfile.TemporaryDirectory(dir="/tmp") as src_raw:
+            explicit = "ANALYSIS REQUEST: prompt660c_next_analysis\n\nExplicit prompt stays exactly this."
+            src = Path(src_raw) / "request_envelope.json"
+            src.write_text(
+                json.dumps(_instruction_request(prompt_text=explicit), indent=2),
+                encoding="utf-8",
+            )
+            result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=raw, request_envelope_path=src)
+            self.assertEqual(result["status"], "success", msg=result["errors"])
+            saved = json.loads((Path(raw) / "request_envelope.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["prompt_text"], explicit)
+            self.assertEqual((Path(raw) / "request.md").read_text(encoding="utf-8"), explicit)
+
+    def test_existing_work_root_instruction_request_is_respected_and_normalized(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            work = Path(raw)
+            (work / "request_envelope.json").write_text(json.dumps(_instruction_request(), indent=2), encoding="utf-8")
+            result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(result["status"], "success", msg=result["errors"])
+            saved = json.loads((work / "request_envelope.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["request_id"], "prompt660c_next_analysis")
+            self.assertIn("prompt_text", saved)
+            self.assertNotEqual(saved["request_id"], DEFAULT_REQUEST_ID)
+            status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(status, 200)
+            self.assertEqual(task["task_id"], "prompt660c_next_analysis")
+
     def test_invalid_request_envelope_path_is_rejected(self):
         invalid_cases = [
             ("missing request_id", _request_envelope(request_id="")),
@@ -209,12 +276,22 @@ class ChatgptRunnerBridgeServerTests(unittest.TestCase):
                 result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=Path(raw) / "work", request_envelope_path=path)
                 self.assertEqual(result["status"], "blocked")
                 self.assertTrue(result["errors"])
+                if label == "missing prompt":
+                    self.assertTrue(any("prompt_text, prompt, or instruction" in error for error in result["errors"]))
         with tempfile.TemporaryDirectory(dir="/tmp") as raw:
             path = Path(raw) / "bad_request_envelope.json"
             path.write_text("{not json", encoding="utf-8")
             result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=Path(raw) / "work", request_envelope_path=path)
             self.assertEqual(result["status"], "blocked")
             self.assertTrue(any("invalid JSON" in error for error in result["errors"]))
+
+    def test_instruction_style_request_missing_request_id_is_rejected(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            path = Path(raw) / "bad_request_envelope.json"
+            path.write_text(json.dumps(_instruction_request(request_id=""), indent=2), encoding="utf-8")
+            result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=Path(raw) / "work", request_envelope_path=path)
+            self.assertEqual(result["status"], "blocked")
+            self.assertTrue(any("request_id is required" in error for error in result["errors"]))
 
     def test_post_request_updates_active_request_and_rejects_invalid_without_corruption(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as raw:
@@ -231,6 +308,24 @@ class ChatgptRunnerBridgeServerTests(unittest.TestCase):
             status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
             self.assertEqual(status, 200)
             self.assertEqual(task["task_id"], "prompt660c_next_analysis")
+
+    def test_post_request_accepts_instruction_style_request(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            prepare_bridge_work(repo_root=REPO_ROOT, work_root=raw)
+            status, payload = dispatch_local_request(
+                method="POST",
+                path="/request",
+                body=_instruction_request(),
+                repo_root=REPO_ROOT,
+                work_root=raw,
+            )
+            self.assertEqual(status, 200, msg=payload.get("errors"))
+            self.assertEqual(payload["request_id"], "prompt660c_next_analysis")
+            status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(status, 200)
+            self.assertEqual(task["task_id"], "prompt660c_next_analysis")
+            saved = json.loads((Path(raw) / "request_envelope.json").read_text(encoding="utf-8"))
+            self.assertIn("ANALYSIS REQUEST: prompt660c_next_analysis", saved["prompt_text"])
 
             status, bad = dispatch_local_request(
                 method="POST",

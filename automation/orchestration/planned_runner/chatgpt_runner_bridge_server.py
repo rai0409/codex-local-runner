@@ -83,11 +83,73 @@ def _read_json(path: Path) -> tuple[dict[str, Any], list[str]]:
 
 
 def _request_prompt_text(envelope: Mapping[str, Any]) -> str:
-    return _txt(envelope.get("prompt_text")) or _txt(envelope.get("prompt"))
+    for key in ("prompt_text", "prompt"):
+        value = envelope.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
 
 
-def validate_browser_request_envelope(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
-    """Validate the local browser request envelope shape consumed by the extension."""
+def _str_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [_txt(v) for v in value if _txt(v)]
+
+
+def build_prompt_text_from_instruction_request(payload: Mapping[str, Any]) -> str:
+    """Build a bridge prompt from a higher-level instruction-style request artifact."""
+    request_id = _txt(payload.get("request_id"))
+    instruction = _txt(payload.get("instruction"))
+    boundary = _txt(payload.get("current_capability_boundary"))
+    requested_schemas = _str_list(payload.get("requested_output_schema_versions"))
+    schema_text = ", ".join(requested_schemas) if requested_schemas else "analysis_artifact_v1"
+    lines = [
+        f"ANALYSIS REQUEST: {request_id}",
+    ]
+    if boundary:
+        lines += ["", f"Current capability boundary: {boundary}"]
+    lines += [
+        "",
+        "Instruction:",
+        instruction,
+        "",
+        f"Requested output schema versions: {schema_text}",
+        "",
+        "Return ONE JSON object only. Do not include markdown, commentary, or extra text.",
+        "The JSON object must use schema_version=\"analysis_artifact_v1\" and include these fields:",
+        "- schema_version",
+        "- request_id",
+        "- source",
+        "- status",
+        "- current_state_summary",
+        "- confirmed_completed[]",
+        "- missing_gaps[]",
+        "- recommended_next_action",
+        "- recommended_prompts[]",
+        "- evaluation_score_out_of_100",
+        "- risk_notes[]",
+        "",
+        f"The request_id field must be \"{request_id}\".",
+        "Use source=\"chatgpt_browser\" and status=\"success\" when the analysis succeeds.",
+        "",
+        "Safety constraints:",
+        "- No secrets.",
+        "- No credentials.",
+        "- No cookies.",
+        "- No browser profile data.",
+        "- No private session files.",
+        f"- No {'.'}env values.",
+        "- No remote pushes.",
+        "- No PRs.",
+        "- No merges.",
+        "- No destructive operations.",
+        "- No arbitrary prompt execution.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def normalize_bridge_request_envelope(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Normalize full bridge envelopes and instruction-style request artifacts."""
     errors: list[str] = []
     if not isinstance(payload, Mapping):
         return {}, ["request envelope must be a JSON object"]
@@ -98,8 +160,12 @@ def validate_browser_request_envelope(payload: Mapping[str, Any]) -> tuple[dict[
     if not request_id:
         errors.append("request_id is required")
     prompt_text = _request_prompt_text(payload)
+    instruction = _txt(payload.get("instruction"))
     if not prompt_text:
-        errors.append("prompt_text or prompt is required")
+        if instruction and request_id:
+            prompt_text = build_prompt_text_from_instruction_request(payload)
+        else:
+            errors.append("prompt_text, prompt, or instruction is required")
     envelope = dict(payload)
     envelope["schema_version"] = schema
     envelope["adapter"] = _txt(envelope.get("adapter"), default=BROWSER_OPERATOR_ADAPTER_NAME)
@@ -110,6 +176,11 @@ def validate_browser_request_envelope(payload: Mapping[str, Any]) -> tuple[dict[
     if "prompt_fingerprint" not in envelope and prompt_text:
         envelope["prompt_fingerprint"] = _fingerprint(prompt_text)
     return envelope, errors
+
+
+def validate_browser_request_envelope(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Validate the local browser request envelope shape consumed by the extension."""
+    return normalize_bridge_request_envelope(payload)
 
 
 def _load_request_envelope_file(path: str | Path) -> tuple[dict[str, Any], list[str]]:
@@ -123,7 +194,7 @@ def _write_prepared_request(paths: Mapping[str, Path], envelope: Mapping[str, An
     prompt_text = _request_prompt_text(envelope)
     _write_json(paths["request_envelope"], envelope)
     paths["legacy_request"].parent.mkdir(parents=True, exist_ok=True)
-    paths["legacy_request"].write_text(prompt_text + "\n", encoding="utf-8")
+    paths["legacy_request"].write_text(prompt_text, encoding="utf-8")
     _write_json(
         paths["status"],
         {
@@ -686,6 +757,8 @@ __all__ = [
     "is_safe_bridge_bind_host",
     "inspect_protocol",
     "prepare_bridge_work",
+    "build_prompt_text_from_instruction_request",
+    "normalize_bridge_request_envelope",
     "validate_browser_request_envelope",
     "load_prepared_request",
     "active_request_id",
