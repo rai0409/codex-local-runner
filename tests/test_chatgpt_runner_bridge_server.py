@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from automation.orchestration.planned_runner.browser_chatgpt_operator_adapter import (
+    BROWSER_REQUEST_ENVELOPE_SCHEMA,
     BROWSER_RESPONSE_ENVELOPE_SCHEMA,
 )
 from automation.orchestration.planned_runner.chatgpt_runner_bridge_server import (
@@ -73,6 +74,33 @@ def _response(**overrides):
     return payload
 
 
+def _request_envelope(**overrides):
+    payload = {
+        "schema_version": BROWSER_REQUEST_ENVELOPE_SCHEMA,
+        "adapter": "browser_chatgpt_operator_adapter",
+        "request_id": "prompt660c_next_analysis",
+        "status": "request_loaded",
+        "source_schema_version": BROWSER_REQUEST_ENVELOPE_SCHEMA,
+        "target_output_schema": "analysis_artifact_v1",
+        "require_structured_artifact": True,
+        "allowed_next_actions": [
+            "generate_prompt_batch",
+            "continue_existing_batch",
+            "manual_review_required",
+        ],
+        "prompt_text": "ANALYSIS REQUEST: prompt660c_next_analysis\n\nReturn one JSON object only.",
+        "safety": {
+            "browser_execution": "operator_or_extension_mediated_only",
+            "no_cookie_or_token_storage": True,
+            "no_credentials_required": True,
+            "no_login_bypass": True,
+            "no_repo_side_network": True,
+        },
+    }
+    payload.update(overrides)
+    return payload
+
+
 class ChatgptRunnerBridgeServerTests(unittest.TestCase):
     def test_historical_protocol_inspection_returns_deterministic_classification(self):
         result = inspect_protocol(REPO_ROOT)
@@ -132,6 +160,90 @@ class ChatgptRunnerBridgeServerTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertTrue(task["has_task"])
             self.assertIn("browser_chatgpt_request_envelope_v1", task["prompt"])
+
+    def test_default_next_task_remains_prompt659a_when_no_existing_request(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(status, 200)
+            self.assertTrue(task["has_task"])
+            self.assertEqual(task["task_id"], DEFAULT_REQUEST_ID)
+
+    def test_existing_work_root_request_envelope_is_preserved(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            work = Path(raw)
+            original = _request_envelope()
+            (work / "request_envelope.json").write_text(json.dumps(original, indent=2), encoding="utf-8")
+            result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(result["status"], "success", msg=result["errors"])
+            status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(status, 200)
+            self.assertEqual(task["task_id"], "prompt660c_next_analysis")
+            saved = json.loads((work / "request_envelope.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["request_id"], "prompt660c_next_analysis")
+            self.assertNotEqual(saved["request_id"], DEFAULT_REQUEST_ID)
+            self.assertEqual((work / "request.md").read_text(encoding="utf-8").strip(), original["prompt_text"])
+            status_payload = json.loads((work / "status.json").read_text(encoding="utf-8"))
+            self.assertEqual(status_payload["request_id"], "prompt660c_next_analysis")
+
+    def test_explicit_request_envelope_path_is_respected(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw, tempfile.TemporaryDirectory(dir="/tmp") as src_raw:
+            src = Path(src_raw) / "request_envelope.json"
+            src.write_text(json.dumps(_request_envelope(), indent=2), encoding="utf-8")
+            result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=raw, request_envelope_path=src)
+            self.assertEqual(result["status"], "success", msg=result["errors"])
+            self.assertEqual(result["request_id"], "prompt660c_next_analysis")
+            status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(status, 200)
+            self.assertEqual(task["task_id"], "prompt660c_next_analysis")
+            self.assertNotIn(DEFAULT_REQUEST_ID, task["prompt"])
+
+    def test_invalid_request_envelope_path_is_rejected(self):
+        invalid_cases = [
+            ("missing request_id", _request_envelope(request_id="")),
+            ("missing prompt", {k: v for k, v in _request_envelope().items() if k != "prompt_text"}),
+        ]
+        for label, payload in invalid_cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory(dir="/tmp") as raw:
+                path = Path(raw) / "bad_request_envelope.json"
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=Path(raw) / "work", request_envelope_path=path)
+                self.assertEqual(result["status"], "blocked")
+                self.assertTrue(result["errors"])
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            path = Path(raw) / "bad_request_envelope.json"
+            path.write_text("{not json", encoding="utf-8")
+            result = prepare_bridge_work(repo_root=REPO_ROOT, work_root=Path(raw) / "work", request_envelope_path=path)
+            self.assertEqual(result["status"], "blocked")
+            self.assertTrue(any("invalid JSON" in error for error in result["errors"]))
+
+    def test_post_request_updates_active_request_and_rejects_invalid_without_corruption(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            prepare_bridge_work(repo_root=REPO_ROOT, work_root=raw)
+            status, payload = dispatch_local_request(
+                method="POST",
+                path="/request",
+                body=_request_envelope(),
+                repo_root=REPO_ROOT,
+                work_root=raw,
+            )
+            self.assertEqual(status, 200, msg=payload.get("errors"))
+            self.assertEqual(payload["request_id"], "prompt660c_next_analysis")
+            status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(status, 200)
+            self.assertEqual(task["task_id"], "prompt660c_next_analysis")
+
+            status, bad = dispatch_local_request(
+                method="POST",
+                path="/request",
+                body=_request_envelope(request_id="", prompt_text=""),
+                repo_root=REPO_ROOT,
+                work_root=raw,
+            )
+            self.assertEqual(status, 400)
+            self.assertTrue(bad["errors"])
+            status, task = dispatch_local_request(method="GET", path="/next-task", repo_root=REPO_ROOT, work_root=raw)
+            self.assertEqual(status, 200)
+            self.assertEqual(task["task_id"], "prompt660c_next_analysis")
 
     def test_response_endpoint_rejects_malformed_json(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as raw:

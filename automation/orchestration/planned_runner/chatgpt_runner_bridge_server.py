@@ -82,6 +82,59 @@ def _read_json(path: Path) -> tuple[dict[str, Any], list[str]]:
     return dict(loaded), []
 
 
+def _request_prompt_text(envelope: Mapping[str, Any]) -> str:
+    return _txt(envelope.get("prompt_text")) or _txt(envelope.get("prompt"))
+
+
+def validate_browser_request_envelope(payload: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Validate the local browser request envelope shape consumed by the extension."""
+    errors: list[str] = []
+    if not isinstance(payload, Mapping):
+        return {}, ["request envelope must be a JSON object"]
+    schema = _txt(payload.get("schema_version"))
+    if schema != BROWSER_REQUEST_ENVELOPE_SCHEMA:
+        errors.append(f"schema_version must be {BROWSER_REQUEST_ENVELOPE_SCHEMA!r}")
+    request_id = _txt(payload.get("request_id"))
+    if not request_id:
+        errors.append("request_id is required")
+    prompt_text = _request_prompt_text(payload)
+    if not prompt_text:
+        errors.append("prompt_text or prompt is required")
+    envelope = dict(payload)
+    envelope["schema_version"] = schema
+    envelope["adapter"] = _txt(envelope.get("adapter"), default=BROWSER_OPERATOR_ADAPTER_NAME)
+    envelope["request_id"] = request_id
+    envelope["status"] = _txt(envelope.get("status"), default="request_loaded")
+    if prompt_text:
+        envelope["prompt_text"] = prompt_text
+    if "prompt_fingerprint" not in envelope and prompt_text:
+        envelope["prompt_fingerprint"] = _fingerprint(prompt_text)
+    return envelope, errors
+
+
+def _load_request_envelope_file(path: str | Path) -> tuple[dict[str, Any], list[str]]:
+    payload, errors = _read_json(Path(path))
+    if errors:
+        return {}, errors
+    return validate_browser_request_envelope(payload)
+
+
+def _write_prepared_request(paths: Mapping[str, Path], envelope: Mapping[str, Any]) -> None:
+    prompt_text = _request_prompt_text(envelope)
+    _write_json(paths["request_envelope"], envelope)
+    paths["legacy_request"].parent.mkdir(parents=True, exist_ok=True)
+    paths["legacy_request"].write_text(prompt_text + "\n", encoding="utf-8")
+    _write_json(
+        paths["status"],
+        {
+            "status": "request_prepared",
+            "request_id": _txt(envelope.get("request_id")),
+            "request_envelope_path": paths["request_envelope"].as_posix(),
+            "updated_at": _now_iso(),
+        },
+    )
+
+
 def is_safe_bridge_bind_host(host: str, *, allow_private_host_bind: bool = False) -> bool:
     """Return whether a bridge bind host is safe under the current mode."""
     normalized = _txt(host).lower()
@@ -192,31 +245,38 @@ def prepare_bridge_work(
     repo_root: str | Path = ".",
     work_root: str | Path = DEFAULT_WORK_ROOT,
     request_id: str = DEFAULT_REQUEST_ID,
+    request_envelope_path: str | Path | None = None,
 ) -> dict[str, Any]:
     work = Path(work_root)
-    request = build_bridge_analysis_request(request_id)
-    created = create_browser_request_envelope(request)
-    if created.get("status") != "success":
-        return {"status": "blocked", "errors": created.get("errors", []), "request_envelope_path": ""}
-    envelope = _append_output_contract(created["envelope"], request_id)
-    request_text = json.dumps(envelope, ensure_ascii=False, indent=2, sort_keys=True)
     paths = bridge_paths(work)
-    _write_json(paths["request_envelope"], envelope)
-    paths["legacy_request"].write_text(request_text + "\n", encoding="utf-8")
-    _write_json(
-        paths["status"],
-        {
-            "status": "request_prepared",
-            "request_id": request_id,
-            "request_envelope_path": paths["request_envelope"].as_posix(),
-            "updated_at": _now_iso(),
-        },
-    )
+    explicit_path = Path(request_envelope_path) if request_envelope_path else None
+    if explicit_path:
+        envelope, envelope_errors = _load_request_envelope_file(explicit_path)
+        if envelope_errors:
+            return {"status": "blocked", "errors": envelope_errors, "request_envelope_path": explicit_path.as_posix()}
+        _write_prepared_request(paths, envelope)
+    elif paths["request_envelope"].is_file():
+        envelope, envelope_errors = _load_request_envelope_file(paths["request_envelope"])
+        if envelope_errors:
+            return {
+                "status": "blocked",
+                "errors": envelope_errors,
+                "request_envelope_path": paths["request_envelope"].as_posix(),
+            }
+        _write_prepared_request(paths, envelope)
+    else:
+        request = build_bridge_analysis_request(request_id)
+        created = create_browser_request_envelope(request)
+        if created.get("status") != "success":
+            return {"status": "blocked", "errors": created.get("errors", []), "request_envelope_path": ""}
+        envelope = _append_output_contract(created["envelope"], request_id)
+        _write_prepared_request(paths, envelope)
     protocol = inspect_protocol(repo_root)
+    prepared_request_id = _txt(envelope.get("request_id"), default=request_id)
     return {
         "status": "success" if protocol["old_endpoints_found"] else "partial",
         "errors": protocol.get("errors", []),
-        "request_id": request_id,
+        "request_id": prepared_request_id,
         "work_root": work.as_posix(),
         "request_envelope_path": paths["request_envelope"].as_posix(),
         "legacy_request_path": paths["legacy_request"].as_posix(),
@@ -247,6 +307,13 @@ def bridge_paths(work_root: str | Path) -> dict[str, Path]:
 def load_prepared_request(work_root: str | Path = DEFAULT_WORK_ROOT) -> tuple[dict[str, Any], list[str]]:
     paths = bridge_paths(work_root)
     return _read_json(paths["request_envelope"])
+
+
+def active_request_id(work_root: str | Path = DEFAULT_WORK_ROOT, fallback: str = DEFAULT_REQUEST_ID) -> str:
+    envelope, errors = load_prepared_request(work_root)
+    if errors:
+        return fallback
+    return _txt(envelope.get("request_id"), default=fallback)
 
 
 def _coerce_legacy_result_payload(payload: Mapping[str, Any], request_id: str) -> tuple[dict[str, Any], list[str]]:
@@ -370,7 +437,7 @@ def dispatch_local_request(
     repo = Path(repo_root)
     payload = dict(body or {})
     if method == "GET" and path == "/health":
-        return 200, {"status": "ok", "host": DEFAULT_HOST, "request_id": request_id}
+        return 200, {"status": "ok", "host": DEFAULT_HOST, "request_id": active_request_id(work, request_id)}
     if method == "GET" and path in {"/request", "/next-task"}:
         envelope, errors = load_prepared_request(work)
         if errors:
@@ -390,6 +457,17 @@ def dispatch_local_request(
         }
     if method == "GET" and path == "/status":
         return 200, current_status(work)
+    if method == "POST" and path == "/request":
+        envelope, errors = validate_browser_request_envelope(payload)
+        if errors:
+            return 400, {"status": "blocked", "errors": errors}
+        paths = bridge_paths(work)
+        _write_prepared_request(paths, envelope)
+        return 200, {
+            "status": "success",
+            "request_id": envelope["request_id"],
+            "request_envelope_path": paths["request_envelope"].as_posix(),
+        }
     if method == "POST" and path == "/status":
         paths = bridge_paths(work)
         existing = current_status(work)
@@ -398,14 +476,14 @@ def dispatch_local_request(
         _write_json(paths["status"], existing)
         return 200, {"ok": True, "status": existing}
     if method == "POST" and path == "/response":
-        result = accept_response_envelope(payload, repo_root=repo, work_root=work, request_id=request_id)
+        result = accept_response_envelope(payload, repo_root=repo, work_root=work, request_id=active_request_id(work, request_id))
         return (200 if result.get("status") == "success" else 400), result
     if method == "POST" and path == "/result":
         result = accept_response_envelope(
             payload,
             repo_root=repo,
             work_root=work,
-            request_id=request_id,
+            request_id=active_request_id(work, request_id),
             legacy_result_payload=True,
         )
         return (200 if result.get("status") == "success" else 400), {
@@ -463,7 +541,12 @@ def run_once_if_response_present(
     payload, errors = _read_json(paths["response_envelope"])
     if errors:
         return _write_status_result(paths, "blocked", errors)
-    return accept_response_envelope(payload, repo_root=repo_root, work_root=work_root, request_id=request_id)
+    return accept_response_envelope(
+        payload,
+        repo_root=repo_root,
+        work_root=work_root,
+        request_id=active_request_id(work_root, request_id),
+    )
 
 
 def extension_steps(
@@ -575,13 +658,21 @@ def create_server(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
     request_id: str = DEFAULT_REQUEST_ID,
+    request_envelope_path: str | Path | None = None,
     allow_private_host_bind: bool = False,
 ) -> ThreadingHTTPServer:
     if not is_safe_bridge_bind_host(host, allow_private_host_bind=allow_private_host_bind):
         raise ValueError(
             "bridge server host must be loopback by default; private IPv4 WSL binds require --allow-private-host-bind"
         )
-    prepare_bridge_work(repo_root=repo_root, work_root=work_root, request_id=request_id)
+    prepared = prepare_bridge_work(
+        repo_root=repo_root,
+        work_root=work_root,
+        request_id=request_id,
+        request_envelope_path=request_envelope_path,
+    )
+    if prepared.get("status") == "blocked":
+        raise ValueError("; ".join(str(e) for e in prepared.get("errors", [])) or "request preparation failed")
     handler = make_handler(repo_root=repo_root, work_root=work_root, request_id=request_id)
     return ThreadingHTTPServer((host, port), handler)
 
@@ -595,7 +686,9 @@ __all__ = [
     "is_safe_bridge_bind_host",
     "inspect_protocol",
     "prepare_bridge_work",
+    "validate_browser_request_envelope",
     "load_prepared_request",
+    "active_request_id",
     "accept_response_envelope",
     "current_status",
     "dispatch_local_request",

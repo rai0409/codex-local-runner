@@ -68,6 +68,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--request-id", default=DEFAULT_REQUEST_ID)
+    parser.add_argument(
+        "--request-envelope-path",
+        default="",
+        help="Use an existing browser_chatgpt_request_envelope_v1 JSON file instead of generating the default request.",
+    )
     parser.add_argument("--response-envelope", default="")
     parser.add_argument(
         "--allow-private-host-bind",
@@ -88,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
                 repo_root=args.repo_root,
                 work_root=args.work_root,
                 request_id=args.request_id,
+                request_envelope_path=args.request_envelope_path or None,
             )
         )
         return 0
@@ -160,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             request_id=args.request_id,
+            request_envelope_path=args.request_envelope_path or None,
             allow_private_host_bind=args.allow_private_host_bind,
         )
         print(f"ChatGPT Runner Bridge server listening on http://{args.host}:{args.port}")
