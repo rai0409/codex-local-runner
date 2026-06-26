@@ -9,6 +9,7 @@ from pathlib import Path
 from automation.orchestration.planned_runner.browser_chatgpt_operator_adapter import (
     BROWSER_REQUEST_ENVELOPE_SCHEMA,
     BROWSER_RESPONSE_ENVELOPE_SCHEMA,
+    normalize_browser_response_to_analysis_artifact,
 )
 from automation.orchestration.planned_runner.chatgpt_runner_bridge_server import (
     DEFAULT_HOST,
@@ -72,6 +73,45 @@ def _response(**overrides):
     }
     payload.update(overrides)
     return payload
+
+
+OBSERVED_PROMPT_660_STRINGS = [
+    (
+        "Prompt 660d: Add a local-only two-cycle autonomy proof harness. It must use synthetic "
+        "browser response artifacts, reuse the existing assimilation, execution gate, and capture gate, "
+        "and stop after exactly two cycles."
+    ),
+    (
+        "Prompt 660e: Add tests for the two-cycle proof harness. Cover successful two-cycle completion, "
+        "duplicate fingerprint stop, max-iteration stop, unsafe artifact path rejection, missing approval "
+        "rejection, and missing capture artifact rejection."
+    ),
+    (
+        "Prompt 660f: Add a minimal operator-facing evidence summary writer for the two-cycle proof. "
+        "It should summarize only local safe artifacts."
+    ),
+]
+
+
+def _loose_artifact(**overrides):
+    artifact = {
+        "schema_version": "analysis_artifact_v1",
+        "request_id": DEFAULT_REQUEST_ID,
+        "source": "chatgpt_browser",
+        "status": "success",
+        "current_state_summary": "Current boundary is one safe browser-to-Codex cycle proven.",
+        "confirmed_completed": ["Prompt660C one-cycle proof"],
+        "missing_gaps": ["Second-cycle assimilation needs Prompt655-compatible prompt metadata."],
+        "recommended_next_action": (
+            "Run a local-only two-cycle proof harness with execution disabled by default, then enable only "
+            "the minimum gated path needed to prove cycle 2."
+        ),
+        "recommended_prompts": list(OBSERVED_PROMPT_660_STRINGS),
+        "evaluation_score_out_of_100": 88,
+        "risk_notes": ["Keep all execution gated and local-only."],
+    }
+    artifact.update(overrides)
+    return artifact
 
 
 def _request_envelope(**overrides):
@@ -394,6 +434,132 @@ class ChatgptRunnerBridgeServerTests(unittest.TestCase):
             artifact = json.loads((Path(raw) / "analysis_artifact.json").read_text())
             _, errors = validate_analysis_artifact(artifact)
             self.assertEqual(errors, [])
+
+    def test_loose_chatgpt_artifact_string_prompts_normalize_to_prompt655_batch(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            status, payload = dispatch_local_request(
+                method="POST",
+                path="/response",
+                body=_response(chatgpt_output=json.dumps(_loose_artifact())),
+                repo_root=REPO_ROOT,
+                work_root=raw,
+            )
+            self.assertEqual(status, 200, msg=payload.get("errors"))
+            self.assertEqual(payload["status"], "success")
+            self.assertTrue(payload["response_envelope_validated"])
+            self.assertTrue(payload["analysis_artifact_normalized"])
+            self.assertTrue(payload["prompt657_validation_compatibility_verified"])
+            self.assertTrue(payload["prompt655_batch_conversion_compatibility_verified"])
+            self.assertTrue(payload["next_prompt_selection_verified"])
+
+            artifact = json.loads((Path(raw) / "analysis_artifact.json").read_text(encoding="utf-8"))
+            self.assertEqual(artifact["recommended_next_action"], "generate_prompt_batch")
+            prompts = artifact["recommended_prompts"]
+            expected = [
+                "prompt660d_two_cycle_autonomy_proof_harness",
+                "prompt660e_two_cycle_proof_harness_tests",
+                "prompt660f_two_cycle_evidence_summary_writer",
+            ]
+            self.assertEqual([prompt["prompt_id"] for prompt in prompts], expected)
+            for prompt in prompts:
+                prompt_id = prompt["prompt_id"]
+                self.assertTrue(prompt["body"])
+                self.assertEqual(prompt["expected_tag"], prompt_id)
+                self.assertEqual(
+                    prompt["expected_report_path"],
+                    f"artifacts/autonomous_runtime/{prompt_id}_report.json",
+                )
+                self.assertEqual(
+                    prompt["expected_summary_path"],
+                    f"artifacts/autonomous_runtime/{prompt_id}_summary.md",
+                )
+                self.assertEqual(prompt["required_tests"], [])
+                self.assertEqual(
+                    prompt["pass_conditions"],
+                    {"status_field": f"{prompt_id}_status", "status_value": "success"},
+                )
+
+            manifest = json.loads((Path(raw) / "prompt_batch" / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual([entry["prompt_id"] for entry in manifest["prompts"]], expected)
+
+    def test_partial_prompt_objects_are_filled_for_prompt655_compatibility(self):
+        partial = _loose_artifact(
+            recommended_next_action="generate_prompt_batch",
+            recommended_prompts=[
+                {
+                    "prompt_id": "prompt661c_partial",
+                    "title": "Partial prompt",
+                    "body": "Implement only local response assimilation tests.",
+                }
+            ],
+        )
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            result = accept_response_envelope(
+                _response(chatgpt_output=json.dumps(partial)),
+                repo_root=REPO_ROOT,
+                work_root=raw,
+            )
+            self.assertEqual(result["status"], "success", msg=result["errors"])
+            artifact = json.loads((Path(raw) / "analysis_artifact.json").read_text(encoding="utf-8"))
+            prompt = artifact["recommended_prompts"][0]
+            self.assertEqual(prompt["prompt_id"], "prompt661c_partial")
+            self.assertEqual(prompt["expected_tag"], "prompt661c_partial")
+            self.assertEqual(
+                prompt["expected_report_path"],
+                "artifacts/autonomous_runtime/prompt661c_partial_report.json",
+            )
+            self.assertEqual(
+                prompt["expected_summary_path"],
+                "artifacts/autonomous_runtime/prompt661c_partial_summary.md",
+            )
+            self.assertEqual(
+                prompt["pass_conditions"],
+                {"status_field": "prompt661c_partial_status", "status_value": "success"},
+            )
+
+    def test_free_text_action_without_prompts_normalizes_to_manual_review_required(self):
+        response = _response(
+            chatgpt_output=json.dumps(
+                _loose_artifact(
+                    recommended_next_action="Run something next.",
+                    recommended_prompts=[],
+                )
+            )
+        )
+        result = normalize_browser_response_to_analysis_artifact(response, expected_request_id=DEFAULT_REQUEST_ID)
+        self.assertEqual(result["status"], "success", msg=result["errors"])
+        self.assertEqual(result["artifact"]["recommended_next_action"], "manual_review_required")
+        self.assertEqual(result["artifact"]["recommended_prompts"], [])
+
+    def test_invalid_json_chatgpt_output_still_fails_safely(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            result = accept_response_envelope(
+                _response(chatgpt_output="{not json"),
+                repo_root=REPO_ROOT,
+                work_root=raw,
+            )
+            self.assertEqual(result["status"], "blocked")
+            self.assertTrue(any("valid JSON" in error for error in result["errors"]))
+
+    def test_unsafe_prompt_metadata_paths_fail_closed(self):
+        artifact = _loose_artifact(
+            recommended_next_action="generate_prompt_batch",
+            recommended_prompts=[
+                {
+                    "prompt_id": "prompt661c_unsafe_path",
+                    "body": "Keep this prompt local-only.",
+                    "expected_report_path": "../unsafe.json",
+                }
+            ],
+        )
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            result = accept_response_envelope(
+                _response(chatgpt_output=json.dumps(artifact)),
+                repo_root=REPO_ROOT,
+                work_root=raw,
+            )
+            self.assertEqual(result["status"], "blocked")
+            self.assertTrue(any("repo-relative safe" in error for error in result["errors"]))
 
     def test_legacy_result_endpoint_accepts_stringified_response_envelope(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as raw:

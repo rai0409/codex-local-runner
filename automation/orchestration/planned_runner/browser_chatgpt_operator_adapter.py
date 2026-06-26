@@ -37,6 +37,30 @@ ALLOWED_RESPONSE_STATUSES = (
 )
 SECRET_FIELD_PATTERN = re.compile(r"(cookie|token|password|secret|credential)", re.IGNORECASE)
 REQUEST_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+PROMPT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+PROMPT_LABEL_PATTERN = re.compile(r"\bprompt\s+([0-9]+[a-z]?)\b", re.IGNORECASE)
+PROMPT_ID_SAFE_CHARS = re.compile(r"[^a-z0-9._-]+")
+
+KNOWN_PROMPT_DEFAULTS = {
+    "660d": {
+        "prompt_id": "prompt660d_two_cycle_autonomy_proof_harness",
+        "expected_tag": "prompt660d_two_cycle_autonomy_proof_harness",
+        "expected_report_path": "artifacts/autonomous_runtime/prompt660d_two_cycle_autonomy_proof_harness_report.json",
+        "expected_summary_path": "artifacts/autonomous_runtime/prompt660d_two_cycle_autonomy_proof_harness_summary.md",
+    },
+    "660e": {
+        "prompt_id": "prompt660e_two_cycle_proof_harness_tests",
+        "expected_tag": "prompt660e_two_cycle_proof_harness_tests",
+        "expected_report_path": "artifacts/autonomous_runtime/prompt660e_two_cycle_proof_harness_tests_report.json",
+        "expected_summary_path": "artifacts/autonomous_runtime/prompt660e_two_cycle_proof_harness_tests_summary.md",
+    },
+    "660f": {
+        "prompt_id": "prompt660f_two_cycle_evidence_summary_writer",
+        "expected_tag": "prompt660f_two_cycle_evidence_summary_writer",
+        "expected_report_path": "artifacts/autonomous_runtime/prompt660f_two_cycle_evidence_summary_writer_report.json",
+        "expected_summary_path": "artifacts/autonomous_runtime/prompt660f_two_cycle_evidence_summary_writer_summary.md",
+    },
+}
 
 
 def _txt(value: Any, *, default: str = "") -> str:
@@ -96,6 +120,139 @@ def _find_secret_keys(value: Any, prefix: str = "") -> list[str]:
 
 def _fingerprint(text: str) -> str:
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _str_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [_txt(item) for item in value if _txt(item)]
+
+
+def _is_safe_relpath(value: str) -> bool:
+    text = _txt(value)
+    if not text or text.startswith("/") or text.startswith("~"):
+        return False
+    if ".." in Path(text).parts or "\x00" in text:
+        return False
+    return True
+
+
+def _slug_text(value: Any, *, fallback: str) -> str:
+    text = _txt(value).lower()
+    slug = PROMPT_ID_SAFE_CHARS.sub("_", text).strip("._-")[:64]
+    if not slug:
+        slug = fallback
+    if not slug[0].isalnum():
+        slug = f"p_{slug}"[:64]
+    return slug if PROMPT_ID_PATTERN.match(slug) else fallback
+
+
+def _known_prompt_defaults(value: Any) -> dict[str, str]:
+    text = _txt(value)
+    match = PROMPT_LABEL_PATTERN.search(text)
+    if not match:
+        return {}
+    return dict(KNOWN_PROMPT_DEFAULTS.get(match.group(1).lower(), {}))
+
+
+def _generic_prompt_defaults(prompt_id: str) -> dict[str, str]:
+    return {
+        "prompt_id": prompt_id,
+        "expected_tag": prompt_id,
+        "expected_report_path": f"artifacts/autonomous_runtime/{prompt_id}_report.json",
+        "expected_summary_path": f"artifacts/autonomous_runtime/{prompt_id}_summary.md",
+    }
+
+
+def _safe_prompt_id(raw: Any, *, body: str, index: int, seen: set[str]) -> str:
+    known = _known_prompt_defaults(body)
+    candidate = _txt(raw) or known.get("prompt_id", "")
+    if not candidate or not PROMPT_ID_PATTERN.match(candidate):
+        label = PROMPT_LABEL_PATTERN.search(body)
+        if label:
+            prefix = f"prompt{label.group(1).lower()}"
+            remainder = body[label.end():].split(".", 1)[0].split(":", 1)[-1]
+            candidate = _slug_text(f"{prefix}_{remainder}", fallback=f"{prefix}_{index}")
+        else:
+            candidate = _slug_text(body[:80], fallback=f"prompt_{index}")
+    base = candidate[:64]
+    candidate = base
+    suffix = 2
+    while candidate in seen:
+        suffix_text = f"_{suffix}"
+        candidate = f"{base[:64 - len(suffix_text)]}{suffix_text}"
+        suffix += 1
+    seen.add(candidate)
+    return candidate
+
+
+def _normalize_recommended_prompt(raw: Any, index: int, seen: set[str]) -> dict[str, Any]:
+    if isinstance(raw, Mapping):
+        body = _txt(raw.get("body"), default=_txt(raw.get("title")))
+        if not body:
+            body = _txt(raw.get("prompt"), default=_txt(raw.get("description")))
+        source_for_defaults = body or _txt(raw.get("prompt_id")) or _txt(raw.get("title"))
+        prompt_id = _safe_prompt_id(raw.get("prompt_id"), body=source_for_defaults, index=index, seen=seen)
+        existing = dict(raw)
+    else:
+        body = _txt(raw)
+        prompt_id = _safe_prompt_id("", body=body, index=index, seen=seen)
+        existing = {}
+
+    if not body:
+        body = prompt_id
+    known = _known_prompt_defaults(body) or _known_prompt_defaults(prompt_id)
+    defaults = known or _generic_prompt_defaults(prompt_id)
+    expected_tag = _txt(existing.get("expected_tag"), default=defaults["expected_tag"])
+    expected_report_path = _txt(existing.get("expected_report_path"), default=defaults["expected_report_path"])
+    expected_summary_path = _txt(existing.get("expected_summary_path"), default=defaults["expected_summary_path"])
+
+    pass_conditions = existing.get("pass_conditions", {})
+    if not isinstance(pass_conditions, Mapping):
+        pass_conditions = {}
+    status_field = _txt(pass_conditions.get("status_field"), default=f"{prompt_id}_status")
+    status_value = _txt(pass_conditions.get("status_value"), default="success")
+
+    return {
+        "prompt_id": prompt_id,
+        "title": _txt(existing.get("title"), default=prompt_id),
+        "body": body,
+        "expected_tag": expected_tag,
+        "expected_report_path": expected_report_path,
+        "expected_summary_path": expected_summary_path,
+        "required_tests": _str_list(existing.get("required_tests")),
+        "pass_conditions": {"status_field": status_field, "status_value": status_value},
+    }
+
+
+def normalize_analysis_artifact_for_prompt655_compatibility(
+    payload: Mapping[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """Normalize loose ChatGPT analysis artifacts without executing prompt text."""
+    if not isinstance(payload, Mapping):
+        return {}, ["analysis artifact must be a JSON object"]
+    artifact = dict(payload)
+    raw_prompts = artifact.get("recommended_prompts", [])
+    prompt_items = raw_prompts if isinstance(raw_prompts, list) else []
+    action = _txt(artifact.get("recommended_next_action"))
+    if action not in ALLOWED_NEXT_ACTIONS:
+        artifact["recommended_next_action"] = "generate_prompt_batch" if prompt_items else "manual_review_required"
+
+    errors: list[str] = []
+    normalized_prompts: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    if raw_prompts is not None:
+        if not isinstance(raw_prompts, list):
+            errors.append("recommended_prompts must be a list")
+        else:
+            for index, item in enumerate(raw_prompts):
+                normalized = _normalize_recommended_prompt(item, index, seen)
+                for key in ("expected_report_path", "expected_summary_path"):
+                    if not _is_safe_relpath(normalized[key]):
+                        errors.append(f"{normalized['prompt_id']}.{key} is not repo-relative safe: {normalized[key]!r}")
+                normalized_prompts.append(normalized)
+    artifact["recommended_prompts"] = normalized_prompts
+    return artifact, errors
 
 
 def create_browser_request_envelope(
@@ -242,7 +399,15 @@ def normalize_browser_response_to_analysis_artifact(
             ],
             "artifact": {},
         }
-    artifact, artifact_errors = validate_analysis_artifact(parsed)
+    compatible, compatibility_errors = normalize_analysis_artifact_for_prompt655_compatibility(parsed)
+    if compatibility_errors:
+        return {
+            "status": "blocked",
+            "reason": "analysis_artifact_prompt655_compatibility_failed",
+            "errors": compatibility_errors,
+            "artifact": compatible or dict(parsed),
+        }
+    artifact, artifact_errors = validate_analysis_artifact(compatible)
     return {
         "status": "success" if not artifact_errors else "blocked",
         "reason": "analysis_artifact_valid" if not artifact_errors else "invalid_analysis_artifact",
@@ -333,6 +498,7 @@ __all__ = [
     "create_browser_request_envelope",
     "create_browser_request_envelope_from_file",
     "validate_browser_response_envelope",
+    "normalize_analysis_artifact_for_prompt655_compatibility",
     "normalize_browser_response_to_analysis_artifact",
     "normalize_browser_response_file_to_analysis_artifact",
     "inspect_extension_files",
