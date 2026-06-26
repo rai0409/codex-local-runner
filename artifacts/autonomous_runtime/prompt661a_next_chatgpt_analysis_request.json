@@ -1,0 +1,10 @@
+{
+  "schema_version": "browser_chatgpt_request_envelope_v1",
+  "request_id": "prompt661a_next_analysis",
+  "source": "codex_local_runner",
+  "current_capability_boundary": "two_safe_browser_to_codex_cycles_proven",
+  "requested_output_schema_versions": [
+    "analysis_artifact_v1"
+  ],
+  "instruction": "Analyze the next safest local-only step after two safe browser-to-Codex cycles have been proven. Focus on a bounded multi-cycle browser-to-Codex runner with explicit approval gates, duplicate prompt fingerprint stops, max-iteration stops, failure stops, Prompt655-compatible evidence, and artifact-only review. Do not request secrets, credentials, cookies, browser profile data, .env values, private session files, remote pushes, PR creation, merges, destructive cleanup, or arbitrary prompt execution."
+}
