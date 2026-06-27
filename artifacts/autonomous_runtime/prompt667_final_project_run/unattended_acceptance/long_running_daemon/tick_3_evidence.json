@@ -1,0 +1,11 @@
+{
+  "bounded_daemon_queue_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_3_bounded_daemon/daemon_queue.json",
+  "bounded_daemon_report_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_3_bounded_daemon/bounded_daemon_runner_report.json",
+  "bounded_daemon_state_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_3_bounded_daemon/daemon_state.json",
+  "internal_codex_executor_used": true,
+  "local_only_evidence_captured": true,
+  "status": "success",
+  "stop_reason": "max_cycles_reached",
+  "tick_id": "prompt665_item_3_unattended_local_proof",
+  "tick_index": 3
+}

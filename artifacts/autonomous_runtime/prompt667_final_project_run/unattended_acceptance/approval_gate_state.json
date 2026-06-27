@@ -1,0 +1,27 @@
+{
+  "approval_errors": [],
+  "created_at": "2026-06-27T06:38:55.473586Z",
+  "items": [
+    {
+      "approval_id": "prompt665_preapproval_1",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "tick_id": "prompt665_item_1_unattended_local_proof"
+    },
+    {
+      "approval_id": "prompt665_preapproval_2",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "tick_id": "prompt665_item_2_unattended_local_proof"
+    },
+    {
+      "approval_id": "prompt665_preapproval_3",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "tick_id": "prompt665_item_3_unattended_local_proof"
+    }
+  ],
+  "preapproved_queue_required": true,
+  "run_id": "prompt667_final_project_run_unattended",
+  "schema_version": "bounded_unattended_preapproval_v1"
+}

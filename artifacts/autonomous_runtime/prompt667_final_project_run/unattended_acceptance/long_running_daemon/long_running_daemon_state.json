@@ -1,0 +1,57 @@
+{
+  "artifact_paths": [
+    "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_1_evidence.json",
+    "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_2_evidence.json",
+    "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_3_evidence.json"
+  ],
+  "completed_ticks": [
+    {
+      "bounded_daemon_queue_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_1_bounded_daemon/daemon_queue.json",
+      "bounded_daemon_report_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_1_bounded_daemon/bounded_daemon_runner_report.json",
+      "bounded_daemon_state_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_1_bounded_daemon/daemon_state.json",
+      "evidence_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_1_evidence.json",
+      "internal_codex_executor_used": true,
+      "local_only_evidence_captured": true,
+      "status": "success",
+      "stop_reason": "max_cycles_reached",
+      "tick_id": "prompt665_item_1_unattended_local_proof",
+      "tick_index": 1
+    },
+    {
+      "bounded_daemon_queue_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_2_bounded_daemon/daemon_queue.json",
+      "bounded_daemon_report_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_2_bounded_daemon/bounded_daemon_runner_report.json",
+      "bounded_daemon_state_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_2_bounded_daemon/daemon_state.json",
+      "evidence_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_2_evidence.json",
+      "internal_codex_executor_used": true,
+      "local_only_evidence_captured": true,
+      "status": "success",
+      "stop_reason": "max_cycles_reached",
+      "tick_id": "prompt665_item_2_unattended_local_proof",
+      "tick_index": 2
+    },
+    {
+      "bounded_daemon_queue_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_3_bounded_daemon/daemon_queue.json",
+      "bounded_daemon_report_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_3_bounded_daemon/bounded_daemon_runner_report.json",
+      "bounded_daemon_state_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_3_bounded_daemon/daemon_state.json",
+      "evidence_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/tick_3_evidence.json",
+      "internal_codex_executor_used": true,
+      "local_only_evidence_captured": true,
+      "status": "success",
+      "stop_reason": "max_cycles_reached",
+      "tick_id": "prompt665_item_3_unattended_local_proof",
+      "tick_index": 3
+    }
+  ],
+  "failure_threshold": 1,
+  "lock_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/long_running_daemon.lock",
+  "max_ticks": 3,
+  "pid": 3,
+  "queue_path": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/long_running_daemon_queue.json",
+  "run_id": "prompt667_final_project_run_unattended_long_running",
+  "schema_version": "long_running_daemon_state_v1",
+  "status": "success",
+  "stop_file": "artifacts/autonomous_runtime/prompt667_final_project_run/unattended_acceptance/long_running_daemon/operator_stop.request",
+  "stop_reason": "max_ticks_reached",
+  "terminal": true,
+  "updated_at": "2026-06-27T06:38:55.489163Z"
+}

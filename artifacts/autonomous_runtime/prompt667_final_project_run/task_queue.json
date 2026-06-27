@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "approval_id": "prompt665_preapproval_1",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "prompt_path": "artifacts/autonomous_runtime/prompt667_final_project_run/preapproved_queue/prompts/prompt665_item_1_unattended_local_proof.md",
+      "status": "pending",
+      "tick_id": "prompt665_item_1_unattended_local_proof",
+      "tick_index": 1
+    },
+    {
+      "approval_id": "prompt665_preapproval_2",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "prompt_path": "artifacts/autonomous_runtime/prompt667_final_project_run/preapproved_queue/prompts/prompt665_item_2_unattended_local_proof.md",
+      "status": "pending",
+      "tick_id": "prompt665_item_2_unattended_local_proof",
+      "tick_index": 2
+    },
+    {
+      "approval_id": "prompt665_preapproval_3",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "prompt_path": "artifacts/autonomous_runtime/prompt667_final_project_run/preapproved_queue/prompts/prompt665_item_3_unattended_local_proof.md",
+      "status": "pending",
+      "tick_id": "prompt665_item_3_unattended_local_proof",
+      "tick_index": 3
+    }
+  ],
+  "schema_version": "prompt667_task_queue_v1"
+}

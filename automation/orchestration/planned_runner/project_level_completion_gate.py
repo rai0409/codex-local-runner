@@ -102,6 +102,37 @@ PRE_FINAL_CRITERIA = [
 
 FINAL_E2E_CRITERION = "final_end_to_end_unattended_project_run_not_yet_proven"
 
+FINAL_E2E_FIELDS = [
+    "final_e2e_acceptance_implemented",
+    "safe_project_goal_required",
+    "unsafe_project_goal_rejected",
+    "safe_task_queue_generated_or_loaded",
+    "approval_gate_verified",
+    "missing_approval_blocks_execution",
+    "no_human_intervention_during_run_verified",
+    "lock_acquired",
+    "duplicate_lock_rejected",
+    "durable_state_persisted",
+    "durable_queue_persisted",
+    "per_item_or_step_evidence_captured",
+    "internal_codex_executor_used",
+    "internal_executor_safety_gate_verified",
+    "implementation_artifact_created",
+    "validation_or_tests_executed",
+    "final_evidence_summary_written",
+    "terminal_state_recorded",
+    "stop_reason_recorded",
+    "local_only_evidence_captured",
+    "unsafe_paths_rejected",
+    "remote_actions_blocked",
+    "destructive_actions_blocked",
+    "credential_storage_prevented",
+    "browser_profile_access_prevented",
+    "cookie_access_prevented",
+    "env_value_access_prevented",
+    "final_project_level_audit_written",
+]
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -180,6 +211,7 @@ def run_project_level_completion_gate(
     *,
     repo_root: str | Path,
     out_dir: str | Path,
+    final_e2e_report_path: str | Path | None = None,
     write_reports: bool = True,
 ) -> dict[str, Any]:
     repo = Path(repo_root)
@@ -222,7 +254,28 @@ def run_project_level_completion_gate(
     else:
         fake_completion_rejected = True
 
-    if FINAL_E2E_CRITERION not in missing:
+    final_e2e_verified = False
+    final_e2e_report = {}
+    final_e2e_report_text = str(final_e2e_report_path or "").strip()
+    if final_e2e_report_text:
+        final_path = Path(final_e2e_report_text)
+        if not final_path.is_absolute():
+            final_path = repo / final_path
+        final_e2e_report, final_error = _read_json(final_path)
+        evidence_files_checked.append(final_path.relative_to(repo).as_posix() if final_path.is_relative_to(repo) else final_path.as_posix())
+        if final_error:
+            missing.append(f"final_e2e:report:{final_error}")
+        missing_final_fields = [
+            field for field in FINAL_E2E_FIELDS if final_e2e_report.get(field) is not True
+        ]
+        if int(final_e2e_report.get("queue_item_count", 0) or 0) < 3:
+            missing_final_fields.append("queue_item_count_at_least_3")
+        if missing_final_fields:
+            missing.append(f"final_e2e:missing_fields:{','.join(missing_final_fields)}")
+        else:
+            final_e2e_verified = True
+
+    if not final_e2e_verified and FINAL_E2E_CRITERION not in missing:
         missing.append(FINAL_E2E_CRITERION)
 
     browser_to_codex = all(
@@ -283,14 +336,18 @@ def run_project_level_completion_gate(
         ]
     )
 
-    pre_final_missing = [item for item in missing if item != FINAL_E2E_CRITERION]
+    pre_final_missing = [
+        item for item in missing
+        if item != FINAL_E2E_CRITERION and not item.startswith("final_e2e:")
+    ]
     readiness_for_prompt667 = not pre_final_missing
-    project_level_autonomy_complete = False
+    project_level_autonomy_complete = readiness_for_prompt667 and final_e2e_verified
     result = {
         "schema_version": "project_level_completion_gate_v1",
         "status": "success" if readiness_for_prompt667 else "blocked",
         "generated_at": _utc_now(),
         "readiness_for_prompt667": readiness_for_prompt667,
+        "final_e2e_verified": final_e2e_verified,
         "project_level_autonomy_complete": project_level_autonomy_complete,
         "missing_completion_criteria": missing,
         "missing_completion_criteria_count": len(missing),
@@ -305,11 +362,19 @@ def run_project_level_completion_gate(
         "internal_executor_invariants_verified": internal_executor,
         "browser_to_codex_invariants_verified": browser_to_codex,
         "fake_completion_rejected": fake_completion_rejected,
-        "current_capability_boundary_after": "project_level_autonomy_completion_gate_proven",
+        "current_capability_boundary_after": (
+            "project_level_autonomy_complete"
+            if project_level_autonomy_complete
+            else "project_level_autonomy_completion_gate_proven"
+        ),
         "next_recommended_action": (
-            "continue_to_end_to_end_unattended_project_run_acceptance"
-            if readiness_for_prompt667
-            else "manual_review_required"
+            "stabilize_and_document_for_release"
+            if project_level_autonomy_complete
+            else (
+                "continue_to_end_to_end_unattended_project_run_acceptance"
+                if readiness_for_prompt667
+                else "manual_review_required"
+            )
         ),
     }
     if write_reports:
@@ -320,6 +385,7 @@ def run_project_level_completion_gate(
 
 __all__ = [
     "FINAL_E2E_CRITERION",
+    "FINAL_E2E_FIELDS",
     "PRE_FINAL_CRITERIA",
     "PROMPT_EVIDENCE",
     "run_project_level_completion_gate",

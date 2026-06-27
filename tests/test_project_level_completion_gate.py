@@ -166,6 +166,54 @@ class ProjectLevelCompletionGateTests(unittest.TestCase):
             self.assertTrue(result["browser_to_codex_invariants_verified"])
             self.assertTrue(result["safety_invariants_verified"])
 
+    def test_final_e2e_report_completes_project_level_gate(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            repo = self._copy_fixture_repo(Path(raw))
+            final_path = repo / "artifacts" / "autonomous_runtime" / "prompt667" / "final.json"
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+            final_payload = {field: True for field in [
+                "final_e2e_acceptance_implemented",
+                "safe_project_goal_required",
+                "unsafe_project_goal_rejected",
+                "safe_task_queue_generated_or_loaded",
+                "approval_gate_verified",
+                "missing_approval_blocks_execution",
+                "no_human_intervention_during_run_verified",
+                "lock_acquired",
+                "duplicate_lock_rejected",
+                "durable_state_persisted",
+                "durable_queue_persisted",
+                "per_item_or_step_evidence_captured",
+                "internal_codex_executor_used",
+                "internal_executor_safety_gate_verified",
+                "implementation_artifact_created",
+                "validation_or_tests_executed",
+                "final_evidence_summary_written",
+                "terminal_state_recorded",
+                "stop_reason_recorded",
+                "local_only_evidence_captured",
+                "unsafe_paths_rejected",
+                "remote_actions_blocked",
+                "destructive_actions_blocked",
+                "credential_storage_prevented",
+                "browser_profile_access_prevented",
+                "cookie_access_prevented",
+                "env_value_access_prevented",
+                "final_project_level_audit_written",
+            ]}
+            final_payload["queue_item_count"] = 3
+            final_payload["project_level_autonomy_complete"] = True
+            final_path.write_text(json.dumps(final_payload), encoding="utf-8")
+            result = run_project_level_completion_gate(
+                repo_root=repo,
+                out_dir=repo / "artifacts" / "autonomous_runtime" / "prompt666_gate",
+                final_e2e_report_path=final_path,
+            )
+        self.assertTrue(result["readiness_for_prompt667"])
+        self.assertTrue(result["final_e2e_verified"])
+        self.assertTrue(result["project_level_autonomy_complete"])
+        self.assertEqual(result["missing_completion_criteria"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

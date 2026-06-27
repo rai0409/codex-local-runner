@@ -1,0 +1,11 @@
+{
+  "approved_for_execution": true,
+  "goal_id": "prompt667_final_local_autonomy_acceptance_note",
+  "goal_text": "Create a local-only final autonomy acceptance note that summarizes the accepted bounded unattended project run, references generated evidence, and writes a deterministic marker file under artifacts/autonomous_runtime/prompt667_final_project_run/.",
+  "local_only": true,
+  "requires_browser": false,
+  "requires_credentials": false,
+  "requires_network": false,
+  "run_id": "prompt667_final_project_run",
+  "schema_version": "prompt667_project_goal_v1"
+}
