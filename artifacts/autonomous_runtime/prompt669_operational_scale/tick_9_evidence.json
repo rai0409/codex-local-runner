@@ -1,0 +1,13 @@
+{
+  "bounded_daemon_queue_path": "artifacts/autonomous_runtime/prompt669_operational_scale/tick_9_bounded_daemon/daemon_queue.json",
+  "bounded_daemon_report_path": "artifacts/autonomous_runtime/prompt669_operational_scale/tick_9_bounded_daemon/bounded_daemon_runner_report.json",
+  "bounded_daemon_state_path": "artifacts/autonomous_runtime/prompt669_operational_scale/tick_9_bounded_daemon/daemon_state.json",
+  "internal_codex_executor_used": true,
+  "local_only_evidence_captured": true,
+  "run_id": "prompt669_operational_scale",
+  "schema_version": "prompt669_tick_evidence_v1",
+  "status": "success",
+  "stop_reason": "max_cycles_reached",
+  "tick_id": "prompt669_item_09",
+  "tick_index": 9
+}

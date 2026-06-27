@@ -1,0 +1,9 @@
+{
+  "bounded": true,
+  "created_at": "2026-06-27T08:38:14.019615Z",
+  "evidence_count": 10,
+  "queue_item_count": 10,
+  "run_id": "prompt669_operational_scale",
+  "schema_version": "prompt669_scale_marker_v1",
+  "tick_count": 10
+}

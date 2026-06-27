@@ -1,0 +1,15 @@
+{
+  "artifact_paths": [],
+  "completed_ticks": [],
+  "lock_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/operational_scale.lock",
+  "max_cycles": 5,
+  "max_items": 10,
+  "max_ticks": 10,
+  "queue_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/task_queue.json",
+  "run_id": "prompt669_operational_scale_failure_threshold",
+  "schema_version": "prompt669_operational_scale_state_v1",
+  "status": "blocked",
+  "stop_reason": "failure_threshold_reached",
+  "terminal": true,
+  "updated_at": "2026-06-27T08:38:14.004195Z"
+}
