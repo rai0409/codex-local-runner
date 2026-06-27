@@ -1,0 +1,10 @@
+{
+  "schema_version": "browser_chatgpt_request_envelope_v1",
+  "request_id": "prompt662_next_analysis",
+  "source": "codex_local_runner",
+  "current_capability_boundary": "bounded_multi_cycle_internal_executor_proven",
+  "requested_output_schema_versions": [
+    "analysis_artifact_v1"
+  ],
+  "instruction": "Analyze the next safest local-only step after a bounded multi-cycle internal executor proof. Focus on daemon hardening: persistent queue state, restart safety, duplicate suppression, failure budgets, evidence retention, and operator-readable summaries. Do not request secrets, credentials, cookies, browser profile data, .env values, private session files, remote pushes, PR creation, merges, destructive cleanup, or arbitrary prompt execution."
+}

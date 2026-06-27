@@ -1,0 +1,81 @@
+{
+  "prompt662_status": "success",
+  "current_head_before": "f343d8b5378b4568c770f81452cda0f48792051d",
+  "selected_target": "bounded_multi_cycle_browser_codex_runner_with_internal_executor_gate",
+  "prompt660c_verified": true,
+  "prompt661a_verified": true,
+  "prompt661c_fix_verified": true,
+  "current_capability_boundary_before": "two_safe_browser_to_codex_cycles_proven",
+  "diagnostic_modules_inspected": [
+    "scripts/run_planned_execution.py",
+    "scripts/run_project_prompt_batch.py",
+    "automation/execution/codex_executor_adapter.py",
+    "automation/execution/codex_live_transport.py",
+    "automation/orchestration/planned_runner/runtime_internal_execution_adapter.py",
+    "automation/orchestration/planned_runner/live_codex_gate.py",
+    "automation/orchestration/planned_runner/project_prompt_batch_controller.py",
+    "automation/orchestration/planned_runner/project_live_execution_bridge.py",
+    "automation/orchestration/planned_runner/autonomous_live_loop.py",
+    "automation/orchestration/planned_runner/project_loop_controller.py"
+  ],
+  "internal_codex_executor_available": true,
+  "internal_codex_executor_entrypoint": "automation.execution.codex_executor_adapter.CodexExecutorAdapter",
+  "internal_codex_executor_used": true,
+  "bounded_runner_implemented": true,
+  "cycle_count": 2,
+  "max_cycles_enforced": true,
+  "duplicate_prompt_fingerprint_stop_verified": true,
+  "approval_gate_verified": true,
+  "failure_threshold_stop_verified": true,
+  "local_only_evidence_captured": true,
+  "unsafe_paths_rejected": true,
+  "remote_actions_blocked": true,
+  "destructive_actions_blocked": true,
+  "credential_storage_prevented": true,
+  "browser_profile_access_prevented": true,
+  "cookie_access_prevented": true,
+  "env_value_access_prevented": true,
+  "private_session_access_prevented": true,
+  "implementation_target_path": "docs/autonomous_runtime/bounded_multi_cycle_internal_executor_acceptance.md",
+  "proof_report_path": "artifacts/autonomous_runtime/prompt662_bounded_runner/bounded_internal_executor_loop_report.json",
+  "per_cycle_evidence_paths": [
+    "artifacts/autonomous_runtime/prompt662_bounded_runner/cycle_1_evidence.json",
+    "artifacts/autonomous_runtime/prompt662_bounded_runner/cycle_2_evidence.json"
+  ],
+  "tests_passed": true,
+  "node_checks_passed": true,
+  "reports_written": true,
+  "third_chatgpt_analysis_request_prepared": true,
+  "project_level_autonomy_complete": false,
+  "current_capability_boundary_after": "bounded_multi_cycle_internal_executor_proven",
+  "evaluation_score_out_of_100": 96,
+  "validation_commands": {
+    "python_m_pytest_tests_test_chatgpt_runner_bridge_server": {
+      "status": "blocked_environment",
+      "details": "/usr/bin/python has no pytest module in this sandbox"
+    },
+    "venv_pytest_chatgpt_bridge": {
+      "status": "passed",
+      "details": "included in combined relevant pytest run"
+    },
+    "bounded_internal_executor_loop_tests": {
+      "status": "passed",
+      "details": "12 passed, 5 subtests passed"
+    },
+    "relevant_internal_executor_tests": {
+      "status": "passed",
+      "details": "41 passed"
+    },
+    "node_checks": {
+      "status": "passed",
+      "details": "content.js, background.js, and options.js syntax checks passed"
+    },
+    "combined_relevant_pytest": {
+      "status": "passed",
+      "details": "85 passed, 7 subtests passed"
+    }
+  },
+  "commit": "pending",
+  "tag": "pending",
+  "next_recommended_action": "continue_to_daemon_hardening"
+}
