@@ -1,0 +1,16 @@
+{
+  "approved_for_execution": true,
+  "failure_injections": 2,
+  "goal_id": "prompt671_extended_operational_soak_50_ticks",
+  "goal_text": "Create and validate a deterministic local-only Prompt671 extended operational soak evidence set under artifacts/autonomous_runtime/prompt671_extended_soak_50 with fifty bounded ticks.",
+  "local_only": true,
+  "max_cycles": 10,
+  "max_items": 50,
+  "max_ticks": 50,
+  "requires_browser": false,
+  "requires_credentials": false,
+  "requires_network": false,
+  "retry_attempts_per_item": 2,
+  "run_id": "prompt671_extended_soak_50",
+  "schema_version": "prompt671_extended_soak_goal_v1"
+}

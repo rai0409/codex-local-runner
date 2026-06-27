@@ -1,0 +1,7 @@
+{
+  "preserve_safety_constraints": true,
+  "prompt_text": "Analyze Prompt671 extended operational soak acceptance and propose the next local-only prompt for a responsibility scope matrix.",
+  "recommended_next_action": "continue_to_responsibility_scope_matrix",
+  "schema_version": "next_chatgpt_analysis_request_v1",
+  "source_prompt": "Prompt671"
+}
