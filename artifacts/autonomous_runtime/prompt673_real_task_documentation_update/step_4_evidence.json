@@ -1,0 +1,10 @@
+{
+  "documentation_path": "docs/autonomous_runtime/real_task_responsibility_validation_roadmap.md",
+  "item_id": "prompt673_doc_item_4",
+  "item_name": "write_roadmap_document",
+  "local_only_evidence_captured": true,
+  "run_id": "prompt673_real_task_documentation_update",
+  "schema_version": "prompt673_step_evidence_v1",
+  "status": "done",
+  "tick_index": 4
+}

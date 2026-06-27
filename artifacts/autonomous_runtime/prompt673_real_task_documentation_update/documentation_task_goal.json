@@ -1,0 +1,13 @@
+{
+  "approved_for_execution": true,
+  "goal_id": "real_task_documentation_update_acceptance",
+  "goal_text": "Create a focused local-only real-task responsibility validation roadmap from Prompt672 evidence.",
+  "local_only": true,
+  "max_cycles": 5,
+  "max_items": 10,
+  "max_ticks": 10,
+  "requires_credentials": false,
+  "run_id": "prompt673_real_task_documentation_update",
+  "schema_version": "prompt673_documentation_task_goal_v1",
+  "target_document": "docs/autonomous_runtime/real_task_responsibility_validation_roadmap.md"
+}

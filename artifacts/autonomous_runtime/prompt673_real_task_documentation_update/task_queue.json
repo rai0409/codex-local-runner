@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "item_id": "prompt673_doc_item_1",
+      "item_name": "verify_prompt672_baseline",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt673_doc_item_2",
+      "item_name": "load_responsibility_matrix",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt673_doc_item_3",
+      "item_name": "plan_documentation_update",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt673_doc_item_4",
+      "item_name": "write_roadmap_document",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt673_doc_item_5",
+      "item_name": "validate_roadmap_sections",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt673_doc_item_6",
+      "item_name": "write_final_evidence",
+      "local_only": true,
+      "status": "pending"
+    }
+  ],
+  "schema_version": "prompt673_documentation_task_queue_v1"
+}

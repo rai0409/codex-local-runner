@@ -1,0 +1,14 @@
+{
+  "item_id": "prompt673_doc_item_5",
+  "item_name": "validate_roadmap_sections",
+  "local_only_evidence_captured": true,
+  "next_real_task_validation_sequence_included": true,
+  "out_of_scope_safety_statement_included": true,
+  "prompt667_to_prompt672_evidence_summary_included": true,
+  "prompt672_responsibility_scores_included": true,
+  "required_roadmap_sections_verified": true,
+  "run_id": "prompt673_real_task_documentation_update",
+  "schema_version": "prompt673_step_evidence_v1",
+  "status": "done",
+  "tick_index": 5
+}
