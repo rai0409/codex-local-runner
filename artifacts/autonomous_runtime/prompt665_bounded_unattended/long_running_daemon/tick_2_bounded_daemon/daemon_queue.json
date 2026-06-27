@@ -1,0 +1,14 @@
+{
+  "cycles": [
+    {
+      "approved_for_execution": true,
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt664/tick_2_evidence.json",
+      "prompt_id": "prompt665_item_2_unattended_local_proof",
+      "prompt_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/preapproved_queue/prompts/prompt665_item_2_unattended_local_proof.md",
+      "status": "done"
+    }
+  ],
+  "schema_version": "bounded_daemon_queue_v1",
+  "updated_at": "2026-06-27T05:58:25.140057Z"
+}
