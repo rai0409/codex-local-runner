@@ -1,0 +1,22 @@
+{
+  "cycles": [
+    {
+      "approved_for_execution": true,
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt663_daemon/cycle_1_evidence.json",
+      "prompt_id": "prompt663_daemon_cycle_1_local_proof",
+      "prompt_path": "artifacts/autonomous_runtime/prompt663_daemon_hardening/synthetic_prompt662/prompts/prompt662_cycle_1_local_proof.md",
+      "status": "done"
+    },
+    {
+      "approved_for_execution": true,
+      "cycle_index": 2,
+      "evidence_path": "artifacts/autonomous_runtime/prompt663_daemon/cycle_2_evidence.json",
+      "prompt_id": "prompt663_daemon_cycle_2_local_proof",
+      "prompt_path": "artifacts/autonomous_runtime/prompt663_daemon_hardening/synthetic_prompt662/prompts/prompt662_cycle_2_local_proof.md",
+      "status": "done"
+    }
+  ],
+  "schema_version": "bounded_daemon_queue_v1",
+  "updated_at": "2026-06-27T04:53:09.487797Z"
+}
