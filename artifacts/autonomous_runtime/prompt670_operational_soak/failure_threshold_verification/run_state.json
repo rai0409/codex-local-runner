@@ -1,0 +1,14 @@
+{
+  "completed_ticks": [],
+  "lock_path": "artifacts/autonomous_runtime/prompt670_operational_soak/failure_threshold_verification/operational_soak.lock",
+  "max_cycles": 8,
+  "max_items": 30,
+  "max_ticks": 30,
+  "queue_path": "artifacts/autonomous_runtime/prompt670_operational_soak/failure_threshold_verification/task_queue.json",
+  "run_id": "prompt670_operational_soak_failure_threshold",
+  "schema_version": "prompt670_operational_soak_state_v1",
+  "status": "blocked",
+  "stop_reason": "failure_threshold_reached",
+  "terminal": true,
+  "updated_at": "2026-06-27T08:54:45.492140Z"
+}

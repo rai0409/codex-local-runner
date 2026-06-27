@@ -1,0 +1,11 @@
+{
+  "internal_codex_executor_used": false,
+  "local_only_evidence_captured": true,
+  "policy": "skip",
+  "run_id": "prompt670_operational_soak",
+  "schema_version": "prompt670_tick_evidence_v1",
+  "skip_reason": "controlled_policy_skip",
+  "status": "skipped",
+  "tick_id": "prompt670_item_10",
+  "tick_index": 10
+}

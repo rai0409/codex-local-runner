@@ -1,0 +1,77 @@
+{
+  "approved_for_execution": true,
+  "artifacts": {
+    "artifacts": [
+      "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+      "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt"
+    ],
+    "stderr_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+    "stdout_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt"
+  },
+  "cycle_index": 1,
+  "internal_executor_entrypoint": "automation.execution.codex_executor_adapter.CodexExecutorAdapter",
+  "normalized_result": {
+    "additions": 0,
+    "changed_files": [],
+    "cost": {
+      "tokens_input": 0,
+      "tokens_output": 0
+    },
+    "deletions": 0,
+    "execution": {
+      "attempt_count": 1,
+      "finished_at": "2026-06-27T08:54:45.281774Z",
+      "started_at": "2026-06-27T08:54:45.281770Z",
+      "status": "completed",
+      "stderr_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+      "stdout_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+      "verify": {
+        "commands": [],
+        "reason": "proof_transport_local_evidence",
+        "status": "passed"
+      }
+    },
+    "failure_message": null,
+    "failure_type": null,
+    "generated_patch_summary": "local proof transport; no prompt text executed",
+    "job_id": "prompt662_bounded_internal_executor_loop",
+    "pr_id": "prompt670_item_04",
+    "raw_execution": {
+      "artifacts": {
+        "artifacts": [
+          "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+          "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt"
+        ],
+        "stderr_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+        "stdout_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt"
+      },
+      "result": {
+        "additions": 0,
+        "attempt_count": 1,
+        "changed_files": [],
+        "cost": {
+          "tokens_input": 0,
+          "tokens_output": 0
+        },
+        "deletions": 0,
+        "finished_at": "2026-06-27T08:54:45.281774Z",
+        "generated_patch_summary": "local proof transport; no prompt text executed",
+        "run_id": "prompt662_bounded_internal_executor_loop:prompt670_item_04:cycle-1",
+        "started_at": "2026-06-27T08:54:45.281770Z",
+        "status": "completed",
+        "stderr_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+        "stdout_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_4_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+        "verify": {
+          "commands": [],
+          "reason": "proof_transport_local_evidence",
+          "status": "passed"
+        }
+      }
+    }
+  },
+  "passed": true,
+  "prompt_fingerprint": "sha256:8102db3ada5ebbb23af2b583eddc583329b37e32d7f2379611e0b48c4684f8c4",
+  "prompt_id": "prompt670_item_04",
+  "prompt_path": "artifacts/autonomous_runtime/prompt670_operational_soak/prompts/prompt670_item_04.md",
+  "run_id": "prompt662_bounded_internal_executor_loop:prompt670_item_04:cycle-1"
+}

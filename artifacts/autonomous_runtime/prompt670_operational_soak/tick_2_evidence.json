@@ -1,0 +1,14 @@
+{
+  "attempts": 1,
+  "bounded_daemon_queue_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_2_attempt_1_bounded_daemon/daemon_queue.json",
+  "bounded_daemon_report_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_2_attempt_1_bounded_daemon/bounded_daemon_runner_report.json",
+  "bounded_daemon_state_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_2_attempt_1_bounded_daemon/daemon_state.json",
+  "internal_codex_executor_used": true,
+  "local_only_evidence_captured": true,
+  "policy": "normal",
+  "run_id": "prompt670_operational_soak",
+  "schema_version": "prompt670_tick_evidence_v1",
+  "status": "success",
+  "tick_id": "prompt670_item_02",
+  "tick_index": 2
+}
