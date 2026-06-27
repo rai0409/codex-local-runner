@@ -1,0 +1,18 @@
+{
+  "evidence_paths": [
+    "artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/long_running_daemon/tick_1_evidence.json",
+    "artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/long_running_daemon/tick_2_evidence.json",
+    "artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/long_running_daemon/tick_3_evidence.json"
+  ],
+  "operational_goal_path": "artifacts/autonomous_runtime/prompt668_operational_use/operational_goal.json",
+  "run_id": "prompt668_operational_use",
+  "schema_version": "prompt668_operational_evidence_summary_v1",
+  "task_queue_path": "artifacts/autonomous_runtime/prompt668_operational_use/task_queue.json",
+  "unattended_report_path": "artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/bounded_unattended_acceptance_report.json",
+  "validation": {
+    "implementation_artifact_exists": true,
+    "marker_exists": true,
+    "queue_item_count_between_3_and_5": true,
+    "unattended_status_success": true
+  }
+}
