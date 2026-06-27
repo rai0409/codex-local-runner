@@ -1,0 +1,11 @@
+{
+  "next_prompt_sequence_behavior_tested": true,
+  "relevant_regression_tests_passed": true,
+  "responsibility_matrix_behavior_tested": true,
+  "safe_validation_tasks_tested": true,
+  "score_summary_tested": true,
+  "targeted_pytest_passed": true,
+  "test_artifact_created_or_updated": true,
+  "unsafe_out_of_scope_behavior_tested": true,
+  "unsafe_recommendation_exclusion_tested": true
+}

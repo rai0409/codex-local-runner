@@ -1,0 +1,14 @@
+{
+  "approved_for_execution": true,
+  "goal_id": "real_task_test_addition_acceptance",
+  "goal_text": "Add focused local-only pytest coverage for responsibility matrix real-task behavior.",
+  "local_only": true,
+  "max_cycles": 5,
+  "max_items": 10,
+  "max_ticks": 10,
+  "requires_credentials": false,
+  "run_id": "prompt674_real_task_test_addition",
+  "schema_version": "prompt674_test_addition_task_goal_v1",
+  "target_module": "automation/orchestration/planned_runner/responsibility_scope_matrix.py",
+  "test_artifact": "tests/test_real_task_test_addition_acceptance.py"
+}

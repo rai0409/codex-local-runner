@@ -1,0 +1,9 @@
+{
+  "item_id": "prompt674_test_item_1",
+  "item_name": "verify_prompt673_baseline",
+  "local_only_evidence_captured": true,
+  "run_id": "prompt674_real_task_test_addition",
+  "schema_version": "prompt674_step_evidence_v1",
+  "status": "done",
+  "tick_index": 1
+}

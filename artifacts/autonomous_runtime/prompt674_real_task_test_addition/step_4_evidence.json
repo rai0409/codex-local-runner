@@ -1,0 +1,16 @@
+{
+  "item_id": "prompt674_test_item_4",
+  "item_name": "validate_test_artifact_content",
+  "local_only_evidence_captured": true,
+  "next_prompt_sequence_behavior_tested": true,
+  "responsibility_matrix_behavior_tested": true,
+  "run_id": "prompt674_real_task_test_addition",
+  "safe_validation_tasks_tested": true,
+  "schema_version": "prompt674_step_evidence_v1",
+  "score_summary_tested": true,
+  "status": "done",
+  "test_artifact_created_or_updated": true,
+  "tick_index": 4,
+  "unsafe_out_of_scope_behavior_tested": true,
+  "unsafe_recommendation_exclusion_tested": true
+}
