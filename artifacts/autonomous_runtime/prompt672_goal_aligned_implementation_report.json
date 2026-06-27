@@ -1,0 +1,60 @@
+{
+  "current_autonomy_infrastructure_score_out_of_100": 95,
+  "current_capability_boundary_after": "responsibility_scope_matrix_real_task_plan_created",
+  "current_capability_boundary_before": "extended_operational_soak_50_ticks_proven",
+  "current_head_before": "a3c33057a4fd4d5e6b0c93a6816b126fc5c56066",
+  "current_operational_durability_score_out_of_100": 96,
+  "current_real_development_responsibility_score_out_of_100": 38,
+  "current_release_documentation_score_out_of_100": 22,
+  "errors": [],
+  "evaluation_score_out_of_100": 100,
+  "implementation_target_path": "docs/autonomous_runtime/responsibility_scope_matrix.md",
+  "matrix_path": "artifacts/autonomous_runtime/prompt672_responsibility_matrix.json",
+  "next_chatgpt_analysis_request_prepared": true,
+  "next_prompt_sequence_created": true,
+  "next_recommended_action": "start_real_task_responsibility_acceptance",
+  "node_checks_passed": true,
+  "out_of_scope_responsibility_count": 2,
+  "partially_proven_responsibility_count": 6,
+  "project_level_autonomy_complete": true,
+  "prompt671_verified": true,
+  "prompt672_status": "success",
+  "proven_responsibility_count": 16,
+  "reports_written": true,
+  "responsibility_categories_count": 27,
+  "responsibility_matrix_created": true,
+  "responsibility_matrix_entrypoint": "automation.orchestration.planned_runner.responsibility_scope_matrix.run_responsibility_scope_matrix",
+  "run_id": "prompt672_responsibility_scope_matrix",
+  "safe_real_task_plan_created": true,
+  "schema_version": "prompt672_report_v1",
+  "selected_target": "responsibility_scope_matrix_and_real_task_plan",
+  "status": "success",
+  "test_command_used": "PYTHONPATH=. uv run python -m pytest tests/test_chatgpt_runner_bridge_server.py -q; PYTHONPATH=. uv run pytest tests/test_responsibility_scope_matrix.py tests/test_extended_operational_soak_50.py tests/test_operational_soak_recovery_acceptance.py tests/test_operational_scale_up_acceptance.py tests/test_operational_use_acceptance.py tests/test_end_to_end_unattended_project_run.py tests/test_project_level_completion_gate.py tests/test_project_completion_gate.py tests/test_bounded_unattended_acceptance.py tests/test_long_running_daemon_acceptance.py tests/test_bounded_daemon_runner.py tests/test_daemon_queue.py tests/test_daemon_state_resume.py tests/test_daemon_lock_logs.py tests/test_codex_executor_adapter.py -q",
+  "tests_passed": true,
+  "unproven_responsibility_count": 3,
+  "unsafe_tasks_excluded": true,
+  "validation_commands": [
+    {
+      "command": "PYTHONPATH=. uv run python -m pytest tests/test_chatgpt_runner_bridge_server.py -q",
+      "passed": true,
+      "result": "32 passed, 2 subtests passed in 0.20s"
+    },
+    {
+      "command": "PYTHONPATH=. uv run pytest tests/test_responsibility_scope_matrix.py tests/test_extended_operational_soak_50.py tests/test_operational_soak_recovery_acceptance.py tests/test_operational_scale_up_acceptance.py tests/test_operational_use_acceptance.py tests/test_end_to_end_unattended_project_run.py tests/test_project_level_completion_gate.py tests/test_project_completion_gate.py tests/test_bounded_unattended_acceptance.py tests/test_long_running_daemon_acceptance.py tests/test_bounded_daemon_runner.py tests/test_daemon_queue.py tests/test_daemon_state_resume.py tests/test_daemon_lock_logs.py tests/test_codex_executor_adapter.py -q",
+      "passed": true,
+      "result": "119 passed, 21 subtests passed in 6.35s"
+    },
+    {
+      "command": "node --check browser_extension/chatgpt_runner_bridge/content.js",
+      "passed": true
+    },
+    {
+      "command": "node --check browser_extension/chatgpt_runner_bridge/background.js",
+      "passed": true
+    },
+    {
+      "command": "node --check browser_extension/chatgpt_runner_bridge/options.js",
+      "passed": true
+    }
+  ]
+}
