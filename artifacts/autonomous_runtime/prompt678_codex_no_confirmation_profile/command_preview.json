@@ -1,0 +1,18 @@
+{
+  "command": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "never",
+    "-"
+  ],
+  "command_errors": [],
+  "dry_run_only": true,
+  "effective_command_shape": "codex exec --sandbox workspace-write --ask-for-approval never -",
+  "exit_status": "not_run_dry_run",
+  "run_id": "prompt678_codex_no_confirmation_profile",
+  "schema_version": "prompt678_command_preview_v1",
+  "validation_status": "passed"
+}

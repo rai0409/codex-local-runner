@@ -1,10 +1,55 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from typing import Literal
 from typing import Mapping
 from typing import Protocol
+
+
+NO_CONFIRMATION_PROFILE_NAME = "no_confirmation_workspace_write"
+NO_CONFIRMATION_SANDBOX = "workspace-write"
+NO_CONFIRMATION_APPROVAL_POLICY = "never"
+NO_CONFIRMATION_COMMAND_FAMILY = ("codex", "exec")
+NO_CONFIRMATION_FORBIDDEN_FLAGS = {
+    "--yolo",
+    "--dangerously-bypass-approvals-and-sandbox",
+}
+NO_CONFIRMATION_FORBIDDEN_VALUES = {
+    "danger-full-access",
+}
+NO_CONFIRMATION_FORBIDDEN_TERMS = (
+    "git push",
+    "open pr",
+    "pull request",
+    "merge",
+    "rm -rf",
+    "credential",
+    "credentials",
+    "cookie",
+    "cookies",
+    "browser profile",
+    "browser-profile",
+    ".env",
+    "private session",
+    "private-session",
+    "secret",
+    "secrets",
+)
+NO_CONFIRMATION_FORBIDDEN_PATH_PARTS = {
+    ".env",
+    "cookie",
+    "cookies",
+    "credential",
+    "credentials",
+    "secret",
+    "secrets",
+    "browser_profile",
+    "browser_profiles",
+    "private_session",
+    "private_sessions",
+}
 
 
 class CodexExecutionTransport(Protocol):
@@ -93,6 +138,132 @@ def _normalize_status(value: Any) -> str:
     if text in allowed:
         return text
     return "failed"
+
+
+def _path_is_safe_for_no_confirmation(path: str | Path) -> bool:
+    parts = {part.lower().replace("-", "_") for part in Path(path).parts}
+    return not parts.intersection(NO_CONFIRMATION_FORBIDDEN_PATH_PARTS)
+
+
+def _text_has_forbidden_no_confirmation_term(text: str) -> bool:
+    normalized = text.lower()
+    return any(term in normalized for term in NO_CONFIRMATION_FORBIDDEN_TERMS)
+
+
+def validate_no_confirmation_prompt_item(item: Mapping[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if item.get("approved_for_execution") is not True:
+        errors.append("preapproval required")
+    if item.get("local_only") is not True:
+        errors.append("local-only prompt item required")
+    if item.get("requires_credentials") is True:
+        errors.append("credential access rejected")
+    item_type = _normalize_text(item.get("item_type"), default="")
+    if item_type == "free_text":
+        errors.append("arbitrary free-text prompt rejected")
+    combined = " ".join(
+        _normalize_text(item.get(key), default="")
+        for key in ("item_id", "item_type", "goal", "prompt_text")
+    )
+    if _text_has_forbidden_no_confirmation_term(combined):
+        errors.append("unsafe prompt item rejected")
+    prompt_source = _normalize_text(item.get("prompt_source"), default="")
+    output_dir = _normalize_text(item.get("output_dir"), default="")
+    for candidate in (prompt_source, output_dir):
+        if candidate and not _path_is_safe_for_no_confirmation(candidate):
+            errors.append("unsafe path rejected")
+            break
+    return errors
+
+
+def validate_no_confirmation_codex_command(command: list[str]) -> list[str]:
+    errors: list[str] = []
+    if command[:2] != list(NO_CONFIRMATION_COMMAND_FAMILY):
+        errors.append("command must use codex exec")
+    if "--sandbox" not in command:
+        errors.append("sandbox flag required")
+    else:
+        sandbox_index = command.index("--sandbox")
+        sandbox_value = command[sandbox_index + 1] if sandbox_index + 1 < len(command) else ""
+        if sandbox_value != NO_CONFIRMATION_SANDBOX:
+            errors.append("workspace-write sandbox required")
+    if "--ask-for-approval" not in command:
+        errors.append("ask-for-approval flag required")
+    else:
+        approval_index = command.index("--ask-for-approval")
+        approval_value = command[approval_index + 1] if approval_index + 1 < len(command) else ""
+        if approval_value != NO_CONFIRMATION_APPROVAL_POLICY:
+            errors.append("approval policy never required")
+    if "-" not in command:
+        errors.append("stdin prompt mode required")
+    if any(flag in command for flag in NO_CONFIRMATION_FORBIDDEN_FLAGS):
+        errors.append("sandbox bypass flags rejected")
+    if any(value in command for value in NO_CONFIRMATION_FORBIDDEN_VALUES):
+        errors.append("danger-full-access rejected")
+    return errors
+
+
+def build_no_confirmation_codex_command() -> list[str]:
+    command = [
+        "codex",
+        "exec",
+        "--sandbox",
+        NO_CONFIRMATION_SANDBOX,
+        "--ask-for-approval",
+        NO_CONFIRMATION_APPROVAL_POLICY,
+        "-",
+    ]
+    errors = validate_no_confirmation_codex_command(command)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return command
+
+
+def build_no_confirmation_execution_profile(
+    *,
+    run_id: str,
+    prompt_source: str,
+    output_dir: str,
+    timeout_seconds: int = 120,
+) -> dict[str, Any]:
+    if not _normalize_text(run_id):
+        raise ValueError("run_id is required")
+    if not _normalize_text(prompt_source):
+        raise ValueError("prompt_source is required")
+    if not _normalize_text(output_dir):
+        raise ValueError("output_dir is required")
+    if timeout_seconds < 1 or timeout_seconds > 120:
+        raise ValueError("timeout_seconds must be between 1 and 120")
+    if not _path_is_safe_for_no_confirmation(prompt_source) or not _path_is_safe_for_no_confirmation(output_dir):
+        raise ValueError("unsafe no-confirmation profile path")
+    command = build_no_confirmation_codex_command()
+    return {
+        "profile_name": NO_CONFIRMATION_PROFILE_NAME,
+        "command_family": "codex exec",
+        "command": command,
+        "effective_command_shape": " ".join(command),
+        "sandbox": NO_CONFIRMATION_SANDBOX,
+        "approval_policy": NO_CONFIRMATION_APPROVAL_POLICY,
+        "stdin_prompt_mode_supported": command[-1] == "-",
+        "output_capture_supported": True,
+        "local_only": True,
+        "remote_execution_allowed": False,
+        "destructive_cleanup_allowed": False,
+        "credentials_allowed": False,
+        "cookies_allowed": False,
+        "browser_profiles_allowed": False,
+        "env_values_allowed": False,
+        "private_session_files_allowed": False,
+        "arbitrary_free_text_allowed": False,
+        "run_id": run_id,
+        "prompt_source": prompt_source,
+        "output_dir": output_dir,
+        "stdout_path": str(Path(output_dir) / "codex_stdout.txt"),
+        "stderr_path": str(Path(output_dir) / "codex_stderr.txt"),
+        "result_path": str(Path(output_dir) / "codex_result.json"),
+        "timeout_seconds": timeout_seconds,
+        "dry_run_supported": True,
+    }
 
 
 def _normalize_verify_section(raw_result: Mapping[str, Any], *, execution_status: str) -> dict[str, Any]:
