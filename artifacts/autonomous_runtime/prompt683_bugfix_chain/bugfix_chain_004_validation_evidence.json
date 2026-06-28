@@ -1,0 +1,26 @@
+{
+  "item_id": "bugfix_chain_004_validation",
+  "item_type": "validation",
+  "no_confirmation_policy_applied": true,
+  "non_interactive_command_preview": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "never",
+    "-"
+  ],
+  "profile_name": "no_confirmation_workspace_write",
+  "run_id": "prompt683_bugfix_chain",
+  "schema_version": "prompt683_prompt_item_evidence_v1",
+  "selected_execution_profile": "no_confirmation_workspace_write",
+  "status": "success",
+  "stop_reason": "prompt_item_completed",
+  "terminal": true,
+  "terminal_state": "completed",
+  "tick_index": 4,
+  "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_bugfix_from_failing_test_inside_multi_prompt_chain.py -q",
+  "validation_policy_errors": [],
+  "validation_result": "bugfix_chain_step_verified"
+}

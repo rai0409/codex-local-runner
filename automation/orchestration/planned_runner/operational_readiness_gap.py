@@ -132,6 +132,8 @@ def extract_blocking_gap_ids(readiness_matrix: Mapping[str, Any]) -> list[int]:
     """Return deterministic IDs for unproven or partial criteria with missing proof."""
     criteria = readiness_matrix.get("criteria")
     if not isinstance(criteria, Sequence) or isinstance(criteria, (str, bytes)):
+        criteria = readiness_matrix.get("blocking_gaps")
+    if not isinstance(criteria, Sequence) or isinstance(criteria, (str, bytes)):
         return []
     gap_ids: list[int] = []
     for criterion in criteria:

@@ -1,0 +1,75 @@
+{
+  "items": [
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "verify Prompt682 and Prompt681 baselines and confirm bugfix_from_failing_test_proven_after=false before this Prompt",
+      "item_id": "bugfix_chain_001_baseline_verify",
+      "item_type": "baseline_verification",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "add a focused test that captures a missing deterministic edge case and confirm it fails before the fix",
+      "item_id": "bugfix_chain_002_controlled_failing_test",
+      "item_type": "controlled_failing_test",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "apply the smallest local-only bugfix for the failing test",
+      "item_id": "bugfix_chain_003_minimal_bugfix",
+      "item_type": "minimal_bugfix",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "confirm the targeted test passes after the fix and run relevant regression tests with workspace-local uv cache",
+      "item_id": "bugfix_chain_004_validation",
+      "item_type": "validation",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "write final evidence proving failing test to bugfix to tests pass inside multi-prompt chain",
+      "item_id": "bugfix_chain_005_evidence_summary",
+      "item_type": "evidence_summary",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    }
+  ],
+  "max_prompt_cycles": 5,
+  "max_prompt_items": 5,
+  "max_prompt_ticks": 5,
+  "max_retries_per_prompt": 1,
+  "preapproved": true,
+  "schema_version": "prompt683_bugfix_prompt_queue_v1"
+}

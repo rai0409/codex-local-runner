@@ -1,0 +1,8 @@
+{
+  "actual_code_artifact_changed_by_bugfix": true,
+  "bugfix_edge_case": "extract_blocking_gap_ids falls back to blocking_gaps when criteria is absent",
+  "code_artifact_path": "automation/orchestration/planned_runner/operational_readiness_gap.py",
+  "minimal_bugfix_applied": true,
+  "runner_artifact_path": "automation/orchestration/planned_runner/bugfix_chain.py",
+  "runner_created_or_updated": true
+}
