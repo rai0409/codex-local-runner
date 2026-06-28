@@ -36,9 +36,14 @@ MAX_RETRIES_PER_PROMPT = 1
 MAX_FAILURE_INJECTIONS = 2
 ALLOWED_PROMPT_TYPES = {
     "documentation_followup",
+    "baseline_verification",
     "test_followup",
     "small_code_change_preview",
     "small_code_change_readiness",
+    "small_code_change",
+    "test_update",
+    "validation",
+    "evidence_summary",
     "bugfix_readiness",
     "multi_responsibility_readiness",
     "multi_responsibility_chain_readiness",

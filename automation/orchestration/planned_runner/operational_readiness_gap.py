@@ -128,6 +128,29 @@ def _criterion(cid: int, name: str, status: str, prompt: str, field: str, missin
     }
 
 
+def extract_blocking_gap_ids(readiness_matrix: Mapping[str, Any]) -> list[int]:
+    """Return deterministic IDs for unproven or partial criteria with missing proof."""
+    criteria = readiness_matrix.get("criteria")
+    if not isinstance(criteria, Sequence) or isinstance(criteria, (str, bytes)):
+        return []
+    gap_ids: list[int] = []
+    for criterion in criteria:
+        if not isinstance(criterion, Mapping):
+            continue
+        if criterion.get("status") not in {"unproven", "partially_proven"}:
+            continue
+        if not str(criterion.get("missing_proof") or "").strip():
+            continue
+        raw_id = criterion.get("id")
+        if isinstance(raw_id, bool):
+            continue
+        if isinstance(raw_id, int):
+            gap_ids.append(raw_id)
+        elif isinstance(raw_id, str) and raw_id.strip().isdigit():
+            gap_ids.append(int(raw_id.strip()))
+    return sorted(dict.fromkeys(gap_ids))
+
+
 def build_readiness_matrix(repo_root: str | Path) -> dict[str, Any]:
     repo = Path(repo_root)
     baselines = verify_baselines(repo)
@@ -308,4 +331,4 @@ def run_operational_readiness_gap_acceptance(*, repo_root: str | Path, out_dir: 
     return result
 
 
-__all__ = ["BOUNDARY_AFTER", "BOUNDARY_BEFORE", "MATRIX_PATH", "RUN_DIR", "build_readiness_matrix", "run_operational_readiness_gap_acceptance", "verify_baselines"]
+__all__ = ["BOUNDARY_AFTER", "BOUNDARY_BEFORE", "MATRIX_PATH", "RUN_DIR", "build_readiness_matrix", "extract_blocking_gap_ids", "run_operational_readiness_gap_acceptance", "verify_baselines"]

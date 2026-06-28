@@ -1,0 +1,29 @@
+{
+  "actual_code_artifact_changed": true,
+  "code_artifact_path": "automation/orchestration/planned_runner/operational_readiness_gap.py",
+  "new_helper_name": "extract_blocking_gap_ids",
+  "prompt682_relevant_changed_files": [
+    "artifacts/autonomous_runtime/prompt682_goal_aligned_implementation_report.json",
+    "artifacts/autonomous_runtime/prompt682_goal_aligned_implementation_summary.md",
+    "artifacts/autonomous_runtime/prompt682_next_chatgpt_analysis_request.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/code_change_summary.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/evidence_summary.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/prompt_queue.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/real_code_chain_001_baseline_verify_evidence.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/real_code_chain_002_code_change_evidence.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/real_code_chain_003_test_update_evidence.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/real_code_chain_004_validation_evidence.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/real_code_chain_005_evidence_summary_evidence.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/real_code_change_marker.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/run_state.json",
+    "artifacts/autonomous_runtime/prompt682_real_code_change_chain/test_validation.json",
+    "artifacts/autonomous_runtime/prompt682_report.json",
+    "artifacts/autonomous_runtime/prompt682_summary.md",
+    "automation/orchestration/planned_runner/multi_prompt_queue_autonomy.py",
+    "automation/orchestration/planned_runner/operational_readiness_gap.py",
+    "automation/orchestration/planned_runner/real_code_change_chain.py",
+    "docs/autonomous_runtime/real_code_change_inside_multi_prompt_chain_acceptance.md",
+    "tests/test_real_code_change_inside_multi_prompt_chain.py"
+  ],
+  "runner_artifact_path": "automation/orchestration/planned_runner/real_code_change_chain.py"
+}

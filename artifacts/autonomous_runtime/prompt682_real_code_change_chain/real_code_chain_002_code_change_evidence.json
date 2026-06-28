@@ -1,0 +1,26 @@
+{
+  "item_id": "real_code_chain_002_code_change",
+  "item_type": "small_code_change",
+  "no_confirmation_policy_applied": true,
+  "non_interactive_command_preview": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "never",
+    "-"
+  ],
+  "profile_name": "no_confirmation_workspace_write",
+  "run_id": "prompt682_real_code_change_chain",
+  "schema_version": "prompt682_prompt_item_evidence_v1",
+  "selected_execution_profile": "no_confirmation_workspace_write",
+  "status": "success",
+  "stop_reason": "prompt_item_completed",
+  "terminal": true,
+  "terminal_state": "completed",
+  "tick_index": 2,
+  "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_real_code_change_inside_multi_prompt_chain.py -q",
+  "validation_policy_errors": [],
+  "validation_result": "real_code_chain_step_verified"
+}

@@ -1,0 +1,21 @@
+{
+  "node_checks_passed": true,
+  "relevant_regression_tests_passed": true,
+  "targeted_pytest_passed": true,
+  "test_artifact_created_or_updated": true,
+  "test_artifact_path": "tests/test_real_code_change_inside_multi_prompt_chain.py",
+  "test_command_used": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run python -m pytest tests/test_chatgpt_runner_bridge_server.py -q && UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_real_code_change_inside_multi_prompt_chain.py tests/test_operational_readiness_gap.py tests/test_multi_prompt_real_task_chain.py tests/test_no_confirmation_multi_prompt_queue.py tests/test_codex_no_confirmation_execution_profile.py tests/test_codex_executor_adapter.py tests/test_multi_prompt_queue_scale_up.py tests/test_multi_prompt_queue_autonomy.py tests/test_real_task_test_addition_acceptance.py tests/test_real_task_documentation_update_acceptance.py tests/test_responsibility_scope_matrix.py tests/test_extended_operational_soak_50.py tests/test_operational_soak_recovery_acceptance.py tests/test_operational_scale_up_acceptance.py tests/test_operational_use_acceptance.py tests/test_end_to_end_unattended_project_run.py tests/test_project_level_completion_gate.py tests/test_project_completion_gate.py tests/test_bounded_unattended_acceptance.py tests/test_long_running_daemon_acceptance.py tests/test_bounded_daemon_runner.py tests/test_daemon_queue.py tests/test_daemon_state_resume.py tests/test_daemon_lock_logs.py -q",
+  "validation_command_policy": {
+    "avoidable_workspace_external_cache_confirmation_eliminated": true,
+    "input_commands": [
+      "PYTHONPATH=. uv run pytest tests/test_real_code_change_inside_multi_prompt_chain.py -q"
+    ],
+    "normalized_commands": [
+      "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_real_code_change_inside_multi_prompt_chain.py -q"
+    ],
+    "rejected_commands": {},
+    "schema_version": "prompt679_validation_command_policy_v1",
+    "validation_commands_use_workspace_local_uv_cache": true,
+    "workspace_local_uv_cache": "UV_CACHE_DIR=.uv-cache"
+  }
+}
