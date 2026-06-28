@@ -1,0 +1,75 @@
+{
+  "items": [
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "verify Prompt681, Prompt682, and Prompt683 baselines and confirm release_docs_demo_pack_proven_after=false before this Prompt",
+      "item_id": "release_docs_001_baseline_verify",
+      "item_type": "baseline_verification",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "extract exact proven and unproven capabilities from Prompt681 through Prompt683 reports",
+      "item_id": "release_docs_002_capability_extract",
+      "item_type": "capability_extract",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "create the local-only release documentation and demo pack",
+      "item_id": "release_docs_003_release_docs_generate",
+      "item_type": "release_docs_generate",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "validate required documentation sections, evidence references, false-completion guardrails, and local-only safety statements",
+      "item_id": "release_docs_004_docs_validation",
+      "item_type": "docs_validation",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "write final evidence proving release docs/demo pack acceptance",
+      "item_id": "release_docs_005_evidence_summary",
+      "item_type": "evidence_summary",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    }
+  ],
+  "max_prompt_cycles": 5,
+  "max_prompt_items": 5,
+  "max_prompt_ticks": 5,
+  "max_retries_per_prompt": 1,
+  "preapproved": true,
+  "schema_version": "prompt684_release_docs_prompt_queue_v1"
+}
