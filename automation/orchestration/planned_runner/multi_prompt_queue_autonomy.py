@@ -9,6 +9,10 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from automation.execution.codex_executor_adapter import (
+    NO_CONFIRMATION_PROFILE_NAME,
+    validate_no_confirmation_profile_selection,
+)
 from automation.orchestration.planned_runner.daemon_lock import acquire_lock, release_lock
 
 
@@ -218,18 +222,29 @@ def verify_prompt676_baseline(repo_root: str | Path) -> dict[str, Any]:
     }
 
 
-def build_prompt_item(*, item_id: str, item_type: str, goal: str, approved: bool = True) -> dict[str, Any]:
-    return {
+def build_prompt_item(
+    *,
+    item_id: str,
+    item_type: str,
+    goal: str,
+    approved: bool = True,
+    execution_profile: str | None = None,
+) -> dict[str, Any]:
+    item = {
         "schema_version": "prompt676_prompt_queue_item_v1",
         "item_id": item_id,
         "item_type": item_type,
         "goal": goal,
         "approved_for_execution": approved,
         "local_only": True,
+        "bounded": True,
         "requires_credentials": False,
         "max_retries": MAX_RETRIES_PER_PROMPT,
         "commit_tag_decision": "record_only_no_commit_for_queue_item",
     }
+    if execution_profile:
+        item["execution_profile"] = execution_profile
+    return item
 
 
 def build_default_prompt_queue() -> dict[str, Any]:
@@ -370,6 +385,10 @@ def validate_prompt_item(item: Mapping[str, Any]) -> list[str]:
     text = " ".join(str(item.get(key, "")) for key in ("goal", "item_type", "item_id")).lower()
     if any(term in text for term in FORBIDDEN_TEXT):
         errors.append("prompt item contains forbidden operation")
+    if item.get("execution_profile") == NO_CONFIRMATION_PROFILE_NAME:
+        for error in validate_no_confirmation_profile_selection(item):
+            if error not in errors:
+                errors.append(error)
     return errors
 
 

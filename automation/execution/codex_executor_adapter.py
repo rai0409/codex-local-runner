@@ -50,6 +50,7 @@ NO_CONFIRMATION_FORBIDDEN_PATH_PARTS = {
     "private_session",
     "private_sessions",
 }
+WORKSPACE_LOCAL_UV_CACHE_PREFIX = "UV_CACHE_DIR=.uv-cache"
 
 
 class CodexExecutionTransport(Protocol):
@@ -161,6 +162,10 @@ def validate_no_confirmation_prompt_item(item: Mapping[str, Any]) -> list[str]:
     item_type = _normalize_text(item.get("item_type"), default="")
     if item_type == "free_text":
         errors.append("arbitrary free-text prompt rejected")
+    if item.get("remote") is True or item.get("remote_execution") is True:
+        errors.append("remote action rejected")
+    if item.get("destructive") is True or item.get("destructive_cleanup") is True:
+        errors.append("destructive action rejected")
     combined = " ".join(
         _normalize_text(item.get(key), default="")
         for key in ("item_id", "item_type", "goal", "prompt_text")
@@ -174,6 +179,47 @@ def validate_no_confirmation_prompt_item(item: Mapping[str, Any]) -> list[str]:
             errors.append("unsafe path rejected")
             break
     return errors
+
+
+def validate_no_confirmation_profile_selection(item: Mapping[str, Any]) -> list[str]:
+    errors = validate_no_confirmation_prompt_item(item)
+    profile = _normalize_text(item.get("execution_profile"), default="")
+    if profile != NO_CONFIRMATION_PROFILE_NAME:
+        errors.append("no-confirmation execution profile required")
+    if item.get("bounded") is False:
+        errors.append("bounded prompt item required")
+    return errors
+
+
+def validation_command_uses_workspace_local_uv_cache(command: str) -> bool:
+    text = _normalize_text(command)
+    if "uv run" not in text:
+        return True
+    return text.startswith(f"{WORKSPACE_LOCAL_UV_CACHE_PREFIX} ") or text == WORKSPACE_LOCAL_UV_CACHE_PREFIX
+
+
+def normalize_validation_command_for_workspace_cache(command: str) -> str:
+    text = _normalize_text(command)
+    if "uv run" not in text:
+        return text
+    if validation_command_uses_workspace_local_uv_cache(text):
+        return text
+    parts = text.split()
+    if parts and parts[0].startswith("UV_CACHE_DIR="):
+        parts = parts[1:]
+        text = " ".join(parts)
+    return f"{WORKSPACE_LOCAL_UV_CACHE_PREFIX} {text}"
+
+
+def validate_workspace_local_uv_cache_policy(command: str) -> list[str]:
+    text = _normalize_text(command)
+    if "uv run" not in text:
+        return []
+    if "UV_CACHE_DIR=" in text and not validation_command_uses_workspace_local_uv_cache(text):
+        return ["workspace-external uv cache rejected"]
+    if not validation_command_uses_workspace_local_uv_cache(text):
+        return ["workspace-local uv cache required"]
+    return []
 
 
 def validate_no_confirmation_codex_command(command: list[str]) -> list[str]:

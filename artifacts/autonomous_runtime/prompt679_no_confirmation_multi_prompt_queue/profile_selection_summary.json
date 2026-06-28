@@ -1,0 +1,12 @@
+{
+  "all_prompt_items_use_no_confirmation_profile": true,
+  "confirmation_avoidance": "safe_preapproved_items_use_non_interactive_workspace_write_dry_run_command_previews",
+  "profile_name": "no_confirmation_workspace_write",
+  "prompt_item_count": 3,
+  "schema_version": "prompt679_profile_selection_summary_v1",
+  "selected_profiles": {
+    "prompt679_docs_profile_check": "no_confirmation_workspace_write",
+    "prompt679_policy_profile_check": "no_confirmation_workspace_write",
+    "prompt679_tests_profile_check": "no_confirmation_workspace_write"
+  }
+}
