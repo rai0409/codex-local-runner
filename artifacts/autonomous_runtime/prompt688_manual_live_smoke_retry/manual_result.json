@@ -1,0 +1,15 @@
+{
+  "prompt": "prompt688_manual_live_smoke_retry",
+  "base_head": "81bf1e6",
+  "base_tag": "prompt687-final-operational-completion-gate",
+  "codex_exec_mode": "workspace-write",
+  "ephemeral": true,
+  "json_events": true,
+  "live_smoke_attempted": true,
+  "live_smoke_exit_code": 0,
+  "live_smoke_succeeded": true,
+  "expected_marker_path": "artifacts/autonomous_runtime/prompt688_manual_live_smoke_retry/live_smoke_marker.txt",
+  "expected_marker_content": "PROMPT688_LIVE_CODEX_SMOKE_OK",
+  "unexpected_tracked_file_diff": false,
+  "source_worktree": "/tmp/codex_prompt688_live_smoke_worktree"
+}

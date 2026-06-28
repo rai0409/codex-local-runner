@@ -1,0 +1,308 @@
+{
+  "baselines": {
+    "prompt682_verified": true,
+    "prompt683_verified": true,
+    "prompt684_verified": true,
+    "prompt685_verified": true,
+    "prompt686_verified": true,
+    "prompt687_verified": true
+  },
+  "manual_smoke_validation": {
+    "base_head_valid": true,
+    "base_tag_valid": true,
+    "codex_events_jsonl_non_empty": true,
+    "codex_stderr_exists": true,
+    "expected_marker_content_valid": true,
+    "last_message_exists": true,
+    "manual_evidence_dir": "artifacts/autonomous_runtime/prompt688_manual_live_smoke_retry",
+    "manual_evidence_dir_exists": true,
+    "manual_evidence_files_count": 5,
+    "manual_live_smoke_evidence_valid": true,
+    "manual_required_evidence_files_present": true,
+    "manual_result_codex_exec_mode": "workspace-write",
+    "manual_result_ephemeral": true,
+    "manual_result_exit_code": 0,
+    "manual_result_json_events": true,
+    "manual_result_json_valid": true,
+    "manual_result_live_smoke_attempted": true,
+    "manual_result_live_smoke_succeeded": true,
+    "manual_result_unexpected_tracked_file_diff": false,
+    "marker_content_valid": true,
+    "proof_scope": "bounded live Codex smoke marker only; not arbitrary broad code execution",
+    "schema_version": "prompt688_manual_smoke_evidence_validation_v1",
+    "source_worktree_valid": true
+  },
+  "matrix": {
+    "boundary_confirmed_criteria_count": 0,
+    "complete_as_real_no_human_autonomous_development": true,
+    "completed_as_dry_run_boundary_operational_runner": true,
+    "completed_as_live_codex_no_human_autonomous_development_runner": true,
+    "completed_as_local_only_bounded_autonomous_development_runner": true,
+    "criteria": [
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "76b351780ef9b35f9ff04e89d225923d0c400c4b",
+        "evidence_fields": {
+          "project_level_autonomy_complete": true
+        },
+        "evidence_prompt": "prompt667",
+        "evidence_tag": "prompt667-end-to-end-unattended-project-run-acceptance",
+        "id": "end_to_end_unattended_project_run",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "a3c33057a4fd4d5e6b0c93a6816b126fc5c56066",
+        "evidence_fields": {
+          "queue_item_count": 50,
+          "tick_count": 50
+        },
+        "evidence_prompt": "prompt671",
+        "evidence_tag": "prompt671-extended-operational-soak-50-ticks",
+        "id": "extended_operational_soak_50_ticks",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "17842f08d7189dfe2f62fea98aa405aa6aeeb0ba",
+        "evidence_fields": {
+          "prompt_item_count": 7,
+          "prompt_tick_count": 7
+        },
+        "evidence_prompt": "prompt677",
+        "evidence_tag": "prompt677-increase-multi-prompt-queue-length",
+        "id": "multi_prompt_queue_7_items",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "106f6503816c24febcbd5c3f67167de9e09d7a5f",
+        "evidence_fields": {
+          "no_confirmation_profile_wired_into_multi_prompt_queue": true
+        },
+        "evidence_prompt": "prompt679",
+        "evidence_tag": "prompt679-wire-no-confirmation-profile-into-multi-prompt-queue",
+        "id": "no_confirmation_profile_wired",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+        "evidence_fields": {
+          "prompt_item_count": 7,
+          "prompt_tick_count": 7
+        },
+        "evidence_prompt": "prompt680",
+        "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+        "id": "multi_prompt_real_task_chain_7_items",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "dd408f61b125a8832807ec3a9411e28ca5c4d265",
+        "evidence_fields": {
+          "total_criteria_count": 17
+        },
+        "evidence_prompt": "prompt681",
+        "evidence_tag": "prompt681-operational-readiness-gap-to-real-autonomous-development",
+        "id": "operational_readiness_gap_analyzed",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "198069c3759687ed663f305072855e37bb189f77",
+        "evidence_fields": {
+          "real_code_change_proven_after": true
+        },
+        "evidence_prompt": "prompt682",
+        "evidence_tag": "prompt682-real-code-change-inside-multi-prompt-chain",
+        "id": "real_code_change_inside_multi_prompt_chain",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "9da246eae7f8bec4a09d6c7f1fa473d3dced6b95",
+        "evidence_fields": {
+          "bugfix_from_failing_test_proven_after": true
+        },
+        "evidence_prompt": "prompt683",
+        "evidence_tag": "prompt683-bugfix-from-failing-test-inside-multi-prompt-chain",
+        "id": "bugfix_from_failing_test_inside_multi_prompt_chain",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "2d66e88fe58201508bd993c080be66420f099bf8",
+        "evidence_fields": {
+          "release_docs_demo_pack_proven_after": true
+        },
+        "evidence_prompt": "prompt684",
+        "evidence_tag": "prompt684-release-docs-demo-pack-acceptance",
+        "id": "release_docs_demo_pack",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "3c4a79ab3156242dcb731d88dfdb4dc2a77b8b8a",
+        "evidence_fields": {
+          "new_safe_goal_operational_daemon_proven_after": true
+        },
+        "evidence_prompt": "prompt685",
+        "evidence_tag": "prompt685-new-safe-goal-operational-daemon-acceptance",
+        "id": "new_safe_goal_operational_daemon",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_live_and_real_completion",
+        "evidence_commit": "81bf1e6f3cb1ba9f1d562b11edf826270374b80f",
+        "evidence_fields": {
+          "live_codex_execution_proven_after": true,
+          "manual_smoke_exit_code": 0,
+          "manual_smoke_marker_content": "PROMPT688_LIVE_CODEX_SMOKE_OK"
+        },
+        "evidence_prompt": "prompt687",
+        "evidence_tag": "prompt687-final-operational-completion-gate",
+        "id": "live_codex_execution",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "superseded_by_valid_manual_live_smoke",
+        "evidence_commit": "81bf1e6f3cb1ba9f1d562b11edf826270374b80f",
+        "evidence_fields": {
+          "live_codex_runtime_boundary_confirmed": false
+        },
+        "evidence_prompt": "prompt687",
+        "evidence_tag": "prompt687-final-operational-completion-gate",
+        "id": "live_codex_runtime_boundary",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "superseded_by_valid_manual_live_smoke",
+        "evidence_commit": "81bf1e6f3cb1ba9f1d562b11edf826270374b80f",
+        "evidence_fields": {
+          "dry_run_only_boundary_confirmed": false
+        },
+        "evidence_prompt": "prompt687",
+        "evidence_tag": "prompt687-final-operational-completion-gate",
+        "id": "dry_run_only_boundary",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "cabbe3973966ae3bd79e0da502c86d2e81fdc92d",
+        "evidence_fields": {
+          "credential_storage_prevented": true,
+          "destructive_actions_blocked": true,
+          "remote_actions_blocked": true
+        },
+        "evidence_prompt": "prompt686",
+        "evidence_tag": "prompt686-live-codex-execution-or-runtime-boundary-acceptance",
+        "id": "safety_gate_remote_destructive_secret_blocks",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "81bf1e6f3cb1ba9f1d562b11edf826270374b80f",
+        "evidence_fields": {
+          "false_completion_claims_rejected": true
+        },
+        "evidence_prompt": "prompt687",
+        "evidence_tag": "prompt687-final-operational-completion-gate",
+        "id": "no_false_completion_claims",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "81bf1e6f3cb1ba9f1d562b11edf826270374b80f",
+        "evidence_fields": {
+          "prompt667_through_prompt687_evidence_indexed": true
+        },
+        "evidence_prompt": "prompt687",
+        "evidence_tag": "prompt687-final-operational-completion-gate",
+        "id": "final_evidence_index",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      },
+      {
+        "completion_category_impact": "required_for_all_categories",
+        "evidence_commit": "81bf1e6f3cb1ba9f1d562b11edf826270374b80f",
+        "evidence_fields": {
+          "final_operational_completion_gate_implemented": true
+        },
+        "evidence_prompt": "prompt687",
+        "evidence_tag": "prompt687-final-operational-completion-gate",
+        "id": "final_operational_completion_gate",
+        "next_required_action": "none",
+        "remaining_gap": "none",
+        "status": "proven"
+      }
+    ],
+    "current_capability_boundary_after": "manual_live_codex_smoke_evidence_finalized",
+    "current_capability_boundary_before": "final_operational_completion_gate_complete",
+    "dry_run_only_boundary_confirmed": false,
+    "false_by_evidence_criteria_count": 0,
+    "live_codex_execution_proven_after": true,
+    "live_codex_runtime_boundary_confirmed": false,
+    "proven_final_criteria_count": 17,
+    "remaining_blockers": [],
+    "schema_version": "prompt688_final_completion_matrix_v1",
+    "total_final_criteria_count": 17,
+    "unproven_final_criteria_count": 0
+  },
+  "protected_artifacts_preserved": {
+    "prompt667": true,
+    "prompt668": true,
+    "prompt669": true,
+    "prompt670": true,
+    "prompt671": true,
+    "prompt672": true,
+    "prompt673": true,
+    "prompt674": true,
+    "prompt675": "not_present",
+    "prompt676": true,
+    "prompt677": true,
+    "prompt678": true,
+    "prompt679": true,
+    "prompt680": true,
+    "prompt681": true,
+    "prompt682": true,
+    "prompt683": true,
+    "prompt684": true,
+    "prompt685": true,
+    "prompt686": true,
+    "prompt687": true
+  },
+  "run_id": "prompt688_manual_live_smoke_finalization",
+  "schema_version": "prompt688_evidence_summary_v1"
+}
