@@ -1,0 +1,7 @@
+{
+  "preserve_safety_constraints": true,
+  "prompt_text": "Install or update to a Codex CLI/runtime that exposes a safe non-interactive workspace-write approval mode, then rerun a live Codex smoke acceptance Prompt.",
+  "recommended_next_action": "install_or_update_codex_safe_non_interactive_mode_then_rerun_live_smoke",
+  "schema_version": "next_chatgpt_analysis_request_v1",
+  "source_prompt": "Prompt687"
+}

@@ -1,0 +1,9 @@
+{
+  "remaining_blockers": [
+    {
+      "blocker": "installed CLI lacks safe non-interactive approval flag",
+      "id": "live_codex_execution",
+      "required_next_action": "Install or update to a Codex CLI/runtime that exposes a safe non-interactive workspace-write approval mode, then rerun a live Codex smoke acceptance Prompt."
+    }
+  ]
+}
