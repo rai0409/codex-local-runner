@@ -1,0 +1,13 @@
+{
+  "false_completion_claims_rejected": true,
+  "node_checks_passed": true,
+  "operational_proof_note_written": true,
+  "prompt682_evidence_in_note": true,
+  "prompt683_evidence_in_note": true,
+  "prompt684_evidence_in_note": true,
+  "remaining_live_codex_gap_listed": true,
+  "schema_version": "prompt685_validation_summary_v1",
+  "test_command_used": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run python -m pytest tests/test_chatgpt_runner_bridge_server.py -q && UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_new_safe_goal_operational_daemon.py tests/test_release_docs_demo_pack.py tests/test_bugfix_from_failing_test_inside_multi_prompt_chain.py tests/test_real_code_change_inside_multi_prompt_chain.py tests/test_operational_readiness_gap.py tests/test_multi_prompt_real_task_chain.py tests/test_no_confirmation_multi_prompt_queue.py tests/test_codex_no_confirmation_execution_profile.py tests/test_codex_executor_adapter.py tests/test_multi_prompt_queue_scale_up.py tests/test_multi_prompt_queue_autonomy.py tests/test_real_task_test_addition_acceptance.py tests/test_real_task_documentation_update_acceptance.py tests/test_responsibility_scope_matrix.py tests/test_extended_operational_soak_50.py tests/test_operational_soak_recovery_acceptance.py tests/test_operational_scale_up_acceptance.py tests/test_operational_use_acceptance.py tests/test_end_to_end_unattended_project_run.py tests/test_project_level_completion_gate.py tests/test_project_completion_gate.py tests/test_bounded_unattended_acceptance.py tests/test_long_running_daemon_acceptance.py tests/test_bounded_daemon_runner.py tests/test_daemon_queue.py tests/test_daemon_state_resume.py tests/test_daemon_lock_logs.py -q",
+  "validation_passed": true,
+  "workspace_local_uv_cache_policy_used": true
+}
