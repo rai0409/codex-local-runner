@@ -41,8 +41,10 @@ ALLOWED_PROMPT_TYPES = {
     "small_code_change_readiness",
     "bugfix_readiness",
     "multi_responsibility_readiness",
+    "multi_responsibility_chain_readiness",
     "policy_check",
     "release_docs_readiness",
+    "final_chain_summary",
 }
 FORBIDDEN_TEXT = (
     "git push",

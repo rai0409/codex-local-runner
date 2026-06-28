@@ -1,0 +1,36 @@
+{
+  "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+  "controlled_failure_injection": {
+    "failure_type": "simulated_retryable_readiness_probe",
+    "injected": true,
+    "recovered": true,
+    "retry_attempts": 1
+  },
+  "effective_command_shape": "codex exec --sandbox workspace-write --ask-for-approval never -",
+  "item_id": "real_task_chain_004_bugfix_readiness",
+  "item_type": "bugfix_readiness",
+  "local_only_evidence_captured": true,
+  "no_confirmation_policy_applied": true,
+  "non_interactive_command_preview": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "never",
+    "-"
+  ],
+  "profile_name": "no_confirmation_workspace_write",
+  "run_id": "prompt680_multi_prompt_real_task_chain",
+  "schema_version": "prompt680_prompt_item_evidence_v1",
+  "selected_execution_profile": "no_confirmation_workspace_write",
+  "status": "success",
+  "stop_reason": "prompt_item_completed",
+  "terminal": true,
+  "terminal_state": "completed",
+  "tick_index": 4,
+  "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_multi_prompt_real_task_chain.py -q",
+  "validation_marker": "bugfix_readiness_readiness_verified",
+  "validation_policy_errors": [],
+  "validation_result": "real_task_readiness_verified"
+}

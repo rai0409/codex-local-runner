@@ -1,0 +1,13 @@
+{
+  "avoidable_workspace_external_cache_confirmation_eliminated": true,
+  "input_commands": [
+    "PYTHONPATH=. uv run pytest tests/test_multi_prompt_real_task_chain.py -q"
+  ],
+  "normalized_commands": [
+    "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_multi_prompt_real_task_chain.py -q"
+  ],
+  "rejected_commands": {},
+  "schema_version": "prompt679_validation_command_policy_v1",
+  "validation_commands_use_workspace_local_uv_cache": true,
+  "workspace_local_uv_cache": "UV_CACHE_DIR=.uv-cache"
+}
