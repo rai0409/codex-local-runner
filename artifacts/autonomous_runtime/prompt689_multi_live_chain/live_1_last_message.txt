@@ -1,0 +1,5 @@
+Created `artifacts/autonomous_runtime/prompt689_multi_live_chain/live_1_marker.txt` with exactly:
+
+```text
+PROMPT689_LIVE_CODEX_CHAIN_1_OK
+```
