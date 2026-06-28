@@ -1,0 +1,74 @@
+{
+  "evidence_sources": [
+    {
+      "path": "artifacts/autonomous_runtime/prompt667_report.json",
+      "prompt": "prompt667",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt668_report.json",
+      "prompt": "prompt668",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt669_report.json",
+      "prompt": "prompt669",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt670_report.json",
+      "prompt": "prompt670",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt671_report.json",
+      "prompt": "prompt671",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt672_report.json",
+      "prompt": "prompt672",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt673_report.json",
+      "prompt": "prompt673",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt674_report.json",
+      "prompt": "prompt674",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt675_report.json",
+      "prompt": "prompt675",
+      "verified": "not_present"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt676_report.json",
+      "prompt": "prompt676",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt677_report.json",
+      "prompt": "prompt677",
+      "verified": true
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt678_report.json",
+      "prompt": "prompt678",
+      "verified": true
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt679_report.json",
+      "prompt": "prompt679",
+      "verified": true
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt680_report.json",
+      "prompt": "prompt680",
+      "verified": true
+    }
+  ]
+}

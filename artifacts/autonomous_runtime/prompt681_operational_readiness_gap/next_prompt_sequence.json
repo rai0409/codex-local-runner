@@ -1,0 +1,40 @@
+{
+  "next_prompt_sequence": [
+    {
+      "closes_criteria": [
+        4,
+        5
+      ],
+      "prompt_id": "Prompt682",
+      "title": "real_code_change_inside_multi_prompt_chain_acceptance"
+    },
+    {
+      "closes_criteria": [
+        6
+      ],
+      "prompt_id": "Prompt683",
+      "title": "failing_test_bugfix_inside_multi_prompt_chain_acceptance"
+    },
+    {
+      "closes_criteria": [
+        14
+      ],
+      "prompt_id": "Prompt684",
+      "title": "new_safe_goal_operational_daemon_acceptance"
+    },
+    {
+      "closes_criteria": [
+        16
+      ],
+      "prompt_id": "Prompt685",
+      "title": "live_codex_execution_or_dry_run_limitation_resolution"
+    },
+    {
+      "closes_criteria": [
+        17
+      ],
+      "prompt_id": "Prompt686",
+      "title": "release_documentation_and_demo_pack_acceptance"
+    }
+  ]
+}
