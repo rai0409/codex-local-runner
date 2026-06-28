@@ -1,0 +1,19 @@
+{
+  "command_errors": [
+    "installed CLI lacks safe non-interactive approval flag"
+  ],
+  "live_smoke_attempted": false,
+  "live_smoke_blocker": "installed CLI lacks safe non-interactive approval flag",
+  "schema_version": "prompt686_live_smoke_decision_v1",
+  "smoke_command_preview": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "never",
+    "--cd",
+    ".",
+    "Create the file artifacts/autonomous_runtime/prompt686_live_codex_execution/live_smoke_marker.txt with exactly the text PROMPT686_LIVE_CODEX_SMOKE_OK. Do not modify any other file. Do not read secrets. Do not access the network. Do not ask for confirmation."
+  ]
+}

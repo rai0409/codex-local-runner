@@ -1,0 +1,7 @@
+{
+  "blocker": "installed CLI lacks safe non-interactive approval flag",
+  "dry_run_only_boundary_confirmed": true,
+  "live_codex_runtime_boundary_confirmed": true,
+  "runtime_boundary_reason": "installed CLI lacks safe non-interactive approval flag",
+  "schema_version": "prompt686_runtime_boundary_v1"
+}
