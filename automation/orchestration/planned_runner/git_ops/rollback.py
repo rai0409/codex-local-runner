@@ -1,4 +1,14 @@
 from __future__ import annotations
+from automation.orchestration.planned_runner.constants import *
+
+
+def _normalize_branch_ref(branch_name: str) -> str:
+    normalized = _normalize_text(branch_name, default="")
+    if not normalized:
+        return ""
+    if normalized.startswith("refs/"):
+        return normalized
+    return f"refs/heads/{normalized}"
 
 from dataclasses import dataclass
 from datetime import datetime

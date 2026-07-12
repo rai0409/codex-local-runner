@@ -63,6 +63,7 @@ from automation.orchestration.planned_runner.task_spec import validate_task_spec
 MAX_JOBS_CAP = 5
 MAX_SECONDS_TOTAL_CAP = 1800
 MAX_CYCLES_CAP = 2
+TARGET_REPO_MODES = ("sandbox", "real-worktree")
 
 
 def _utc_now() -> str:
@@ -107,6 +108,30 @@ def _finalize_success(
     check -> done. Reached ONLY after a strictly-passed effect verification, whether
     from the single-shot loop path or the targeted-fix retry path. Commit/tag can
     therefore never occur before a passed effect."""
+    if args.target_repo_mode == "real-worktree":
+        report.update(
+            {
+                "sandbox_cleanup_skipped": True,
+                "sandbox_cleanup_skip_reason": "real_worktree_mode",
+                "sandbox_generated_artifacts_removed": 0,
+                "sandbox_generated_artifact_paths_removed": [],
+                "commit_performed": False,
+                "tag_performed": False,
+                "sandbox_commit_performed": False,
+                "sandbox_tag_performed": False,
+            }
+        )
+        if args.sandbox_commit_tag:
+            report["stage"] = "sandbox_commit_tag_blocked"
+            report["status"] = "blocked"
+            report["errors"] = [
+                "sandbox commit/tag is not allowed with --target-repo-mode real-worktree"
+            ]
+            return report
+        report["stage"] = "done"
+        report["status"] = "success"
+        return report
+
     # Verify commands may have generated Python bytecode inside the sandbox repo;
     # remove it BEFORE the commit/tag gate and the final cleanliness evaluation.
     report["stage"] = "sandbox_cleanup"
@@ -133,6 +158,8 @@ def _finalize_success(
         }
         report["sandbox_commit_performed"] = bool(commit_result.get("commit_performed"))
         report["sandbox_tag_performed"] = bool(commit_result.get("tag_performed"))
+        report["commit_performed"] = report["sandbox_commit_performed"]
+        report["tag_performed"] = report["sandbox_tag_performed"]
         if commit_result.get("status") != "success":
             report["errors"] = [f"sandbox commit/tag blocked: {commit_result.get('blocked_reason')}"]
             return report
@@ -230,6 +257,9 @@ def _process_task(
         "stage": "load_spec",
         "started_at": _utc_now(),
         "codex_invoked_count": 0,
+        "target_repo_mode": args.target_repo_mode,
+        "commit_performed": False,
+        "tag_performed": False,
         "sandbox_commit_performed": False,
         "sandbox_tag_performed": False,
         "sandbox_generated_artifacts_removed": 0,
@@ -338,6 +368,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--live-codex-enable-token", default="")
     parser.add_argument("--sandbox-commit-tag", action="store_true", default=False)
     parser.add_argument("--commit-tag-enable-token", default="")
+    parser.add_argument(
+        "--target-repo-mode",
+        choices=TARGET_REPO_MODES,
+        default="sandbox",
+        help=(
+            "Target repository policy: sandbox preserves cleanup/commit behavior; "
+            "real-worktree skips sandbox-only finalization."
+        ),
+    )
     parser.add_argument("--recover-only", action="store_true", default=False)
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)

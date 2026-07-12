@@ -1,4 +1,5 @@
 from __future__ import annotations
+from automation.orchestration.planned_runner.constants import *
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -1419,13 +1420,6 @@ from automation.orchestration.planned_runner.utils import (
     _write_multi_cycle_history,
     _write_targeted_fix_post_reentry_prompt_if_allowed,
 )
-from automation.orchestration.planned_runner.summaries.final_payload import (
-    _has_contract_identity_conflict,
-    _has_missing_progression_metadata,
-    _is_scope_violation_detected,
-    _is_unbounded_contract,
-)
-
 def _resolve_review_terminal_state(decision_payload: Mapping[str, Any]) -> str:
     next_action = _normalize_text(decision_payload.get("next_action"), default="")
     result_acceptance = _normalize_text(decision_payload.get("result_acceptance"), default="")
@@ -1533,6 +1527,13 @@ def _build_project_merge_branch_lifecycle_state(
     continuation_no_progress_stop_required: bool,
     supported_repair_execution_status: str,
 ) -> dict[str, Any]:
+    from automation.orchestration.planned_runner.summaries.final_payload import (
+        _has_contract_identity_conflict,
+        _has_missing_progression_metadata,
+        _is_scope_violation_detected,
+        _is_unbounded_contract,
+    )
+
     quality_gate_status = _normalize_text(
         project_quality_gate_status,
         default="insufficient_truth",

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from automation.orchestration.planned_runner.constants import *
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -1424,10 +1425,6 @@ from automation.orchestration.planned_runner.state.run_state import (
     _is_remote_github_missing_or_ambiguous_reason,
     _run_state_execution_blockers,
 )
-from automation.orchestration.planned_runner.summaries.final_payload import (
-    _with_execution_gate_surface,
-)
-
 def _validate_pr_unit_order(units: list[dict[str, Any]], *, pr_plan: Mapping[str, Any]) -> None:
     planned_units = pr_plan.get("prs") if isinstance(pr_plan.get("prs"), list) else []
 
@@ -1792,6 +1789,10 @@ def _build_delivery_execution_blocked_payload(
     pr_number: int | None = None,
     pr_url: str = "",
 ) -> dict[str, Any]:
+    from automation.orchestration.planned_runner.summaries.final_payload import (
+        _with_execution_gate_surface,
+    )
+
     payload = _default_delivery_execution_payload(
         schema_version=schema_version,
         execution_type=execution_type,

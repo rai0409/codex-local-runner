@@ -99,6 +99,23 @@ from automation.orchestration.run_state_summary_contract import select_manifest_
 from automation.planning.prompt_compiler import compile_prompt_units
 from automation.planning.prompt_compiler import load_planning_artifacts
 
+
+def _parse_iso_timestamp(value: str) -> datetime | None:
+    text = _normalize_text(value, default="")
+    if not text:
+        return None
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def _normalize_string_sequence(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [text for item in value if (text := str(item).strip())]
+
 from automation.orchestration.planned_runner.project_browser.constants import (
     _PROJECT_BROWSER_ASSIMILATED_DECISIONS,
     _PROJECT_BROWSER_ASSIMILATED_RISK_LEVELS,
@@ -311,6 +328,64 @@ def _normalize_text(value: Any, *, default: str = "") -> str:
         return default
     text = str(value).strip()
     return text if text else default
+
+def _resolve_project_browser_chatgpt_url(
+    prior_browser_state: Mapping[str, Any] | None = None,
+) -> str:
+    prior = dict(prior_browser_state or {})
+    for key in (
+        "project_browser_chatgpt_url",
+        "project_browser_target_url",
+        "chatgpt_url",
+        "target_url",
+    ):
+        value = _normalize_text(prior.get(key), default="")
+        if value:
+            return value
+    return "https://chatgpt.com/"
+
+def _resolve_project_browser_prepared_prompt_text(
+    *,
+    browser_prompt_payload: Mapping[str, Any] | None,
+    browser_queue_handoff_payload: Mapping[str, Any] | None,
+    prior_browser_state: Mapping[str, Any] | None,
+) -> tuple[str, str, str]:
+    for source_name, source in (
+        ("browser_prompt_payload", browser_prompt_payload),
+        ("browser_queue_handoff_payload", browser_queue_handoff_payload),
+        ("prior_browser_state", prior_browser_state),
+    ):
+        payload = dict(source or {})
+        for key in (
+            "project_browser_prepared_prompt_text",
+            "prepared_prompt_text",
+            "project_browser_prompt_text",
+            "prompt_text",
+            "request_text",
+        ):
+            prompt_text = _normalize_text(payload.get(key), default="")
+            if prompt_text:
+                return prompt_text, "available", f"{source_name}_{key}"
+    return "", "unavailable", "prompt_text_missing"
+
+def _overlay_bounded_local_loop_local_loop_state_for_coordinator(
+    *,
+    local_loop_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(local_loop_state or {})
+    approved_restart = dict(approved_restart_payload or {})
+    for key, value in approved_restart.items():
+        if value is None:
+            continue
+        if key.startswith(
+            (
+                "project_browser_autonomous_local_loop_",
+                "project_browser_autonomous_bounded_local_loop_",
+            )
+        ):
+            merged[key] = value
+    return merged
 
 def _normalize_string_list(value: Any, *, sort_items: bool = False) -> list[str]:
     if not isinstance(value, (list, tuple)):
@@ -1064,7 +1139,6 @@ _MOVED_HELPER_MODULES: dict[str, str] = {
     '_normalize_project_browser_reason_codes': 'automation.orchestration.planned_runner.git_ops.pr_merge',
     '_normalize_prompt437_runtime_command_request': 'automation.orchestration.planned_runner.git_ops.pr_merge',
     '_normalize_selector_candidates': 'automation.orchestration.planned_runner.summaries.compact',
-    '_overlay_bounded_local_loop_local_loop_state_for_coordinator': 'automation.orchestration.planned_runner.summaries.compact',
     '_parse_git_status_path': 'automation.orchestration.planned_runner.git_ops.local_status',
     '_parse_project_browser_structured_response': 'automation.orchestration.planned_runner.git_ops.pr_merge',
     '_planning_artifact_bundle_has_complete_objective': 'automation.orchestration.planned_runner.artifacts.paths',
@@ -1274,8 +1348,6 @@ _MOVED_HELPER_MODULES: dict[str, str] = {
     '_refresh_one_cycle_controller_runtime_planning_artifacts': 'automation.orchestration.planned_runner.artifacts.writers',
     '_replace_one_cycle_controller_prompt167_placeholder_bundle': 'automation.orchestration.planned_runner.git_ops.pr_merge',
     '_resolve_current_branch': 'automation.orchestration.planned_runner.git_ops.local_status',
-    '_resolve_project_browser_chatgpt_url': 'automation.orchestration.planned_runner.git_ops.pr_merge',
-    '_resolve_project_browser_prepared_prompt_text': 'automation.orchestration.planned_runner.git_ops.pr_merge',
     '_resolve_prompt357_previous_success_fallback': 'automation.orchestration.planned_runner.git_ops.pr_merge',
     '_resolve_prompt358_recovered_local_continuation_evidence': 'automation.orchestration.planned_runner.git_ops.pr_merge',
     '_run_git': 'automation.orchestration.planned_runner.git_ops.local_status',
@@ -1289,7 +1361,12 @@ def __getattr__(name: str) -> Any:
     module_name = _MOVED_HELPER_MODULES.get(name)
     if not module_name:
         if name.startswith("_") and name.upper() == name:
-            value = ()
+            from automation.orchestration.planned_runner import constants
+
+            try:
+                value = getattr(constants, name)
+            except AttributeError:
+                value = ()
             globals()[name] = value
             return value
         raise AttributeError(name)

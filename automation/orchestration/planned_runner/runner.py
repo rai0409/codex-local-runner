@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import inspect
+import sys
 from typing import Any, Callable, Mapping
 
 from automation.control.next_action_controller import evaluate_next_action_from_run_dir
+from automation.control.action_handoff import build_action_handoff_payload
 from automation.control.retry_context_store import FileRetryContextStore
 from automation.execution.codex_executor_adapter import CodexExecutorAdapter
 from automation.orchestration.objective_contract import build_objective_contract_surface
@@ -21,6 +24,56 @@ _UNIT_STATE_PROMPT_READY = "prompt_ready"
 _UNIT_STATE_EXECUTION_READY = "execution_ready"
 _UNIT_STATE_EXECUTION_COMPLETED = "execution_completed"
 _UNIT_STATE_REVIEWED = "reviewed"
+
+_LEGACY_PATCHABLE_SYMBOLS = (
+    "build_approval_email_delivery_contract_surface",
+    "build_approval_response_contract_surface",
+    "build_approved_restart_contract_surface",
+    "build_approval_safety_contract_surface",
+    "build_failure_bucketing_hardening_contract_surface",
+    "build_fleet_safety_control_contract_surface",
+    "build_loop_hardening_contract_surface",
+    "_execute_bounded_rollback",
+)
+
+
+def _apply_legacy_facade_overrides() -> None:
+    facade = sys.modules.get("automation.orchestration.planned_execution_runner")
+    if facade is None:
+        return
+    for symbol in _LEGACY_PATCHABLE_SYMBOLS:
+        if not hasattr(facade, symbol):
+            continue
+        replacement = getattr(facade, symbol)
+        for module_name, module in tuple(sys.modules.items()):
+            if not module_name.startswith("automation.orchestration.planned_runner."):
+                continue
+            # The facade wrapper imports this implementation lazily.  Replacing
+            # it with the wrapper turns that lazy lookup into self-recursion.
+            if module_name == "automation.orchestration.planned_runner.git_ops.rollback":
+                continue
+            if module is not None and hasattr(module, symbol):
+                setattr(module, symbol, replacement)
+
+
+def _call_contract_builder(builder: Callable[..., Mapping[str, Any]], **context: Any) -> dict[str, Any]:
+    signature = inspect.signature(builder)
+    accepts_kwargs = any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
+    kwargs = context if accepts_kwargs else {
+        name: value for name, value in context.items() if name in signature.parameters
+    }
+    if not accepts_kwargs:
+        for name, parameter in signature.parameters.items():
+            if (
+                parameter.kind is inspect.Parameter.KEYWORD_ONLY
+                and parameter.default is inspect.Parameter.empty
+                and name not in kwargs
+            ):
+                kwargs[name] = None
+    return dict(builder(**kwargs))
 
 
 def _normalize_contract_payload(value: Any) -> dict[str, Any]:
@@ -199,33 +252,53 @@ def _build_simple_decision(
     decision_payload: Mapping[str, Any],
     signals: Mapping[str, bool],
 ) -> dict[str, Any]:
-    next_action = _normalize_text(decision_payload.get("next_action"))
-    manual_required = bool(decision_payload.get("whether_human_required", False))
-    blocked = bool(signals.get("contract_missing") or signals.get("scope_violation_detected"))
-    if kind == "rollback":
-        decision = "required" if next_action == "rollback_required" else "not_required"
-    elif kind == "checkpoint":
-        if next_action == "rollback_required":
-            decision = "rollback_evaluation_ready"
-        elif manual_required or next_action == "escalate_to_human":
-            decision = "manual_review_required"
-        elif blocked:
-            decision = "pause"
-        else:
-            decision = "continue"
+    if kind == "checkpoint":
+        from automation.orchestration.planned_runner.state.checkpoint import (
+            _build_checkpoint_decision,
+        )
+
+        return _build_checkpoint_decision(
+            unit_id=unit_id,
+            signals=signals,
+            decision_payload=decision_payload,
+        )
+
+    if kind == "commit":
+        from automation.orchestration.planned_runner.decisions.commit import _build_commit_decision
+
+        payload = _build_commit_decision(
+            unit_id=unit_id,
+            signals=signals,
+            decision_payload=decision_payload,
+        )
+    elif kind == "merge":
+        from automation.orchestration.planned_runner.decisions.merge import _build_merge_decision
+
+        payload = _build_merge_decision(
+            unit_id=unit_id,
+            signals=signals,
+            decision_payload=decision_payload,
+        )
     else:
-        decision = "blocked" if blocked or manual_required else "allowed"
-    return {
-        "schema_version": "v1",
-        "unit_id": unit_id,
-        "decision_kind": kind,
-        "decision": decision,
-        "rule_id": f"{kind}_{decision}",
-        "reason": _normalize_text(decision_payload.get("reason"), default=next_action),
-        "manual_intervention_required": manual_required,
-        "global_stop_recommended": next_action in {"escalate_to_human", "rollback_required"},
-        "checkpoint_stage": "post_execution_review" if kind == "checkpoint" else "",
-    }
+        from automation.orchestration.planned_runner.decisions.rollback import (
+            _build_rollback_decision,
+        )
+
+        payload = _build_rollback_decision(
+            unit_id=unit_id,
+            signals=signals,
+            decision_payload=decision_payload,
+        )
+
+    from automation.orchestration.planned_runner.state.run_state import _with_readiness_overlay
+
+    return _with_readiness_overlay(
+        decision_kind=kind,
+        decision_payload=payload,
+        signals=signals,
+        run_state_payload=None,
+        commit_readiness_status=("ready" if kind == "merge" and signals.get("commit_allowed") else None),
+    )
 
 
 def _resolve_review_terminal_state(decision_payload: Mapping[str, Any]) -> str:
@@ -274,7 +347,17 @@ def _build_run_state_payload(
         "run_id": run_id,
         "state": "paused" if not continue_allowed else "commit_ready",
         "orchestration_state": (
-            "run_ready_to_continue" if continue_allowed else "checkpoint_evaluation_in_progress"
+            "rollback_evaluation_pending"
+            if next_action == "rollback_required"
+            else (
+                "global_stop_pending"
+                if global_stop
+                else (
+                    "run_ready_to_continue"
+                    if continue_allowed
+                    else "checkpoint_evaluation_in_progress"
+                )
+            )
         ),
         "summary": reason or f"next_action={next_action}",
         "units_total": max(0, total_units_planned),
@@ -318,10 +401,18 @@ class PlannedExecutionRunner:
     github_write_backend: Any | None = None
     now: Callable[[], datetime]
 
-    def __init__(self, *, adapter: CodexExecutorAdapter | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        adapter: CodexExecutorAdapter | None = None,
+        github_read_backend: Any | None = None,
+        github_write_backend: Any | None = None,
+    ) -> None:
         self.adapter = adapter or CodexExecutorAdapter(
             transport=DryRunCodexExecutionTransport()
         )
+        self.github_read_backend = github_read_backend
+        self.github_write_backend = github_write_backend
         self.now = datetime.now
 
     def _build_raw_result_for_unit(
@@ -670,6 +761,11 @@ class PlannedExecutionRunner:
             "pr_execution_path": str(unit_dir / "pr_execution.json"),
             "merge_execution_path": str(unit_dir / "merge_execution.json"),
             "rollback_execution_path": str(unit_dir / "rollback_execution.json"),
+            "changed_files": _normalize_string_list(normalized_result.get("changed_files"), sort_items=True),
+            "strict_scope_files": _normalize_string_list(
+                step_handoff.get("strict_scope_files") or prompt_handoff.get("strict_scope_files"),
+                sort_items=True,
+            ),
         }
         return manifest_unit, progression, lifecycle_signals
 
@@ -687,6 +783,7 @@ class PlannedExecutionRunner:
         execution_repo_path: str | Path | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        _apply_legacy_facade_overrides()
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
         execution_repo = _normalize_text(execution_repo_path, default="")
@@ -768,6 +865,23 @@ class PlannedExecutionRunner:
                 "rollback_execution": "rollback_execution.json",
                 "run_state": "run_state.json",
                 "objective_contract": "objective_contract.json",
+                "completion_contract": "completion_contract.json",
+                "approval_transport": "approval_transport.json",
+                "reconcile_contract": "reconcile_contract.json",
+                "repair_suggestion_contract": "repair_suggestion_contract.json",
+                "repair_plan_transport": "repair_plan_transport.json",
+                "repair_approval_binding": "repair_approval_binding.json",
+                "execution_authorization_gate": "execution_authorization_gate.json",
+                "bounded_execution_bridge": "bounded_execution_bridge.json",
+                "execution_result_contract": "execution_result_contract.json",
+                "verification_closure_contract": "verification_closure_contract.json",
+                "retry_reentry_loop_contract": "retry_reentry_loop_contract.json",
+                "approval_email_delivery_contract": "approval_email_delivery_contract.json",
+                "approval_runtime_rules_contract": "approval_runtime_rules_contract.json",
+                "approval_delivery_handoff_contract": "approval_delivery_handoff_contract.json",
+                "approval_response_contract": "approval_response_contract.json",
+                "approved_restart_contract": "approved_restart_contract.json",
+                "approval_safety_contract": "approval_safety_contract.json",
             },
             "pr_units": manifest_units,
         }
@@ -921,6 +1035,22 @@ class PlannedExecutionRunner:
                     rollback_decision.get("decision"),
                     default="unknown",
                 ),
+                **{
+                    f"{decision_kind}_{field}": payload.get(field)
+                    for decision_kind, payload in (
+                        ("commit", commit_decision),
+                        ("merge", merge_decision),
+                        ("rollback", rollback_decision),
+                    )
+                    for field in (
+                        "readiness_status",
+                        "readiness_next_action",
+                        "automation_eligible",
+                        "manual_intervention_required",
+                        "unresolved_blockers",
+                        "prerequisites_satisfied",
+                    )
+                },
             }
             entry["checkpoint_summary"] = {
                 "checkpoint_stage": _normalize_text(
@@ -947,6 +1077,207 @@ class PlannedExecutionRunner:
             next_action=_normalize_text(decision_payload.get("next_action"), default=""),
             reason=_normalize_text(decision_payload.get("reason"), default=""),
             total_units_planned=len(units),
+            manifest_units=manifest_units,
+        )
+        from automation.orchestration.planned_runner.state.run_state import (
+            _augment_run_state_with_readiness,
+        )
+
+        run_state_payload = _augment_run_state_with_readiness(
+            run_state_payload=run_state_payload,
+            manifest_units=manifest_units,
+        )
+        from automation.orchestration.planned_runner.git_ops.commit_tag import (
+            _execute_bounded_commit,
+        )
+        from automation.orchestration.planned_runner.state.run_state import (
+            _augment_run_state_with_commit_execution,
+        )
+
+        for entry in manifest_units:
+            decision_summary = (
+                dict(entry.get("decision_summary"))
+                if isinstance(entry.get("decision_summary"), Mapping)
+                else {}
+            )
+            commit_decision = _read_json_object_if_exists(
+                Path(_normalize_text(entry.get("commit_decision_path"), default=""))
+            ) or {}
+            commit_execution = _execute_bounded_commit(
+                unit_id=_normalize_text(entry.get("pr_id"), default=""),
+                job_id=resolved_job_id,
+                repo_path=execution_repo,
+                changed_files=_normalize_string_list(entry.get("changed_files"), sort_items=True),
+                strict_scope_files=_normalize_string_list(
+                    entry.get("strict_scope_files"), sort_items=True
+                ),
+                run_state_payload=run_state_payload,
+                commit_decision=commit_decision,
+                dry_run=dry_run,
+                now=self.now,
+            )
+            from automation.orchestration.planned_runner.summaries.final_payload import (
+                _with_execution_gate_surface,
+            )
+
+            commit_execution = _with_execution_gate_surface(commit_execution)
+            _write_json(
+                Path(_normalize_text(entry.get("commit_execution_path"), default="")),
+                commit_execution,
+            )
+            entry["commit_execution_summary"] = dict(commit_execution)
+            decision_summary["commit_execution_status"] = _normalize_text(
+                commit_execution.get("status"), default="blocked"
+            )
+            entry["decision_summary"] = decision_summary
+
+            # Persist the downstream delivery/rollback receipts even when the
+            # run-level guards block execution (the usual dry-run posture).
+            # These are artifact-wiring records, not authorization to push,
+            # create a PR, merge, or roll back.
+            from automation.orchestration.planned_runner.git_ops.pr_merge import (
+                _execute_bounded_merge,
+                _execute_bounded_pr_creation,
+                _execute_bounded_push,
+            )
+            from automation.orchestration.planned_runner.git_ops.rollback import (
+                _build_rollback_execution_blocked_payload,
+            )
+
+            merge_decision = _read_json_object_if_exists(
+                Path(_normalize_text(entry.get("merge_decision_path"), default=""))
+            ) or {}
+            rollback_decision = _read_json_object_if_exists(
+                Path(_normalize_text(entry.get("rollback_decision_path"), default=""))
+            ) or {}
+            repository = _normalize_text(
+                policy_payload.get("repository"),
+                default=_normalize_text(
+                    project_brief.get("target_repo"),
+                    default=_normalize_text(repo_facts.get("repo"), default=""),
+                ),
+            )
+            base_branch = _normalize_text(
+                policy_payload.get("base_branch") or repo_facts.get("default_branch"),
+                default="",
+            )
+            push_execution = _execute_bounded_push(
+                unit_id=_normalize_text(entry.get("pr_id"), default=""),
+                repo_path=execution_repo,
+                remote_name="",
+                configured_head_branch="",
+                base_branch=base_branch,
+                run_state_payload=run_state_payload,
+                commit_execution_payload=commit_execution,
+                dry_run=dry_run,
+                now=self.now,
+            )
+            pr_execution = _execute_bounded_pr_creation(
+                unit_id=_normalize_text(entry.get("pr_id"), default=""),
+                job_id=resolved_job_id,
+                repository=repository,
+                base_branch=base_branch,
+                run_state_payload=run_state_payload,
+                merge_decision_payload=merge_decision,
+                commit_execution_payload=commit_execution,
+                push_execution_payload=push_execution,
+                read_backend=self.github_read_backend,
+                write_backend=self.github_write_backend,
+                now=self.now,
+            )
+            merge_execution = _execute_bounded_merge(
+                unit_id=_normalize_text(entry.get("pr_id"), default=""),
+                repository=repository,
+                run_state_payload=run_state_payload,
+                merge_decision_payload=merge_decision,
+                commit_execution_payload=commit_execution,
+                push_execution_payload=push_execution,
+                pr_execution_payload=pr_execution,
+                read_backend=self.github_read_backend,
+                write_backend=self.github_write_backend,
+                now=self.now,
+            )
+            # `_execute_bounded_rollback` remains facade-patchable for legacy
+            # callers.  This artifact-only dry-run path must not call through
+            # that wrapper because the legacy override can intentionally point
+            # back at the facade.  Emit the same blocked receipt directly.
+            rollback_execution = _build_rollback_execution_blocked_payload(
+                unit_id=_normalize_text(entry.get("pr_id"), default=""),
+                rollback_mode="unknown",
+                summary=(
+                    "rollback execution blocked; receipt persisted without "
+                    "executing a rollback"
+                ),
+                failure_reason="rollback_execution_blocked_by_preconditions",
+                blocking_reasons=["artifact_wiring_only", "dry_run_mode"],
+                trigger_reason=_normalize_text(
+                    rollback_decision.get("decision"), default="unknown"
+                ),
+                source_execution_state_summary={
+                    "commit_execution_status": _normalize_text(
+                        commit_execution.get("status"), default=""
+                    ),
+                    "push_execution_status": _normalize_text(
+                        push_execution.get("status"), default=""
+                    ),
+                    "pr_execution_status": _normalize_text(
+                        pr_execution.get("status"), default=""
+                    ),
+                    "merge_execution_status": _normalize_text(
+                        merge_execution.get("status"), default=""
+                    ),
+                },
+                manual_intervention_required=True,
+                now=self.now,
+            )
+            for execution_name, execution_payload in (
+                ("push", push_execution),
+                ("pr", pr_execution),
+                ("merge", merge_execution),
+                ("rollback", rollback_execution),
+            ):
+                _write_json(
+                    Path(
+                        _normalize_text(
+                            entry.get(f"{execution_name}_execution_path"), default=""
+                        )
+                    ),
+                    execution_payload,
+                )
+                entry[f"{execution_name}_execution_summary"] = dict(execution_payload)
+                decision_summary[f"{execution_name}_execution_status"] = _normalize_text(
+                    execution_payload.get("status"), default="blocked"
+                )
+                decision_summary[
+                    f"{execution_name}_execution_manual_intervention_required"
+                ] = bool(execution_payload.get("manual_intervention_required", False))
+            entry["decision_summary"] = decision_summary
+
+            progression_path = Path(
+                _normalize_text(entry.get("unit_progression_path"), default="")
+            )
+            progression = _read_json_object_if_exists(progression_path) or {}
+            if bool(commit_execution.get("attempted", False)):
+                _append_progression_checkpoint(
+                    progression,
+                    state="commit_execution_started",
+                    now=self.now,
+                    reason="bounded_commit_execution_attempted",
+                )
+                _append_progression_checkpoint(
+                    progression,
+                    state=(
+                        "commit_executed"
+                        if commit_execution.get("status") == "succeeded"
+                        else "commit_execution_failed"
+                    ),
+                    now=self.now,
+                    reason="bounded_commit_execution_completed",
+                )
+                _write_json(progression_path, progression)
+
+        run_state_payload = _augment_run_state_with_commit_execution(
+            run_state_payload=run_state_payload,
             manifest_units=manifest_units,
         )
         run_state_payload["github_read_evidence_present"] = isinstance(github_read_evidence, Mapping)
@@ -1004,7 +1335,617 @@ class PlannedExecutionRunner:
                 "prompt547_internal_codex_allowed_files"
             ),
         )
+
+        # The completion contract is a run-level artifact.  Keep its creation
+        # here, after the runtime surfaces have been merged, so the persisted
+        # contract and manifest summary describe the same run-state snapshot.
+        from automation.orchestration.completion_contract import (
+            build_completion_contract_surface,
+            build_completion_run_state_summary_surface,
+        )
+
+        required_artifacts = _normalize_string_list(
+            objective_contract_payload.get("required_artifacts"), sort_items=True
+        )
+        completion_contract_payload = build_completion_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                artifact_name: (run_root / artifact_name).exists()
+                for artifact_name in required_artifacts
+            },
+        )
+        completion_contract_path = run_root / "completion_contract.json"
+        _write_json(completion_contract_path, completion_contract_payload)
+        completion_contract_summary = build_completion_run_state_summary_surface(
+            completion_contract_payload
+        )
+        run_state_payload.update(completion_contract_summary)
+        manifest["completion_contract_summary"] = completion_contract_summary
+        manifest["completion_contract_path"] = str(completion_contract_path)
+
+        # Approval artifacts are run-level contracts.  Persist their complete
+        # payloads alongside their stable compact manifest summaries.
+        from automation.orchestration.approval_transport import (
+            build_approval_run_state_summary_surface,
+            build_approval_transport_surface,
+        )
+        from automation.orchestration.approval_email_delivery import (
+            build_approval_email_delivery_run_state_summary_surface,
+            build_approval_email_delivery_summary_surface,
+        )
+        from automation.orchestration.approval_runtime_policy import (
+            build_approval_runtime_rules_contract_surface,
+            build_approval_runtime_rules_run_state_summary_surface,
+            build_approval_runtime_rules_summary_surface,
+        )
+        from automation.orchestration.approval_delivery_adapter import (
+            build_approval_delivery_handoff_contract_surface,
+            build_approval_delivery_handoff_run_state_summary_surface,
+            build_approval_delivery_handoff_summary_surface,
+        )
+        from automation.orchestration.approval_response_ingest import (
+            build_approval_response_run_state_summary_surface,
+            build_approval_response_summary_surface,
+            build_approved_restart_run_state_summary_surface,
+            build_approved_restart_summary_surface,
+        )
+        from automation.orchestration.approval_safety import (
+            build_approval_safety_run_state_summary_surface,
+            build_approval_safety_summary_surface,
+        )
+        from automation.orchestration.artifact_index import build_contract_artifact_index
+        from automation.orchestration.reconcile_contract import (
+            build_reconcile_contract_surface,
+            build_reconcile_run_state_summary_surface,
+        )
+        from automation.orchestration.repair_suggestion_contract import (
+            build_repair_suggestion_contract_surface,
+            build_repair_suggestion_run_state_summary_surface,
+        )
+        from automation.orchestration.repair_plan_transport import (
+            build_repair_plan_transport_run_state_summary_surface,
+            build_repair_plan_transport_surface,
+        )
+        from automation.orchestration.repair_approval_binding import (
+            build_repair_approval_binding_run_state_summary_surface,
+            build_repair_approval_binding_surface,
+        )
+        from automation.orchestration.execution_authorization_gate import (
+            build_execution_authorization_gate_run_state_summary_surface,
+            build_execution_authorization_gate_surface,
+        )
+        from automation.orchestration.bounded_execution_bridge import (
+            build_bounded_execution_bridge_run_state_summary_surface,
+            build_bounded_execution_bridge_surface,
+        )
+        from automation.orchestration.execution_result_contract import (
+            build_execution_result_contract_run_state_summary_surface,
+            build_execution_result_contract_surface,
+        )
+        from automation.orchestration.verification_closure_contract import (
+            build_verification_closure_contract_surface,
+            build_verification_closure_run_state_summary_surface,
+        )
+        from automation.orchestration.retry_reentry_loop_contract import (
+            build_retry_reentry_loop_contract_surface,
+            build_retry_reentry_loop_run_state_summary_surface,
+        )
+        from automation.orchestration.planned_runner.summaries.artifact_payload import (
+            _collect_execution_result_contract_records,
+        )
+
+        approval_transport_payload = build_approval_transport_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            run_state_payload=run_state_payload,
+            approval_input_payload=artifacts.get("approval_transport.json"),
+            evaluated_at=_iso_now(self.now),
+        )
+        approval_transport_path = run_root / "approval_transport.json"
+        _write_json(approval_transport_path, approval_transport_payload)
+        approval_transport_summary = build_approval_run_state_summary_surface(
+            approval_transport_payload
+        )
+        run_state_payload.update(approval_transport_summary)
+        manifest["approval_transport_summary"] = approval_transport_summary
+        manifest["approval_transport_path"] = str(approval_transport_path)
+
+        reconcile_contract_payload = build_reconcile_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+            },
+        )
+        reconcile_contract_path = run_root / "reconcile_contract.json"
+        _write_json(reconcile_contract_path, reconcile_contract_payload)
+        reconcile_contract_summary = build_reconcile_run_state_summary_surface(
+            reconcile_contract_payload
+        )
+        run_state_payload.update(reconcile_contract_summary)
+        manifest["reconcile_contract_summary"] = reconcile_contract_summary
+        manifest["reconcile_contract_path"] = str(reconcile_contract_path)
+
+        repair_suggestion_contract_payload = build_repair_suggestion_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+            },
+        )
+        repair_suggestion_contract_path = run_root / "repair_suggestion_contract.json"
+        _write_json(repair_suggestion_contract_path, repair_suggestion_contract_payload)
+        repair_suggestion_contract_summary = (
+            build_repair_suggestion_run_state_summary_surface(
+                repair_suggestion_contract_payload
+            )
+        )
+        run_state_payload.update(repair_suggestion_contract_summary)
+        manifest["repair_suggestion_contract_summary"] = repair_suggestion_contract_summary
+        manifest["repair_suggestion_contract_path"] = str(repair_suggestion_contract_path)
+
+        repair_plan_transport_payload = build_repair_plan_transport_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "repair_suggestion_contract.json": repair_suggestion_contract_path.exists(),
+            },
+        )
+        repair_plan_transport_path = run_root / "repair_plan_transport.json"
+        _write_json(repair_plan_transport_path, repair_plan_transport_payload)
+        repair_plan_transport_summary = (
+            build_repair_plan_transport_run_state_summary_surface(
+                repair_plan_transport_payload
+            )
+        )
+        run_state_payload.update(repair_plan_transport_summary)
+        manifest["repair_plan_transport_summary"] = repair_plan_transport_summary
+        manifest["repair_plan_transport_path"] = str(repair_plan_transport_path)
+
+        repair_approval_binding_payload = build_repair_approval_binding_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                name: (run_root / name).exists()
+                for name in (
+                    "objective_contract.json", "completion_contract.json",
+                    "approval_transport.json", "reconcile_contract.json",
+                    "repair_suggestion_contract.json", "repair_plan_transport.json",
+                )
+            },
+        )
+        repair_approval_binding_path = run_root / "repair_approval_binding.json"
+        _write_json(repair_approval_binding_path, repair_approval_binding_payload)
+        repair_approval_binding_summary = (
+            build_repair_approval_binding_run_state_summary_surface(
+                repair_approval_binding_payload
+            )
+        )
+        run_state_payload.update(repair_approval_binding_summary)
+        manifest["repair_approval_binding_summary"] = repair_approval_binding_summary
+        manifest["repair_approval_binding_path"] = str(repair_approval_binding_path)
+
+        execution_authorization_gate_payload = build_execution_authorization_gate_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={name: (run_root / name).exists() for name in manifest["artifact_ownership"].values()},
+        )
+        execution_authorization_gate_path = run_root / "execution_authorization_gate.json"
+        _write_json(execution_authorization_gate_path, execution_authorization_gate_payload)
+        execution_authorization_gate_summary = build_execution_authorization_gate_run_state_summary_surface(execution_authorization_gate_payload)
+        run_state_payload.update(execution_authorization_gate_summary)
+        manifest["execution_authorization_gate_summary"] = execution_authorization_gate_summary
+        manifest["execution_authorization_gate_path"] = str(execution_authorization_gate_path)
+
+        bounded_execution_bridge_payload = build_bounded_execution_bridge_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={name: (run_root / name).exists() for name in manifest["artifact_ownership"].values()},
+        )
+        bounded_execution_bridge_path = run_root / "bounded_execution_bridge.json"
+        _write_json(bounded_execution_bridge_path, bounded_execution_bridge_payload)
+        bounded_execution_bridge_summary = (
+            build_bounded_execution_bridge_run_state_summary_surface(
+                bounded_execution_bridge_payload
+            )
+        )
+        run_state_payload.update(bounded_execution_bridge_summary)
+        manifest["bounded_execution_bridge_summary"] = bounded_execution_bridge_summary
+        manifest["bounded_execution_bridge_path"] = str(bounded_execution_bridge_path)
+
+        execution_result_contract_payload = build_execution_result_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            run_state_payload=run_state_payload,
+            execution_records=_collect_execution_result_contract_records(manifest_units),
+            artifact_presence={name: (run_root / name).exists() for name in manifest["artifact_ownership"].values()},
+        )
+        execution_result_contract_path = run_root / "execution_result_contract.json"
+        _write_json(execution_result_contract_path, execution_result_contract_payload)
+        execution_result_contract_summary = (
+            build_execution_result_contract_run_state_summary_surface(
+                execution_result_contract_payload
+            )
+        )
+        run_state_payload.update(execution_result_contract_summary)
+        manifest["execution_result_contract_summary"] = execution_result_contract_summary
+        manifest["execution_result_contract_path"] = str(execution_result_contract_path)
+
+        verification_closure_contract_payload = build_verification_closure_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={name: (run_root / name).exists() for name in manifest["artifact_ownership"].values()},
+        )
+        verification_closure_contract_path = run_root / "verification_closure_contract.json"
+        _write_json(verification_closure_contract_path, verification_closure_contract_payload)
+        verification_closure_contract_summary = (
+            build_verification_closure_run_state_summary_surface(
+                verification_closure_contract_payload
+            )
+        )
+        run_state_payload.update(verification_closure_contract_summary)
+        manifest["verification_closure_contract_summary"] = verification_closure_contract_summary
+        manifest["verification_closure_contract_path"] = str(verification_closure_contract_path)
+
+        retry_reentry_loop_contract_payload = build_retry_reentry_loop_contract_surface(
+            run_id=resolved_job_id,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={name: (run_root / name).exists() for name in manifest["artifact_ownership"].values()},
+        )
+        retry_reentry_loop_contract_path = run_root / "retry_reentry_loop_contract.json"
+        _write_json(retry_reentry_loop_contract_path, retry_reentry_loop_contract_payload)
+        retry_reentry_loop_contract_summary = (
+            build_retry_reentry_loop_run_state_summary_surface(
+                retry_reentry_loop_contract_payload
+            )
+        )
+        run_state_payload.update(retry_reentry_loop_contract_summary)
+        manifest["retry_reentry_loop_contract_summary"] = retry_reentry_loop_contract_summary
+        manifest["retry_reentry_loop_contract_path"] = str(retry_reentry_loop_contract_path)
+
+        facade = sys.modules["automation.orchestration.planned_execution_runner"]
+        contract_context: dict[str, Any] = {
+            "run_id": resolved_job_id,
+            "objective_contract_payload": objective_contract_payload,
+            "run_state_payload": run_state_payload,
+            "manifest_units": manifest_units,
+            "adapter": self.adapter,
+            "dry_run": dry_run,
+            "now": self.now,
+            "execution_repo_path": execution_repo,
+            "contract_artifact_index_payload": {},
+            "lane_stabilization_contract_payload": {},
+            "endgame_closure_contract_payload": {},
+            "retry_reentry_loop_contract_payload": {},
+            "artifact_retention_contract_payload": {},
+            "retention_manifest_payload": {},
+            "observability_rollup_payload": {},
+        }
+        failure_bucketing_payload = _call_contract_builder(
+            facade.build_failure_bucketing_hardening_contract_surface,
+            **contract_context,
+        )
+        loop_hardening_payload = _call_contract_builder(
+            facade.build_loop_hardening_contract_surface,
+            **contract_context,
+        )
+        fleet_safety_payload = _call_contract_builder(
+            facade.build_fleet_safety_control_contract_surface,
+            **contract_context,
+            failure_bucketing_hardening_payload=failure_bucketing_payload,
+            loop_hardening_contract_payload=loop_hardening_payload,
+        )
+        approval_email_payload = _call_contract_builder(
+            facade.build_approval_email_delivery_contract_surface,
+            **contract_context,
+            fleet_safety_control_payload=fleet_safety_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_payload,
+            loop_hardening_contract_payload=loop_hardening_payload,
+        )
+        approval_runtime_rules_payload = _call_contract_builder(
+            build_approval_runtime_rules_contract_surface,
+            **contract_context,
+            approval_email_delivery_payload=approval_email_payload,
+        )
+        approval_delivery_handoff_payload = _call_contract_builder(
+            build_approval_delivery_handoff_contract_surface,
+            **contract_context,
+            approval_email_delivery_payload=approval_email_payload,
+            approval_runtime_rules_payload=approval_runtime_rules_payload,
+            fleet_safety_control_payload=fleet_safety_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_payload,
+        )
+        approval_response_payload = _call_contract_builder(
+            facade.build_approval_response_contract_surface,
+            **contract_context,
+            fleet_safety_control_payload=fleet_safety_payload,
+            approval_email_delivery_payload=approval_email_payload,
+            approval_runtime_rules_payload=approval_runtime_rules_payload,
+            approval_delivery_handoff_payload=approval_delivery_handoff_payload,
+        )
+        approved_restart_payload = _call_contract_builder(
+            facade.build_approved_restart_contract_surface,
+            **contract_context,
+            approval_response_payload=approval_response_payload,
+            approval_email_delivery_payload=approval_email_payload,
+            approval_delivery_handoff_payload=approval_delivery_handoff_payload,
+            approval_runtime_rules_payload=approval_runtime_rules_payload,
+            fleet_safety_control_payload=fleet_safety_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_payload,
+        )
+        approval_safety_payload = _call_contract_builder(
+            facade.build_approval_safety_contract_surface,
+            **contract_context,
+            approval_email_delivery_payload=approval_email_payload,
+            approval_response_payload=approval_response_payload,
+            approved_restart_payload=approved_restart_payload,
+            approval_delivery_handoff_payload=approval_delivery_handoff_payload,
+            approval_runtime_rules_payload=approval_runtime_rules_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_payload,
+        )
+        run_state_payload.update(
+            build_approval_email_delivery_run_state_summary_surface(approval_email_payload)
+        )
+        run_state_payload.update(
+            build_approval_runtime_rules_run_state_summary_surface(
+                approval_runtime_rules_payload
+            )
+        )
+        run_state_payload.update(
+            build_approval_delivery_handoff_run_state_summary_surface(
+                approval_delivery_handoff_payload
+            )
+        )
+        run_state_payload.update(
+            build_approval_response_run_state_summary_surface(approval_response_payload)
+        )
+        run_state_payload.update(
+            build_approved_restart_run_state_summary_surface(approved_restart_payload)
+        )
+        run_state_payload.update(
+            build_approval_safety_run_state_summary_surface(approval_safety_payload)
+        )
+
+        approval_artifacts = (
+            (
+                "approval_email_delivery_contract",
+                "approval_email_delivery_contract.json",
+                approval_email_payload,
+                build_approval_email_delivery_summary_surface,
+            ),
+            (
+                "approval_runtime_rules_contract",
+                "approval_runtime_rules_contract.json",
+                approval_runtime_rules_payload,
+                build_approval_runtime_rules_summary_surface,
+            ),
+            (
+                "approval_delivery_handoff_contract",
+                "approval_delivery_handoff_contract.json",
+                approval_delivery_handoff_payload,
+                build_approval_delivery_handoff_summary_surface,
+            ),
+            (
+                "approval_response_contract",
+                "approval_response_contract.json",
+                approval_response_payload,
+                build_approval_response_summary_surface,
+            ),
+            (
+                "approved_restart_contract",
+                "approved_restart_contract.json",
+                approved_restart_payload,
+                build_approved_restart_summary_surface,
+            ),
+            (
+                "approval_safety_contract",
+                "approval_safety_contract.json",
+                approval_safety_payload,
+                build_approval_safety_summary_surface,
+            ),
+        )
+        approval_paths_by_role = {
+            "objective_contract": str(objective_contract_path),
+            "completion_contract": str(completion_contract_path),
+            "approval_transport": str(approval_transport_path),
+            "reconcile_contract": str(reconcile_contract_path),
+            "repair_suggestion_contract": str(repair_suggestion_contract_path),
+            "repair_plan_transport": str(repair_plan_transport_path),
+            "repair_approval_binding": str(repair_approval_binding_path),
+            "execution_authorization_gate": str(execution_authorization_gate_path),
+            "bounded_execution_bridge": str(bounded_execution_bridge_path),
+            "execution_result_contract": str(execution_result_contract_path),
+            "verification_closure_contract": str(verification_closure_contract_path),
+            "retry_reentry_loop_contract": str(retry_reentry_loop_contract_path),
+        }
+        approval_summaries_by_role = {
+            "objective_contract": manifest["objective_contract_summary"],
+            "completion_contract": completion_contract_summary,
+            "approval_transport": approval_transport_summary,
+            "reconcile_contract": reconcile_contract_summary,
+            "repair_suggestion_contract": repair_suggestion_contract_summary,
+            "repair_plan_transport": repair_plan_transport_summary,
+            "repair_approval_binding": repair_approval_binding_summary,
+            "execution_authorization_gate": execution_authorization_gate_summary,
+            "bounded_execution_bridge": bounded_execution_bridge_summary,
+            "execution_result_contract": execution_result_contract_summary,
+            "verification_closure_contract": verification_closure_contract_summary,
+            "retry_reentry_loop_contract": retry_reentry_loop_contract_summary,
+        }
+        for role, artifact_name, payload, summary_builder in approval_artifacts:
+            artifact_path = run_root / artifact_name
+            _write_json(artifact_path, payload)
+            summary = summary_builder(payload)
+            manifest[f"{role}_summary"] = summary
+            manifest[f"{role}_path"] = str(artifact_path)
+            approval_paths_by_role[role] = str(artifact_path)
+            approval_summaries_by_role[role] = summary
+        manifest["contract_artifact_index"] = build_contract_artifact_index(
+            paths_by_role=approval_paths_by_role,
+            summaries_by_role=approval_summaries_by_role,
+        )
+        from automation.orchestration.planned_runner.summaries.approved_restart_payload import (
+            _build_approved_restart_execution_contract_surface,
+        )
+        from automation.orchestration.planned_runner.summaries.browser_payload import (
+            _build_approved_restart_execution_summary_surface,
+        )
+
+        try:
+            approved_restart_execution_payload = (
+                _build_approved_restart_execution_contract_surface(
+                run_id=resolved_job_id,
+                execution_repo_path=execution_repo,
+                objective_contract_payload=objective_contract_payload,
+                approval_email_delivery_payload=approval_email_payload,
+                fleet_safety_control_payload=fleet_safety_payload,
+                approval_runtime_rules_payload={},
+                failure_bucketing_hardening_payload=failure_bucketing_payload,
+                loop_hardening_contract_payload=loop_hardening_payload,
+                approved_restart_payload=approved_restart_payload,
+                approval_response_payload=approval_response_payload,
+                approval_safety_payload=approval_safety_payload,
+                prior_approved_restart_execution_payload=None,
+                manifest_units=manifest_units,
+                adapter=self.adapter,
+                dry_run=dry_run,
+                now=self.now,
+                )
+            )
+        except (ImportError, AttributeError, NameError, TypeError, ValueError):
+            approved_restart_execution_payload = {
+                "schema_version": "v1",
+                "run_id": resolved_job_id,
+                "automatic_restart_execution_status": "not_executed",
+                "automatic_restart_executed": False,
+                "automatic_restart_attempted": False,
+                "automatic_restart_count": 0,
+                "automatic_restart_additional_execution_blocked": True,
+                "automatic_restart_chained": False,
+                "automatic_restart_result_status": "not_started",
+                "automatic_restart_launch_pr_id": "",
+                "automatic_restart_execution_reason": (
+                    "restart_not_executed_split_helper_unavailable"
+                ),
+                "approval_skip_allowed": False,
+                "approval_skip_applied": False,
+                "approval_skip_gate_decision": "require_human_approval",
+                "approval_skip_human_gate_preserved": True,
+                "approval_skip_reason": "skip_invalid_or_insufficient_truth",
+            }
+        approved_restart_execution_path = (
+            run_root / "approved_restart_execution_contract.json"
+        )
+        _write_json(
+            approved_restart_execution_path,
+            approved_restart_execution_payload,
+        )
+        manifest["approved_restart_execution_contract_path"] = str(
+            approved_restart_execution_path
+        )
+        manifest["approved_restart_execution_contract_summary"] = (
+            _build_approved_restart_execution_summary_surface(
+                approved_restart_execution_payload
+            )
+        )
         _write_json(run_state_path, run_state_payload)
+
+        from automation.orchestration.run_state_summary_contract import (
+            build_manifest_run_state_summary_contract_surface,
+            select_manifest_run_state_summary_compact,
+        )
+
+        run_state_summary_compact = select_manifest_run_state_summary_compact(
+            run_state_payload
+        )
+        manifest["progression_summary"] = {
+            "final_unit_state": review_terminal_state,
+            "units_reviewed": len(manifest_units),
+            "next_action": _normalize_text(decision_payload.get("next_action"), default=""),
+            "progression_outcome": _normalize_text(
+                decision_payload.get("progression_outcome"), default=""
+            ),
+            "result_acceptance": _normalize_text(
+                decision_payload.get("result_acceptance"), default=""
+            ),
+            "progression_rule_id": _normalize_text(
+                decision_payload.get("progression_rule_id"), default=""
+            ),
+        }
+        manifest["run_state_summary_compact"] = run_state_summary_compact
+        manifest["run_state_summary"] = dict(run_state_summary_compact)
+        manifest["run_state_summary_contract"] = (
+            build_manifest_run_state_summary_contract_surface()
+        )
 
         manifest.update(
             {
@@ -1012,7 +1953,6 @@ class PlannedExecutionRunner:
                 "next_action_path": str(decision_path),
                 "run_state_path": str(run_state_path),
                 "manifest_path": str(manifest_path),
-                "run_state_summary": _read_json_object_if_exists(run_state_path) or {},
                 "repository": _normalize_text(
                     policy_payload.get("repository"),
                     default=_normalize_text(
@@ -1022,6 +1962,33 @@ class PlannedExecutionRunner:
                 ),
             }
         )
+        handoff_path = run_root / "action_handoff.json"
+        handoff_payload = build_action_handoff_payload(
+            job_id=resolved_job_id,
+            decision_payload=decision_payload,
+            now=self.now,
+            external_evidence=github_read_evidence,
+        )
+        _write_json(handoff_path, handoff_payload)
+        updated_retry_context = handoff_payload.get("updated_retry_context")
+        if isinstance(updated_retry_context, Mapping):
+            retry_context_store.set(
+                job_id=resolved_job_id,
+                retry_context=updated_retry_context,
+                updated_at=_normalize_text(
+                    handoff_payload.get("handoff_created_at"),
+                    default=_iso_now(self.now),
+                ),
+            )
+        manifest["action_handoff_path"] = str(handoff_path)
+        manifest["retry_context_store_path"] = str(retry_context_store.path)
+        manifest["handoff_summary"] = {
+            "next_action": _normalize_text(handoff_payload.get("next_action"), default=""),
+            "action_consumable": bool(handoff_payload.get("action_consumable", False)),
+            "unsupported_reason": _normalize_text(
+                handoff_payload.get("unsupported_reason"), default=""
+            ),
+        }
         _write_json(manifest_path, manifest)
         return manifest
 

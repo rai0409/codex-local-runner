@@ -1,4 +1,73 @@
 from __future__ import annotations
+from automation.orchestration.planned_runner.constants import *
+from automation.orchestration.planned_runner.project_browser.constants import (
+    _PROJECT_BROWSER_DECISIONS,
+    _PROJECT_BROWSER_JSON_REQUIRED_FIELDS,
+    _PROJECT_BROWSER_REASON_CODES,
+    _PROJECT_BROWSER_REASON_ORDER,
+    _PROJECT_BROWSER_RISK_LEVELS,
+    _PROJECT_BROWSER_TASK_TYPES,
+)
+
+
+def _normalize_project_browser_reason_codes(reason_codes: list[str]) -> list[str]:
+    normalized = _serialize_required_signals(
+        [reason for reason in reason_codes if reason in _PROJECT_BROWSER_REASON_CODES]
+    )
+    ordered = [reason for reason in _PROJECT_BROWSER_REASON_ORDER if reason in normalized]
+    return ordered if ordered else ["browser_task_insufficient_truth"]
+
+
+def _parse_project_browser_structured_response(
+    raw_response: Any,
+) -> tuple[str, dict[str, Any], str]:
+    if raw_response is None:
+        return "unavailable", {}, "browser_response_unavailable"
+    if isinstance(raw_response, Mapping):
+        payload = dict(raw_response)
+    elif isinstance(raw_response, str):
+        raw_text = raw_response.strip()
+        if not raw_text:
+            return "unavailable", {}, "browser_response_unavailable"
+        try:
+            parsed = json.loads(raw_text)
+        except Exception:
+            return "invalid_response", {}, "browser_response_invalid"
+        if not isinstance(parsed, Mapping):
+            return "invalid_response", {}, "browser_response_invalid"
+        payload = dict(parsed)
+    else:
+        return "invalid_response", {}, "browser_response_invalid"
+    if any(field not in payload for field in _PROJECT_BROWSER_JSON_REQUIRED_FIELDS):
+        return "invalid_response", {}, "browser_response_invalid"
+    task_type = _normalize_text(payload.get("task_type"), default="none")
+    decision = _normalize_text(payload.get("decision"), default="")
+    risk_level = _normalize_text(payload.get("risk_level"), default="")
+    if (
+        task_type not in _PROJECT_BROWSER_TASK_TYPES
+        or task_type == "none"
+        or decision not in _PROJECT_BROWSER_DECISIONS
+        or risk_level not in _PROJECT_BROWSER_RISK_LEVELS
+    ):
+        return "invalid_response", {}, "browser_response_invalid"
+    success_score = _as_non_negative_int(payload.get("success_score"), default=0)
+    confidence_score = _as_non_negative_int(payload.get("confidence_score"), default=0)
+    if success_score > 100 or confidence_score > 100:
+        return "invalid_response", {}, "browser_response_invalid"
+    compact_payload = {
+        "status": _normalize_text(payload.get("status"), default="ok"),
+        "task_type": task_type,
+        "objective_id": _normalize_text(payload.get("objective_id"), default=""),
+        "step_id": _normalize_text(payload.get("step_id"), default=""),
+        "success_score": success_score,
+        "confidence_score": confidence_score,
+        "decision": decision,
+        "decision_reason": _normalize_text(payload.get("decision_reason"), default=""),
+        "risk_level": risk_level,
+        "summary": _normalize_text(payload.get("summary"), default=""),
+        "token_list": _normalize_string_list(payload.get("token_list")),
+    }
+    return "valid", compact_payload, "browser_response_valid"
 import hashlib
 import json
 import os
@@ -90,11 +159,9 @@ from automation.orchestration.planned_runner.utils import (
     _is_project_browser_login_interruption_url,
     _iso_now,
     _normalize_contract_payload,
-    _normalize_project_browser_reason_codes,
     _normalize_string_list,
     _normalize_text,
     _parse_git_status_path,
-    _parse_project_browser_structured_response,
     _read_json_object_if_exists,
     _resolve_project_browser_chatgpt_url,
     _resolve_project_browser_prepared_prompt_text,

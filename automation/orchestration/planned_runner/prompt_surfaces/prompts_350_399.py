@@ -15023,7 +15023,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
                 default=str(prompt377_validation_contract_path),
             )
         )
-    )
+    ) or {}
     prompt377_intake_contract_payload = _read_json_object_if_exists(
         Path(
             _normalize_text(
@@ -15031,7 +15031,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
                 default=str(prompt377_intake_contract_path),
             )
         )
-    )
+    ) or {}
     expected_target_prompt_id = _normalize_text(
         prompt377_validation_contract_payload.get("generated_prompt_target_prompt_id"),
         default=_normalize_text(

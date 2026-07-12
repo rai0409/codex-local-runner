@@ -1,4 +1,5 @@
 from __future__ import annotations
+from automation.orchestration.planned_runner.constants import *
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -1419,20 +1420,24 @@ from automation.orchestration.planned_runner.utils import (
     _write_multi_cycle_history,
     _write_targeted_fix_post_reentry_prompt_if_allowed,
 )
-from automation.orchestration.planned_runner.state.run_state import (
-    _unit_readiness_status,
-)
-from automation.orchestration.planned_runner.summaries.final_payload import (
-    _unit_decision_summary,
-    _unit_execution_status,
-)
-
 def _resolve_closed_loop_orchestration(
     *,
     run_state_payload: Mapping[str, Any],
     manifest_units: list[Mapping[str, Any]],
     run_status: str,
 ) -> dict[str, Any]:
+    # Keep these reverse dependencies lazy: run_state imports this module to
+    # assemble the orchestration surface, while final_payload also consumes
+    # run_state helpers.  Importing either at module load time makes the split
+    # modules depend on a partially initialized run_state module.
+    from automation.orchestration.planned_runner.state.run_state import (
+        _unit_readiness_status,
+    )
+    from automation.orchestration.planned_runner.summaries.final_payload import (
+        _unit_decision_summary,
+        _unit_execution_status,
+    )
+
     global_stop_recommended = bool(run_state_payload.get("global_stop_recommended", False)) or bool(
         run_state_payload.get("global_stop", False)
     )

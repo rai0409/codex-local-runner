@@ -5,6 +5,656 @@ from automation.orchestration.planned_runner.utils import (
     _normalize_text,
     _serialize_required_signals,
 )
+from automation.orchestration.planned_runner.constants import *
+
+_APPROVAL_SKIP_REASON_CODES = {
+    "skip_allowed_low_risk",
+    "skip_not_applicable_approval_not_required",
+    "skip_human_response_already_present",
+    "skip_invalid_or_insufficient_truth",
+    "skip_safety_duplicate_pending",
+    "skip_safety_cooldown_active",
+    "skip_safety_loop_suspected",
+    "skip_safety_delivery_blocked",
+    "skip_safety_delivery_deferred",
+    "skip_safety_not_clear",
+    "skip_manual_review_required",
+    "skip_high_risk_posture",
+    "skip_unsupported_direction",
+    "skip_hold_or_reject_posture",
+    "skip_not_allowed",
+}
+
+_APPROVAL_SKIP_REASON_ORDER = (
+    "skip_not_applicable_approval_not_required",
+    "skip_human_response_already_present",
+    "skip_invalid_or_insufficient_truth",
+    "skip_safety_duplicate_pending",
+    "skip_safety_cooldown_active",
+    "skip_safety_loop_suspected",
+    "skip_safety_delivery_blocked",
+    "skip_safety_delivery_deferred",
+    "skip_safety_not_clear",
+    "skip_manual_review_required",
+    "skip_high_risk_posture",
+    "skip_unsupported_direction",
+    "skip_hold_or_reject_posture",
+    "skip_allowed_low_risk",
+    "skip_not_allowed",
+)
+
+_APPROVED_RESTART_EXECUTION_REASON_CODES = {
+    "invalid_approved_restart_posture",
+    "response_not_approved",
+    "safety_duplicate_pending",
+    "safety_cooldown_active",
+    "safety_loop_suspected",
+    "safety_delivery_blocked",
+    "safety_delivery_deferred",
+    "safety_not_clear",
+    "continuation_budget_insufficient_truth",
+    "continuation_budget_exhausted",
+    "continuation_no_progress_stop",
+    "failure_bucket_continuation_denied",
+    "continuation_next_step_not_selected",
+    "supported_repair_qualification_failed",
+    "supported_repair_verification_failed",
+    "restart_target_missing",
+    "restart_launch_failed",
+    "restart_executed_once",
+    "restart_not_executed",
+}
+
+_APPROVED_RESTART_EXECUTION_REASON_ORDER = (
+    "invalid_approved_restart_posture",
+    "response_not_approved",
+    "safety_duplicate_pending",
+    "safety_cooldown_active",
+    "safety_loop_suspected",
+    "safety_delivery_blocked",
+    "safety_delivery_deferred",
+    "safety_not_clear",
+    "continuation_budget_insufficient_truth",
+    "continuation_budget_exhausted",
+    "continuation_no_progress_stop",
+    "failure_bucket_continuation_denied",
+    "continuation_next_step_not_selected",
+    "supported_repair_qualification_failed",
+    "supported_repair_verification_failed",
+    "restart_target_missing",
+    "restart_launch_failed",
+    "restart_executed_once",
+    "restart_not_executed",
+)
+
+_CONTINUATION_BUDGET_BRANCH_REASON_CODES = {
+    "branch_budget_available",
+    "branch_budget_exhausted",
+    "branch_budget_not_applicable",
+}
+
+_CONTINUATION_BUDGET_BRANCH_REASON_ORDER = (
+    "branch_budget_exhausted",
+    "branch_budget_available",
+    "branch_budget_not_applicable",
+)
+
+_CONTINUATION_BUDGET_REASON_CODES = {
+    "budget_available",
+    "budget_run_exhausted",
+    "budget_objective_exhausted",
+    "budget_lane_exhausted",
+    "budget_branch_exhausted",
+    "budget_insufficient_truth",
+}
+
+_CONTINUATION_BUDGET_REASON_ORDER = (
+    "budget_insufficient_truth",
+    "budget_lane_exhausted",
+    "budget_objective_exhausted",
+    "budget_run_exhausted",
+    "budget_branch_exhausted",
+    "budget_available",
+)
+
+_CONTINUATION_NEXT_STEP_REASON_CODES = {
+    "next_step_selected_supported_repair",
+    "next_step_selected_truth_gather",
+    "next_step_selected_replan",
+    "next_step_selected_retry",
+    "next_step_insufficient_truth",
+    "next_step_not_selected",
+}
+
+_CONTINUATION_NEXT_STEP_REASON_ORDER = (
+    "next_step_insufficient_truth",
+    "next_step_not_selected",
+    "next_step_selected_supported_repair",
+    "next_step_selected_truth_gather",
+    "next_step_selected_replan",
+    "next_step_selected_retry",
+)
+
+_CONTINUATION_REPAIR_PLAYBOOK_REASON_CODES = {
+    "playbook_selected",
+    "playbook_insufficient_truth",
+    "playbook_bucket_unsupported",
+}
+
+_CONTINUATION_REPAIR_PLAYBOOK_REASON_ORDER = (
+    "playbook_insufficient_truth",
+    "playbook_bucket_unsupported",
+    "playbook_selected",
+)
+
+_FINAL_HUMAN_REVIEW_GATE_REASON_CODES = {
+    "final_review_manual_only_posture",
+    "final_review_high_risk_posture",
+    "final_review_supported_repair_verification_failed",
+    "final_review_next_step_unresolved",
+    "final_review_explicit_manual_review_required",
+    "final_review_not_required",
+}
+
+_FINAL_HUMAN_REVIEW_GATE_REASON_ORDER = (
+    "final_review_manual_only_posture",
+    "final_review_high_risk_posture",
+    "final_review_supported_repair_verification_failed",
+    "final_review_next_step_unresolved",
+    "final_review_explicit_manual_review_required",
+    "final_review_not_required",
+)
+
+_IMPLEMENTATION_PROMPT_REASON_CODES = {
+    "prompt_compiled",
+    "prompt_planning_insufficient_truth",
+    "prompt_slice_state_insufficient_truth",
+    "prompt_slice_missing",
+    "prompt_size_posture_unbounded",
+}
+
+_IMPLEMENTATION_PROMPT_REASON_ORDER = (
+    "prompt_planning_insufficient_truth",
+    "prompt_slice_state_insufficient_truth",
+    "prompt_slice_missing",
+    "prompt_size_posture_unbounded",
+    "prompt_compiled",
+)
+
+_LONG_RUNNING_REASON_CODES = {
+    "long_running_monitoring_active",
+    "long_running_paused_stale_watchdog",
+    "long_running_escalated_stuck_detection",
+    "long_running_safe_stop_queue_empty",
+    "long_running_safe_stop_queue_blocked",
+    "long_running_safe_stop_human_fallback",
+    "long_running_safe_stop_chain_budget_exhausted",
+    "long_running_escalated_final_human_review_required",
+    "long_running_insufficient_truth_queue_state",
+    "long_running_resume_ready_replay_safe",
+}
+
+_LONG_RUNNING_REASON_ORDER = (
+    "long_running_insufficient_truth_queue_state",
+    "long_running_escalated_final_human_review_required",
+    "long_running_escalated_stuck_detection",
+    "long_running_paused_stale_watchdog",
+    "long_running_safe_stop_human_fallback",
+    "long_running_safe_stop_chain_budget_exhausted",
+    "long_running_safe_stop_queue_blocked",
+    "long_running_safe_stop_queue_empty",
+    "long_running_resume_ready_replay_safe",
+    "long_running_monitoring_active",
+)
+
+_MISSING_REQUIRED_REF_HINTS = (
+    "missing",
+    "unresolved",
+    "not_directory",
+    "not_git_worktree",
+)
+
+_MISSING_REQUIRED_REF_TOKENS = (
+    "repo",
+    "branch",
+    "remote",
+    "base",
+    "head",
+    "pr",
+    "sha",
+    "ref",
+    "path",
+)
+
+_OBJECTIVE_COMPILER_REASON_CODES = {
+    "objective_compiled",
+    "objective_identity_missing",
+    "objective_truth_insufficient",
+    "done_criteria_met",
+    "done_criteria_incomplete",
+    "done_criteria_insufficient_truth",
+    "stop_criteria_continue",
+    "stop_criteria_done_met",
+    "stop_criteria_human_review_required",
+    "stop_criteria_stability_pause_or_escalation",
+    "stop_criteria_human_fallback_preserved",
+    "stop_criteria_insufficient_truth",
+    "scope_drift_detected_queue_prompt_mismatch",
+    "scope_drift_detected_split_signal",
+    "scope_drift_clear",
+    "scope_drift_insufficient_truth",
+    "completion_objective_active",
+    "completion_objective_completed",
+    "completion_objective_blocked",
+    "completion_objective_insufficient_truth",
+}
+
+_OBJECTIVE_COMPILER_REASON_ORDER = (
+    "objective_identity_missing",
+    "objective_truth_insufficient",
+    "objective_compiled",
+    "done_criteria_insufficient_truth",
+    "done_criteria_met",
+    "done_criteria_incomplete",
+    "scope_drift_insufficient_truth",
+    "scope_drift_detected_queue_prompt_mismatch",
+    "scope_drift_detected_split_signal",
+    "scope_drift_clear",
+    "stop_criteria_insufficient_truth",
+    "stop_criteria_human_review_required",
+    "stop_criteria_stability_pause_or_escalation",
+    "stop_criteria_human_fallback_preserved",
+    "stop_criteria_done_met",
+    "stop_criteria_continue",
+    "completion_objective_insufficient_truth",
+    "completion_objective_completed",
+    "completion_objective_blocked",
+    "completion_objective_active",
+)
+
+_PROJECT_APPROVAL_NOTIFICATION_REASON_CODES = {
+    "approval_notification_compiled",
+    "approval_notification_insufficient_truth",
+    "approval_notification_ready",
+    "approval_notification_not_ready",
+    "approval_notification_not_required",
+    "approval_reply_required",
+    "approval_reply_not_required",
+    "approval_channel_email_send",
+    "approval_channel_email_draft",
+    "approval_channel_review_queue",
+    "approval_channel_manual_only",
+    "approval_channel_not_required",
+    "approval_channel_insufficient_truth",
+    "approval_mobile_summary_available",
+    "approval_mobile_summary_not_required",
+    "approval_mobile_summary_insufficient_truth",
+    "approval_escalation_required",
+    "approval_escalation_not_required",
+    "approval_response_awaiting",
+    "approval_response_terminal",
+}
+
+_PROJECT_APPROVAL_NOTIFICATION_REASON_ORDER = (
+    "approval_notification_insufficient_truth",
+    "approval_notification_compiled",
+    "approval_escalation_required",
+    "approval_escalation_not_required",
+    "approval_notification_ready",
+    "approval_notification_not_ready",
+    "approval_notification_not_required",
+    "approval_reply_required",
+    "approval_reply_not_required",
+    "approval_channel_insufficient_truth",
+    "approval_channel_manual_only",
+    "approval_channel_review_queue",
+    "approval_channel_email_draft",
+    "approval_channel_email_send",
+    "approval_channel_not_required",
+    "approval_mobile_summary_insufficient_truth",
+    "approval_mobile_summary_available",
+    "approval_mobile_summary_not_required",
+    "approval_response_awaiting",
+    "approval_response_terminal",
+)
+
+_PROJECT_AUTONOMY_BUDGET_REASON_CODES = {
+    "autonomy_budget_compiled",
+    "autonomy_budget_insufficient_truth",
+    "project_priority_active",
+    "project_priority_lowered_budget_exhausted",
+    "project_priority_deferred_blocked",
+    "project_priority_deferred_high_risk",
+    "project_priority_completed",
+    "project_priority_insufficient_truth",
+    "run_budget_available",
+    "run_budget_exhausted",
+    "run_budget_insufficient_truth",
+    "objective_budget_available",
+    "objective_budget_exhausted",
+    "objective_budget_insufficient_truth",
+    "pr_retry_budget_available",
+    "pr_retry_budget_exhausted",
+    "pr_retry_budget_not_applicable",
+    "pr_retry_budget_insufficient_truth",
+    "high_risk_defer_active",
+    "high_risk_defer_clear",
+    "high_risk_defer_insufficient_truth",
+}
+
+_PROJECT_AUTONOMY_BUDGET_REASON_ORDER = (
+    "autonomy_budget_insufficient_truth",
+    "autonomy_budget_compiled",
+    "project_priority_insufficient_truth",
+    "project_priority_deferred_high_risk",
+    "project_priority_deferred_blocked",
+    "project_priority_lowered_budget_exhausted",
+    "project_priority_completed",
+    "project_priority_active",
+    "run_budget_insufficient_truth",
+    "run_budget_exhausted",
+    "run_budget_available",
+    "objective_budget_insufficient_truth",
+    "objective_budget_exhausted",
+    "objective_budget_available",
+    "pr_retry_budget_insufficient_truth",
+    "pr_retry_budget_exhausted",
+    "pr_retry_budget_available",
+    "pr_retry_budget_not_applicable",
+    "high_risk_defer_insufficient_truth",
+    "high_risk_defer_active",
+    "high_risk_defer_clear",
+)
+
+_PROJECT_EXTERNAL_BOUNDARY_REASON_CODES = {
+    "external_boundary_compiled",
+    "external_boundary_insufficient_truth",
+    "external_dependency_available",
+    "external_dependency_blocked",
+    "external_dependency_manual_only",
+    "external_boundary_manual_only",
+    "external_network_boundary_clear",
+    "external_network_boundary_blocked",
+    "external_ci_boundary_clear",
+    "external_ci_boundary_blocked",
+    "external_secrets_boundary_clear",
+    "external_secrets_boundary_blocked",
+    "external_github_boundary_clear",
+    "external_github_boundary_blocked",
+    "external_api_boundary_clear",
+    "external_api_boundary_blocked",
+}
+
+_PROJECT_EXTERNAL_BOUNDARY_REASON_ORDER = (
+    "external_boundary_insufficient_truth",
+    "external_boundary_compiled",
+    "external_dependency_manual_only",
+    "external_dependency_blocked",
+    "external_dependency_available",
+    "external_boundary_manual_only",
+    "external_network_boundary_blocked",
+    "external_ci_boundary_blocked",
+    "external_secrets_boundary_blocked",
+    "external_github_boundary_blocked",
+    "external_api_boundary_blocked",
+    "external_network_boundary_clear",
+    "external_ci_boundary_clear",
+    "external_secrets_boundary_clear",
+    "external_github_boundary_clear",
+    "external_api_boundary_clear",
+)
+
+_PROJECT_FAILURE_MEMORY_REASON_CODES = {
+    "failure_memory_compiled",
+    "failure_memory_insufficient_truth",
+    "failure_memory_ineffective_retry_detected",
+    "failure_memory_failed_repair_detected",
+    "failure_memory_repeated_review_issue_detected",
+    "failure_memory_recurring_failure_bucket_detected",
+    "failure_memory_no_ineffective_retry",
+    "failure_memory_no_failed_repair",
+    "failure_memory_no_repeated_review_issue",
+    "failure_memory_no_recurring_failure_bucket",
+    "failure_memory_suppression_none",
+    "failure_memory_suppression_retry",
+    "failure_memory_suppression_repair",
+    "failure_memory_suppression_review_issue",
+    "failure_memory_suppression_failure_bucket",
+}
+
+_PROJECT_FAILURE_MEMORY_REASON_ORDER = (
+    "failure_memory_insufficient_truth",
+    "failure_memory_compiled",
+    "failure_memory_ineffective_retry_detected",
+    "failure_memory_failed_repair_detected",
+    "failure_memory_repeated_review_issue_detected",
+    "failure_memory_recurring_failure_bucket_detected",
+    "failure_memory_no_ineffective_retry",
+    "failure_memory_no_failed_repair",
+    "failure_memory_no_repeated_review_issue",
+    "failure_memory_no_recurring_failure_bucket",
+    "failure_memory_suppression_failure_bucket",
+    "failure_memory_suppression_review_issue",
+    "failure_memory_suppression_repair",
+    "failure_memory_suppression_retry",
+    "failure_memory_suppression_none",
+)
+
+_PROJECT_HUMAN_ESCALATION_REASON_CODES = {
+    "escalation_compiled",
+    "escalation_insufficient_truth",
+    "escalation_required",
+    "escalation_not_required",
+    "escalation_architecture_risk_elevated",
+    "escalation_architecture_risk_clear",
+    "escalation_scope_risk_elevated",
+    "escalation_scope_risk_clear",
+    "escalation_external_risk_elevated",
+    "escalation_external_risk_clear",
+    "escalation_budget_risk_elevated",
+    "escalation_budget_risk_clear",
+    "escalation_repeated_failure_risk_elevated",
+    "escalation_repeated_failure_risk_clear",
+    "escalation_manual_only_risk_elevated",
+    "escalation_manual_only_risk_clear",
+}
+
+_PROJECT_HUMAN_ESCALATION_REASON_ORDER = (
+    "escalation_insufficient_truth",
+    "escalation_compiled",
+    "escalation_required",
+    "escalation_not_required",
+    "escalation_manual_only_risk_elevated",
+    "escalation_external_risk_elevated",
+    "escalation_budget_risk_elevated",
+    "escalation_repeated_failure_risk_elevated",
+    "escalation_scope_risk_elevated",
+    "escalation_architecture_risk_elevated",
+    "escalation_manual_only_risk_clear",
+    "escalation_external_risk_clear",
+    "escalation_budget_risk_clear",
+    "escalation_repeated_failure_risk_clear",
+    "escalation_scope_risk_clear",
+    "escalation_architecture_risk_clear",
+)
+
+_PROJECT_MULTI_OBJECTIVE_REASON_CODES = {
+    "multi_objective_compiled",
+    "multi_objective_insufficient_truth",
+    "multi_objective_selected",
+    "multi_objective_deferred",
+    "multi_objective_blocked_objective_deferred",
+    "multi_objective_blocked_objective_not_deferred",
+    "multi_objective_queue_resume_selected_first",
+    "multi_objective_queue_resume_blocked",
+    "multi_objective_queue_resume_empty",
+    "multi_objective_queue_resume_completed_waiting",
+    "multi_objective_queue_deferred_non_runnable",
+    "multi_objective_approval_notification_deferred",
+    "multi_objective_escalation_deferred",
+}
+
+_PROJECT_MULTI_OBJECTIVE_REASON_ORDER = (
+    "multi_objective_insufficient_truth",
+    "multi_objective_compiled",
+    "multi_objective_approval_notification_deferred",
+    "multi_objective_escalation_deferred",
+    "multi_objective_selected",
+    "multi_objective_deferred",
+    "multi_objective_blocked_objective_deferred",
+    "multi_objective_blocked_objective_not_deferred",
+    "multi_objective_queue_deferred_non_runnable",
+    "multi_objective_queue_resume_selected_first",
+    "multi_objective_queue_resume_blocked",
+    "multi_objective_queue_resume_completed_waiting",
+    "multi_objective_queue_resume_empty",
+)
+
+_PROJECT_PLANNING_SUMMARY_REASON_CODES = {
+    "planning_summary_compiled",
+    "planning_summary_insufficient_truth",
+}
+
+_PROJECT_PLANNING_SUMMARY_REASON_ORDER = (
+    "planning_summary_insufficient_truth",
+    "planning_summary_compiled",
+)
+
+_PROJECT_QUALITY_GATE_REASON_CODES = {
+    "quality_gate_compiled",
+    "quality_gate_insufficient_truth",
+    "quality_gate_posture_merge_ready",
+    "quality_gate_posture_review_ready",
+    "quality_gate_posture_retry_needed",
+    "quality_gate_posture_insufficient_truth",
+    "quality_gate_changed_area_runner_and_tests",
+    "quality_gate_changed_area_runner_only",
+    "quality_gate_changed_area_unknown",
+    "quality_gate_changed_area_insufficient_truth",
+    "quality_gate_risk_high",
+    "quality_gate_risk_moderate",
+    "quality_gate_risk_low",
+    "quality_gate_risk_insufficient_truth",
+    "quality_gate_targeted_regression_enabled",
+    "quality_gate_targeted_regression_not_required",
+}
+
+_PROJECT_QUALITY_GATE_REASON_ORDER = (
+    "quality_gate_insufficient_truth",
+    "quality_gate_posture_insufficient_truth",
+    "quality_gate_changed_area_insufficient_truth",
+    "quality_gate_risk_insufficient_truth",
+    "quality_gate_compiled",
+    "quality_gate_posture_retry_needed",
+    "quality_gate_posture_review_ready",
+    "quality_gate_posture_merge_ready",
+    "quality_gate_changed_area_runner_and_tests",
+    "quality_gate_changed_area_runner_only",
+    "quality_gate_changed_area_unknown",
+    "quality_gate_risk_high",
+    "quality_gate_risk_moderate",
+    "quality_gate_risk_low",
+    "quality_gate_targeted_regression_enabled",
+    "quality_gate_targeted_regression_not_required",
+)
+
+_PROJECT_ROADMAP_REASON_CODES = {
+    "roadmap_compiled",
+    "roadmap_insufficient_truth",
+}
+
+_PROJECT_ROADMAP_REASON_ORDER = (
+    "roadmap_insufficient_truth",
+    "roadmap_compiled",
+)
+
+_REVIEW_ASSIMILATION_REASON_CODES = {
+    "assimilation_queue_state_insufficient_truth",
+    "assimilation_queue_empty",
+    "assimilation_queue_blocked",
+    "assimilation_prompt_unavailable",
+    "assimilation_result_insufficient_truth",
+    "assimilation_accept_succeeded",
+    "assimilation_retry_retryable_failure",
+    "assimilation_replan_design_invalid",
+    "assimilation_split_scope_signal",
+    "assimilation_escalate_manual_followup",
+    "assimilation_escalate_unclassified",
+}
+
+_REVIEW_ASSIMILATION_REASON_ORDER = (
+    "assimilation_queue_state_insufficient_truth",
+    "assimilation_queue_empty",
+    "assimilation_prompt_unavailable",
+    "assimilation_queue_blocked",
+    "assimilation_result_insufficient_truth",
+    "assimilation_escalate_manual_followup",
+    "assimilation_replan_design_invalid",
+    "assimilation_split_scope_signal",
+    "assimilation_retry_retryable_failure",
+    "assimilation_accept_succeeded",
+    "assimilation_escalate_unclassified",
+)
+
+_SELF_HEALING_REASON_CODES = {
+    "self_healing_executed_retry",
+    "self_healing_executed_replan",
+    "self_healing_executed_truth_gather",
+    "self_healing_executed_alternative_supported_repair",
+    "self_healing_selected_retry",
+    "self_healing_selected_replan",
+    "self_healing_selected_truth_gather",
+    "self_healing_selected_alternative_supported_repair",
+    "self_healing_not_applicable_assimilation_no_action",
+    "self_healing_not_applicable_assimilation_accept",
+    "self_healing_insufficient_assimilation_truth",
+    "self_healing_blocked_queue_non_runnable",
+    "self_healing_blocked_safety_gate",
+    "self_healing_blocked_budget_exhausted",
+    "self_healing_blocked_branch_budget_exhausted",
+    "self_healing_blocked_final_human_review",
+    "self_healing_blocked_unsupported_action",
+    "self_healing_blocked_alternative_repair_not_allowed",
+}
+
+_SELF_HEALING_REASON_ORDER = (
+    "self_healing_insufficient_assimilation_truth",
+    "self_healing_not_applicable_assimilation_accept",
+    "self_healing_not_applicable_assimilation_no_action",
+    "self_healing_blocked_queue_non_runnable",
+    "self_healing_blocked_safety_gate",
+    "self_healing_blocked_budget_exhausted",
+    "self_healing_blocked_branch_budget_exhausted",
+    "self_healing_blocked_final_human_review",
+    "self_healing_blocked_alternative_repair_not_allowed",
+    "self_healing_blocked_unsupported_action",
+    "self_healing_selected_alternative_supported_repair",
+    "self_healing_selected_truth_gather",
+    "self_healing_selected_replan",
+    "self_healing_selected_retry",
+    "self_healing_executed_alternative_supported_repair",
+    "self_healing_executed_truth_gather",
+    "self_healing_executed_replan",
+    "self_healing_executed_retry",
+)
+
+_SUPPORTED_REPAIR_EXECUTION_REASON_CODES = {
+    "repair_not_selected",
+    "repair_precheck_blocked",
+    "repair_qualification_failed",
+    "repair_launch_failed",
+    "repair_verification_passed",
+    "repair_verification_failed",
+}
+
+_SUPPORTED_REPAIR_EXECUTION_REASON_ORDER = (
+    "repair_precheck_blocked",
+    "repair_qualification_failed",
+    "repair_launch_failed",
+    "repair_verification_failed",
+    "repair_verification_passed",
+    "repair_not_selected",
+)
 
 def _resolve_approval_input_payload(
     *,
