@@ -37,6 +37,10 @@ def _make_repo(root: Path) -> Path:
     repo = root / "target_repo"
     repo.mkdir(parents=True, exist_ok=True)
     (repo / "target.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "src").mkdir()
+    (repo / "src" / "universe.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_universe.py").write_text("def test_placeholder():\n    assert True\n", encoding="utf-8")
     _git(repo, "init", "-q")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "init")
@@ -102,6 +106,27 @@ def _resolved_retry(*, effect_spec_path, out_dir, **_kwargs):
             {"effect_verification_status": "failed", "failure_digest_path": ""},
             {"effect_verification_status": "passed", "failure_digest_path": ""},
         ],
+    }
+
+
+def _resolved_multi_scope_retry(*, effect_spec_path, out_dir, **_kwargs):
+    spec = json.loads(Path(effect_spec_path).read_text(encoding="utf-8"))
+    repo = Path(spec["repo_path"])
+    (repo / "src" / "universe.py").write_text(
+        "def load_universe(path):\n    return path\n", encoding="utf-8"
+    )
+    (repo / "tests" / "test_universe.py").write_text(
+        "def test_load_universe():\n    assert True\n", encoding="utf-8"
+    )
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    (Path(out_dir) / "targeted_fix_retry_state.json").write_text("{}", encoding="utf-8")
+    return {
+        "status": "success",
+        "converged": True,
+        "stop_reason": "first_attempt_succeeded",
+        "fix_attempts_used": 0,
+        "codex_invoked_count": 1,
+        "attempts": [{"effect_verification_status": "passed", "failure_digest_path": ""}],
     }
 
 
@@ -223,6 +248,37 @@ class DaemonRealWorktreeModeTests(unittest.TestCase):
                 "real-commit-tag-blocked.json",
                 list_tasks(root / "queue")["failed"],
             )
+
+    def test_real_worktree_multi_file_scope_is_reported_and_completes(self):
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as raw:
+            root = Path(raw)
+            repo = _make_repo(root)
+            enqueue_task(
+                root / "queue",
+                {
+                    "task_id": "real-multi-scope",
+                    "kind": "bounded_implementation",
+                    "repo_path": repo.as_posix(),
+                    "allowed_files": ["src/universe.py", "tests/test_universe.py"],
+                    "goal": "Implement a validated universe loader.",
+                    "required_behavior": ["Add the loader and its focused test."],
+                    "prohibited_behavior": ["Do not modify unrelated files."],
+                    "required_text": {
+                        "src/universe.py": ["def load_universe"],
+                        "tests/test_universe.py": ["def test_load_universe"],
+                    },
+                },
+            )
+            with mock.patch.object(
+                daemon, "run_targeted_fix_retry", new=_resolved_multi_scope_retry
+            ):
+                code = daemon.main(_argv(root, target_repo_mode="real-worktree"))
+            report = json.loads(
+                (root / "runs" / "real-multi-scope" / "run_report.json").read_text()
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "success")
+        self.assertEqual(report["allowed_files"], ["src/universe.py", "tests/test_universe.py"])
 
     def test_daemon_source_has_no_remote_operation_commands(self):
         source = (REPO_ROOT / "scripts" / "run_task_queue_daemon.py").read_text(encoding="utf-8")

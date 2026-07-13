@@ -170,6 +170,34 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
         self.assertFalse(state["effect_forbidden_paths_verified"])
         self.assertEqual(state["effect_unexpected_files"], ["evil.txt"])
 
+    def test_scope_outside_allowed_files_blocks_success(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            spec_path = _write_spec(
+                tmp_dir,
+                repo,
+                allowed_files=["calculator.py", "test_calculator.py"],
+                expected_modified_files=["calculator.py", "test_calculator.py"],
+                required_text={
+                    "calculator.py": ["def subtract(a, b):"],
+                    "test_calculator.py": ["def test_subtract"],
+                },
+            )
+
+            def _bad_change():
+                (repo / "calculator.py").write_text("def subtract(a, b):\n    return a - b\n")
+                (repo / "test_calculator.py").write_text("def test_subtract():\n    assert True\n")
+                (repo / "outside.py").write_text("changed = True\n")
+
+            state = self._run_gate(tmp_dir, _fake_codex_factory(side_effect=_bad_change), spec_path)
+        self.assertEqual(state["status"], "blocked")
+        self.assertEqual(state["effect_verification_status"], "failed")
+        self.assertEqual(state["effect_unexpected_files"], ["outside.py"])
+        self.assertTrue(
+            any("outside allowed_files" in error for error in state["effect_verification_errors"])
+        )
+
     def test_default_behavior_without_effect_spec_is_unchanged(self):
         with tempfile.TemporaryDirectory() as raw:
             tmp_dir = Path(raw)

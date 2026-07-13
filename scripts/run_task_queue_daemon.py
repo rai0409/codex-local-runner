@@ -279,6 +279,7 @@ def _process_task(
         report["errors"] = errors
         return report
     report["task_id"] = spec["task_id"]
+    report["allowed_files"] = list(spec.get("allowed_files", []))
 
     report["stage"] = "plan"
     plan = plan_task(spec, run_dir / "plan")

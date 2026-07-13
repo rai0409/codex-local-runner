@@ -124,6 +124,24 @@ def _normalize_relative_file_list(value: Any) -> list[str]:
     return out
 
 
+def _validate_allowed_files(value: Any, errors: list[str]) -> list[str]:
+    allowed_files = _normalize_relative_file_list(value)
+    if not 1 <= len(allowed_files) <= 3:
+        errors.append("effect spec allowed_files must contain 1 to 3 files")
+    for path in allowed_files:
+        candidate = Path(path)
+        if (
+            candidate.is_absolute()
+            or path.endswith("/")
+            or "\\" in path
+            or any(part in {"", ".", ".."} for part in candidate.parts)
+            or any(character in path for character in "*?[]{}")
+        ):
+            errors.append("effect spec allowed_files entries must be repo-relative files without traversal, globs, or directories")
+            break
+    return allowed_files
+
+
 def _load_effect_spec(path_text: str) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     path = Path(path_text)
@@ -170,11 +188,18 @@ def _load_effect_spec(path_text: str) -> tuple[dict[str, Any], list[str]]:
     timeout_value = payload.get("verify_command_timeout_seconds", DEFAULT_VERIFY_COMMAND_TIMEOUT_SECONDS)
     verify_timeout = _as_positive_int(timeout_value, default=DEFAULT_VERIFY_COMMAND_TIMEOUT_SECONDS)
 
+    expected_modified_files = _normalize_relative_file_list(payload.get("expected_modified_files"))
+    allowed_files = _validate_allowed_files(
+        payload.get("allowed_files", expected_modified_files), errors
+    )
+    if not set(expected_modified_files).issubset(set(allowed_files)):
+        errors.append("effect spec expected_modified_files must be included in allowed_files")
     spec = {
         "verify_commands": verify_commands,
         "verify_command_timeout_seconds": verify_timeout,
         "repo_path": repo_path,
-        "expected_modified_files": _normalize_relative_file_list(payload.get("expected_modified_files")),
+        "allowed_files": allowed_files,
+        "expected_modified_files": expected_modified_files,
         "expected_unmodified_files": _normalize_relative_file_list(payload.get("expected_unmodified_files")),
         "required_text": {
             _normalize_text(name): [
@@ -236,9 +261,17 @@ def _verify_effects(
 
     post_listing = _list_repo_files(repo)
     created = post_listing - set(pre_listing)
-    unexpected = sorted(created - set(spec.get("expected_modified_files", [])))
-    if unexpected and not spec.get("allow_extra_files", False):
-        errors.append("unexpected files created: " + ", ".join(unexpected))
+    allowed_files = set(spec.get("allowed_files", []))
+    unexpected = sorted(created - allowed_files)
+    changed_outside_scope = sorted(
+        path
+        for path, pre_hash in pre_hashes.items()
+        if path not in allowed_files and _hash_file(repo / path) != pre_hash
+    )
+    if unexpected:
+        errors.append("unexpected files created outside allowed_files: " + ", ".join(unexpected))
+    if changed_outside_scope:
+        errors.append("files changed outside allowed_files: " + ", ".join(changed_outside_scope))
 
     passed = modified_ok and unmodified_ok and required_text_ok and forbidden_ok and not errors
     return {
@@ -248,6 +281,7 @@ def _verify_effects(
         "effect_required_text_verified": required_text_ok,
         "effect_forbidden_paths_verified": forbidden_ok,
         "effect_unexpected_files": unexpected,
+        "effect_changed_outside_allowed_files": changed_outside_scope,
         "effect_verification_errors": errors,
     }
 
@@ -468,13 +502,8 @@ def run_live_codex_gate(
         effect_spec, effect_spec_errors = _load_effect_spec(effect_spec_text)
         if not effect_spec_errors:
             effect_repo = Path(effect_spec["repo_path"])
-            watch_files = list(
-                dict.fromkeys(
-                    effect_spec["expected_modified_files"] + effect_spec["expected_unmodified_files"]
-                )
-            )
-            pre_hashes = {rel: _hash_file(effect_repo / rel) for rel in watch_files}
             pre_listing = _list_repo_files(effect_repo)
+            pre_hashes = {rel: _hash_file(effect_repo / rel) for rel in pre_listing}
         else:
             effect_state["effect_verification_status"] = "failed"
             effect_state["effect_verification_errors"] = list(effect_spec_errors)
@@ -610,12 +639,16 @@ def run_live_codex_gate(
         "effect_spec_path": effect_spec_text,
         "effect_verification_status": effect_state["effect_verification_status"],
         "effect_expected_modified_files": list(effect_spec.get("expected_modified_files", [])),
+        "effect_allowed_files": list(effect_spec.get("allowed_files", [])),
         "effect_expected_unmodified_files": list(effect_spec.get("expected_unmodified_files", [])),
         "effect_modified_files_verified": effect_state["effect_modified_files_verified"],
         "effect_unmodified_files_verified": effect_state["effect_unmodified_files_verified"],
         "effect_required_text_verified": effect_state["effect_required_text_verified"],
         "effect_forbidden_paths_verified": effect_state["effect_forbidden_paths_verified"],
         "effect_unexpected_files": list(effect_state["effect_unexpected_files"]),
+        "effect_changed_outside_allowed_files": list(
+            effect_state.get("effect_changed_outside_allowed_files", [])
+        ),
         "effect_verification_errors": list(effect_state["effect_verification_errors"]),
         "effect_verify_command_results": list(effect_state.get("effect_verify_command_results", [])),
         "effect_verify_commands_passed": bool(effect_state.get("effect_verify_commands_passed", True)),
