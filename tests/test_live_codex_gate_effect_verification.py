@@ -111,6 +111,53 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
         self.assertEqual(state["effect_verification_errors"], [])
         self.assertEqual(state["next_action"], "commit_tag_gate")
 
+    def test_terminal_codex_output_closes_stdin_before_effect_verification(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            spec_path = _write_spec(tmp_dir, repo)
+            prompt_path = tmp_dir / "prompt.md"
+            prompt_path.write_text("safe prompt\n", encoding="utf-8")
+            observed: dict = {"effect_calls": 0}
+
+            def _fake_run(command, **kwargs):
+                self.assertEqual(kwargs["stdin"], live_codex_gate.subprocess.DEVNULL)
+                (repo / "calculator.py").write_text(
+                    "def add(a, b):\n    return a + b\n\n"
+                    "def subtract(a, b):\n    return a - b\n",
+                    encoding="utf-8",
+                )
+                return live_codex_gate.subprocess.CompletedProcess(
+                    command,
+                    0,
+                    stdout='{"status":"success","summary":"fake"}\n',
+                    stderr="",
+                )
+
+            original_verify = live_codex_gate._verify_effects
+
+            def _verify_once(**kwargs):
+                observed["effect_calls"] += 1
+                return original_verify(**kwargs)
+
+            with (
+                mock.patch.object(live_codex_gate.shutil, "which", return_value="/fake/codex"),
+                mock.patch.object(live_codex_gate.subprocess, "run", side_effect=_fake_run),
+                mock.patch.object(live_codex_gate, "_verify_effects", side_effect=_verify_once),
+            ):
+                state = live_codex_gate.run_live_codex_gate(
+                    generated_prompt_path=prompt_path,
+                    out_dir=tmp_dir / "out",
+                    live_codex_enable_token=live_codex_gate.LIVE_CODEX_GATE_ENABLE_TOKEN,
+                    timeout_seconds=10,
+                    effect_spec_path=spec_path,
+                )
+
+        self.assertEqual(state["status"], "success")
+        self.assertEqual(state["returncode"], 0)
+        self.assertEqual(state["effect_verification_status"], "passed")
+        self.assertEqual(observed["effect_calls"], 1)
+
     def test_zero_returncode_without_change_is_not_success(self):
         with tempfile.TemporaryDirectory() as raw:
             tmp_dir = Path(raw)

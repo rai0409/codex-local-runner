@@ -415,6 +415,11 @@ def _run_codex_once(
             command,
             text=True,
             capture_output=True,
+            # The prompt is supplied as an argv value.  Closing stdin prevents
+            # Codex from entering its follow-up-input loop after it has emitted
+            # a terminal result, which would otherwise delay effect verification
+            # until the live timeout.
+            stdin=subprocess.DEVNULL,
             timeout=timeout_seconds,
             cwd=codex_cwd or None,
         )
