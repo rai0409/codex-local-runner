@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -122,6 +125,35 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
 
             def _fake_run(command, **kwargs):
                 self.assertEqual(kwargs["stdin"], live_codex_gate.subprocess.DEVNULL)
+                environment = kwargs["env"]
+                cache_dir = Path(environment["PYTHONPYCACHEPREFIX"])
+                self.assertEqual(environment["PYTHONDONTWRITEBYTECODE"], "1")
+                self.assertTrue(cache_dir.is_relative_to(tmp_dir / "out"))
+                self.assertFalse(cache_dir.is_relative_to(repo))
+                self.assertIn("-q --strict-markers", environment["PYTEST_ADDOPTS"])
+                self.assertEqual(environment["PYTEST_ADDOPTS"].count("no:cacheprovider"), 1)
+                child = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-c",
+                        "import os; print(os.environ['PYTHONDONTWRITEBYTECODE']); "
+                        "print(os.environ['PYTHONPYCACHEPREFIX']); "
+                        "print(os.environ['PYTEST_ADDOPTS'])",
+                    ],
+                    env=environment,
+                    stdout=subprocess.PIPE,
+                    text=True,
+                )
+                child_stdout, _ = child.communicate(timeout=10)
+                observed["child_environment"] = child_stdout.splitlines()
+                # Simulate cache-producing Python/pytest behavior only when the
+                # isolation environment is absent; the supplied environment must
+                # therefore leave no cache artifacts in the target repo.
+                if environment.get("PYTHONDONTWRITEBYTECODE") != "1":
+                    (repo / "__pycache__").mkdir()
+                    (repo / "__pycache__" / "calculator.pyc").write_text("cache")
+                if "no:cacheprovider" not in environment.get("PYTEST_ADDOPTS", ""):
+                    (repo / ".pytest_cache").mkdir()
                 (repo / "calculator.py").write_text(
                     "def add(a, b):\n    return a + b\n\n"
                     "def subtract(a, b):\n    return a - b\n",
@@ -141,6 +173,7 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
                 return original_verify(**kwargs)
 
             with (
+                mock.patch.dict(os.environ, {"PYTEST_ADDOPTS": "-q --strict-markers"}, clear=False),
                 mock.patch.object(live_codex_gate.shutil, "which", return_value="/fake/codex"),
                 mock.patch.object(live_codex_gate.subprocess, "run", side_effect=_fake_run),
                 mock.patch.object(live_codex_gate, "_verify_effects", side_effect=_verify_once),
@@ -157,6 +190,23 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
         self.assertEqual(state["returncode"], 0)
         self.assertEqual(state["effect_verification_status"], "passed")
         self.assertEqual(observed["effect_calls"], 1)
+        self.assertEqual(observed["child_environment"][0], "1")
+        self.assertIn("-q --strict-markers", observed["child_environment"][2])
+        self.assertFalse((repo / ".pytest_cache").exists())
+        self.assertFalse((repo / "__pycache__").exists())
+
+    def test_existing_pytest_cache_disable_option_is_not_duplicated(self):
+        with tempfile.TemporaryDirectory() as raw:
+            cache_dir = Path(raw) / "runner_work" / "codex_pycache"
+            with mock.patch.dict(
+                os.environ,
+                {"PYTEST_ADDOPTS": "-q -p no:cacheprovider --strict-markers"},
+                clear=False,
+            ):
+                environment = live_codex_gate._build_codex_environment(cache_dir)
+        self.assertEqual(environment["PYTEST_ADDOPTS"].count("no:cacheprovider"), 1)
+        self.assertIn("-q", environment["PYTEST_ADDOPTS"])
+        self.assertIn("--strict-markers", environment["PYTEST_ADDOPTS"])
 
     def test_zero_returncode_without_change_is_not_success(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -235,12 +285,12 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
             def _bad_change():
                 (repo / "calculator.py").write_text("def subtract(a, b):\n    return a - b\n")
                 (repo / "test_calculator.py").write_text("def test_subtract():\n    assert True\n")
-                (repo / "outside.py").write_text("changed = True\n")
+                (repo / "unauthorized.txt").write_text("changed = True\n")
 
             state = self._run_gate(tmp_dir, _fake_codex_factory(side_effect=_bad_change), spec_path)
         self.assertEqual(state["status"], "blocked")
         self.assertEqual(state["effect_verification_status"], "failed")
-        self.assertEqual(state["effect_unexpected_files"], ["outside.py"])
+        self.assertEqual(state["effect_unexpected_files"], ["unauthorized.txt"])
         self.assertTrue(
             any("outside allowed_files" in error for error in state["effect_verification_errors"])
         )

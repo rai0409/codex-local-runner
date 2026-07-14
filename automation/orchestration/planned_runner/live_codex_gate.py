@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 from typing import Any, Mapping
@@ -87,6 +89,29 @@ def _build_codex_command(prompt_text: str, sandbox_mode: str) -> list[str]:
 def _normalize_sandbox_mode(value: Any) -> str:
     text = _normalize_text(value, default="default").lower()
     return text if text in SUPPORTED_SANDBOX_MODES else "default"
+
+
+def _pytest_cache_provider_disabled(options: str) -> bool:
+    try:
+        tokens = shlex.split(options)
+    except ValueError:
+        tokens = options.split()
+    return any(
+        token == "-p" and index + 1 < len(tokens) and tokens[index + 1] == "no:cacheprovider"
+        for index, token in enumerate(tokens)
+    ) or "-pno:cacheprovider" in tokens
+
+
+def _build_codex_environment(cache_dir: Path) -> dict[str, str]:
+    """Return an execution-only environment that keeps Codex child caches out of the repo."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    environment = os.environ.copy()
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    environment["PYTHONPYCACHEPREFIX"] = cache_dir.resolve().as_posix()
+    existing_options = environment.get("PYTEST_ADDOPTS", "")
+    if not _pytest_cache_provider_disabled(existing_options):
+        environment["PYTEST_ADDOPTS"] = (existing_options + " -p no:cacheprovider").strip()
+    return environment
 
 
 def _hash_file(path: Path) -> str | None:
@@ -411,6 +436,7 @@ def _run_codex_once(
         return result, command, False
 
     try:
+        codex_environment = _build_codex_environment(stdout_path.parent / "codex_pycache")
         completed = subprocess.run(
             command,
             text=True,
@@ -422,6 +448,7 @@ def _run_codex_once(
             stdin=subprocess.DEVNULL,
             timeout=timeout_seconds,
             cwd=codex_cwd or None,
+            env=codex_environment,
         )
         finished_at = _utc_now()
         _write_text(stdout_path, completed.stdout or "")
