@@ -77,6 +77,44 @@ else:
     return script
 
 
+def _write_noninteractive_fake_codex(tmp_dir: Path) -> Path:
+    script = tmp_dir / "codex"
+    script.write_text(
+        """
+#!{python}
+import json
+import os
+from pathlib import Path
+import sys
+
+argv = sys.argv[1:]
+record_path = Path(os.environ["FAKE_CODEX_ARGV_PATH"])
+target = argv[argv.index("-C") + 1] if "-C" in argv and argv.index("-C") + 1 < len(argv) else ""
+valid = argv[:8] == ["-a", "never", "-s", "danger-full-access", "-C", target, "exec", "--skip-git-repo-check"]
+record_path.write_text(json.dumps({"argv": argv, "cwd": os.getcwd(), "stdin_isatty": os.isatty(0), "valid": valid}), encoding="utf-8")
+if not valid:
+    print("Would you like to run the following command?", flush=True)
+    sys.stdin.read()
+    raise SystemExit(9)
+mode = os.environ["FAKE_CODEX_MODE"]
+repo = Path(target)
+if mode == "success":
+    source = repo / "calculator.py"
+    source.write_text(source.read_text(encoding="utf-8") + "\\n\\ndef subtract(a, b):\\n    return a - b\\n", encoding="utf-8")
+elif mode == "remove_approved":
+    (repo / "approved_a.py").unlink()
+    (repo / "approved_b.py").unlink()
+elif mode == "failure":
+    print("execution failure returned to model", flush=True)
+    raise SystemExit(7)
+print(json.dumps({"status": "success", "summary": "noninteractive fake"}), flush=True)
+""".lstrip().replace("{python}", sys.executable),
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    return script
+
+
 def _fake_codex_factory(side_effect=None, returncode: int = 0, record: dict | None = None):
     def _fake_run_codex_once(
         *,
@@ -105,7 +143,9 @@ def _fake_codex_factory(side_effect=None, returncode: int = 0, record: dict | No
             started_at="2026-01-01T00:00:00Z",
             finished_at="2026-01-01T00:00:01Z",
         )
-        command = live_codex_gate._build_codex_command("<prompt>", sandbox_mode)
+        command = live_codex_gate._build_codex_command(
+            "<prompt>", codex_cwd or Path.cwd().as_posix()
+        )
         return result, command, True
 
     return _fake_run_codex_once
@@ -350,20 +390,18 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
         self.assertFalse(state["effect_verification_enabled"])
         self.assertEqual(state["effect_verification_status"], "not_run")
         self.assertEqual(state["sandbox_mode"], "default")
-        self.assertNotIn("--sandbox", state["codex_command"])
+        self.assertEqual(
+            state["codex_command"][:8],
+            ["codex", "-a", "never", "-s", "danger-full-access", "-C", Path.cwd().as_posix(), "exec"],
+        )
 
-    def test_workspace_write_sandbox_mode_changes_command(self):
+    def test_codex_command_is_always_noninteractive(self):
         self.assertEqual(
-            live_codex_gate._build_codex_command("p", "workspace-write"),
-            ["codex", "exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "p"],
-        )
-        self.assertEqual(
-            live_codex_gate._build_codex_command("p", "read-only"),
-            ["codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "p"],
-        )
-        self.assertEqual(
-            live_codex_gate._build_codex_command("p", "default"),
-            ["codex", "exec", "--skip-git-repo-check", "p"],
+            live_codex_gate._build_codex_command("p", "/tmp/target_repo"),
+            [
+                "codex", "-a", "never", "-s", "danger-full-access", "-C",
+                "/tmp/target_repo", "exec", "--skip-git-repo-check", "p",
+            ],
         )
         with tempfile.TemporaryDirectory() as raw:
             tmp_dir = Path(raw)
@@ -388,7 +426,8 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
         self.assertEqual(record["sandbox_mode"], "workspace-write")
         self.assertEqual(record["codex_cwd"], repo.as_posix())
         self.assertEqual(state["sandbox_mode"], "workspace-write")
-        self.assertIn("--sandbox", state["codex_command"])
+        self.assertEqual(state["codex_command"][4], "danger-full-access")
+        self.assertEqual(state["codex_command"][6], repo.as_posix())
 
     def test_invalid_effect_spec_blocks_before_codex(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -531,6 +570,95 @@ class LiveCodexProcessLifecycleTests(unittest.TestCase):
         self.assertEqual(state["status"], "blocked")
         self.assertEqual(state["effect_verification_status"], "failed")
         self.assertIn("unauthorized.txt", state["effect_unexpected_files"])
+
+
+class LiveCodexNoninteractiveInvocationTests(unittest.TestCase):
+    def _run_gate(self, tmp_dir: Path, repo: Path, mode: str, spec_path: Path):
+        fake_codex = _write_noninteractive_fake_codex(tmp_dir)
+        prompt = tmp_dir / "prompt.md"
+        prompt.write_text("safe prompt\n", encoding="utf-8")
+        argv_path = tmp_dir / "received_argv.json"
+        environment = {
+            "PATH": f"{fake_codex.parent}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_CODEX_ARGV_PATH": argv_path.as_posix(),
+            "FAKE_CODEX_MODE": mode,
+        }
+        with mock.patch.dict(os.environ, environment, clear=False):
+            state = live_codex_gate.run_live_codex_gate(
+                generated_prompt_path=prompt,
+                out_dir=tmp_dir / "out",
+                live_codex_enable_token=live_codex_gate.LIVE_CODEX_GATE_ENABLE_TOKEN,
+                timeout_seconds=2,
+                effect_spec_path=spec_path,
+            )
+        return state, json.loads(argv_path.read_text(encoding="utf-8"))
+
+    def test_fake_codex_receives_exact_noninteractive_argv_without_approval_output(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            state, received = self._run_gate(tmp_dir, repo, "success", _write_spec(tmp_dir, repo))
+            stdout = (tmp_dir / "out" / "codex_stdout.txt").read_text(encoding="utf-8")
+
+        argv = received["argv"]
+        self.assertTrue(received["valid"])
+        self.assertFalse(received["stdin_isatty"])
+        self.assertEqual(argv.count("exec"), 1)
+        self.assertLess(argv.index("-a"), argv.index("exec"))
+        self.assertLess(argv.index("never"), argv.index("exec"))
+        self.assertLess(argv.index("-s"), argv.index("exec"))
+        self.assertLess(argv.index("danger-full-access"), argv.index("exec"))
+        self.assertLess(argv.index("-C"), argv.index("exec"))
+        self.assertGreater(argv.index("--skip-git-repo-check"), argv.index("exec"))
+        self.assertEqual(argv[argv.index("-a") + 1], "never")
+        self.assertEqual(argv[argv.index("-s") + 1], "danger-full-access")
+        self.assertEqual(argv[argv.index("-C") + 1], repo.as_posix())
+        self.assertEqual(argv[-1], "safe prompt\n")
+        self.assertNotIn("untrusted", argv)
+        self.assertNotIn("on-request", argv)
+        self.assertNotIn("Would you like to run the following command?", stdout)
+        self.assertEqual(state["status"], "success")
+        self.assertEqual(state["effect_verification_status"], "passed")
+
+    def test_approved_removal_completes_without_approval_ui_and_runs_effect_gate(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            (repo / "approved_a.py").write_text("a = 1\n", encoding="utf-8")
+            (repo / "approved_b.py").write_text("b = 1\n", encoding="utf-8")
+            spec_path = _write_spec(
+                tmp_dir,
+                repo,
+                expected_modified_files=[],
+                allowed_files=["approved_a.py", "approved_b.py"],
+                expected_unmodified_files=["calculator.py", "test_calculator.py"],
+                required_text={},
+                forbidden_paths=["approved_a.py", "approved_b.py"],
+            )
+            state, received = self._run_gate(tmp_dir, repo, "remove_approved", spec_path)
+            stdout = (tmp_dir / "out" / "codex_stdout.txt").read_text(encoding="utf-8")
+
+        self.assertTrue(received["valid"])
+        self.assertFalse(received["stdin_isatty"])
+        self.assertNotIn("Would you like to run the following command?", stdout)
+        self.assertFalse((repo / "approved_a.py").exists())
+        self.assertFalse((repo / "approved_b.py").exists())
+        self.assertEqual(state["effect_verification_status"], "passed")
+
+    def test_execution_failure_never_retries_interactively_or_becomes_success(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            state, received = self._run_gate(tmp_dir, repo, "failure", _write_spec(tmp_dir, repo))
+            stdout = (tmp_dir / "out" / "codex_stdout.txt").read_text(encoding="utf-8")
+
+        self.assertTrue(received["valid"])
+        self.assertFalse(received["stdin_isatty"])
+        self.assertIn("execution failure returned to model", stdout)
+        self.assertNotIn("Would you like to run the following command?", stdout)
+        self.assertEqual(state["stop_reason"], "codex_failed")
+        self.assertEqual(state["status"], "blocked")
+        self.assertNotEqual(state["next_action"], "commit_tag_gate")
 
 
 class VerifyCommandTests(unittest.TestCase):

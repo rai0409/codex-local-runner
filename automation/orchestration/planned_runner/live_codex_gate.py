@@ -81,10 +81,17 @@ def _summary_lines(payload: Mapping[str, Any]) -> list[str]:
     ]
 
 
-def _build_codex_command(prompt_text: str, sandbox_mode: str) -> list[str]:
-    command = ["codex", "exec"]
-    if sandbox_mode in {"read-only", "workspace-write"}:
-        command.extend(["--sandbox", sandbox_mode])
+def _build_codex_command(prompt_text: str, target_repo: str) -> list[str]:
+    command = [
+        "codex",
+        "-a",
+        "never",
+        "-s",
+        "danger-full-access",
+        "-C",
+        target_repo,
+        "exec",
+    ]
     command.extend(["--skip-git-repo-check", prompt_text])
     return command
 
@@ -480,7 +487,8 @@ def _run_codex_once(
     codex_cwd: str | None = None,
 ) -> tuple[dict[str, Any], list[str], bool]:
     prompt_text = generated_prompt_path.read_text(encoding="utf-8")
-    command = _build_codex_command(prompt_text, sandbox_mode)
+    target_repo = codex_cwd or Path.cwd().as_posix()
+    command = _build_codex_command(prompt_text, target_repo)
     started_at = _utc_now()
 
     if shutil.which("codex") is None:
@@ -645,7 +653,10 @@ def run_live_codex_gate(
     _write_text(stdout_path, "")
     _write_text(stderr_path, "")
     started_at = _utc_now()
-    codex_command: list[str] = _build_codex_command("<generated_prompt_text>", sandbox)
+    target_repo = effect_repo if effect_repo is not None and effect_repo.is_dir() else Path.cwd()
+    codex_command: list[str] = _build_codex_command(
+        "<generated_prompt_text>", target_repo.as_posix()
+    )
     codex_invoked = False
     returncode: int | None = None
 
@@ -696,7 +707,7 @@ def run_live_codex_gate(
             stderr_path=stderr_path,
             timeout_seconds=timeout,
             sandbox_mode=sandbox,
-            codex_cwd=effect_repo.as_posix() if effect_repo is not None and effect_repo.is_dir() else None,
+            codex_cwd=target_repo.as_posix(),
         )
         status = "success" if result_payload.get("status") == "success" else "blocked"
         stop_reason = _normalize_text(result_payload.get("stop_reason"), default="codex_failed")
