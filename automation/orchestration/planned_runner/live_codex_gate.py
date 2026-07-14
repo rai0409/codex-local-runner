@@ -7,7 +7,9 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import signal
 import subprocess
+import time
 from typing import Any, Mapping
 
 from automation.orchestration.planned_runner.autonomous_cycle import (
@@ -21,6 +23,7 @@ LIVE_CODEX_GATE_ENABLE_TOKEN = "LOCAL_LIVE_CODEX_GATE_ENABLE"
 SUPPORTED_SANDBOX_MODES = ("default", "read-only", "workspace-write")
 ALLOWED_VERIFY_COMMAND_BASENAMES = {"python", "python3", "pytest"}
 DEFAULT_VERIFY_COMMAND_TIMEOUT_SECONDS = 120
+PROCESS_TERMINATION_GRACE_SECONDS = 2
 MIGRATED_LEGACY_FUNCTIONS = [
     "_build_prompt379_generated_prompt_codex_execution_bridge_state",
     "_build_prompt417_selected_prompt_codex_execution_adapter_state",
@@ -112,6 +115,67 @@ def _build_codex_environment(cache_dir: Path) -> dict[str, str]:
     if not _pytest_cache_provider_disabled(existing_options):
         environment["PYTEST_ADDOPTS"] = (existing_options + " -p no:cacheprovider").strip()
     return environment
+
+
+def _terminal_success_result(stdout_text: str) -> bool:
+    for line in reversed(stdout_text.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (
+            isinstance(payload, dict)
+            and _normalize_text(payload.get("status")).lower() == "success"
+            and _normalize_text(payload.get("summary"))
+        ):
+            return True
+    return False
+
+
+def _process_group_exists(process_group_id: int | None) -> bool:
+    if os.name != "posix" or process_group_id is None:
+        return False
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return False
+    return True
+
+
+def _terminate_process_group(process: subprocess.Popen[Any], process_group_id: int | None) -> dict[str, Any]:
+    """Terminate a dedicated POSIX session, with a bounded KILL fallback."""
+    details = {"forced_termination": False, "termination_signal": "", "kill_fallback_used": False}
+    if os.name == "posix" and _process_group_exists(process_group_id):
+        details["forced_termination"] = True
+        details["termination_signal"] = "SIGTERM"
+        try:
+            os.killpg(int(process_group_id), signal.SIGTERM)
+        except ProcessLookupError:
+            return details
+        deadline = time.monotonic() + PROCESS_TERMINATION_GRACE_SECONDS
+        while _process_group_exists(process_group_id) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        if _process_group_exists(process_group_id):
+            details["kill_fallback_used"] = True
+            details["termination_signal"] = "SIGKILL"
+            try:
+                os.killpg(int(process_group_id), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    elif process.poll() is None:
+        details["forced_termination"] = True
+        details["termination_signal"] = "terminate"
+        process.terminate()
+    try:
+        process.wait(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        details["kill_fallback_used"] = True
+        details["termination_signal"] = "kill"
+        process.kill()
+        process.wait(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+    return details
 
 
 def _hash_file(path: Path) -> str | None:
@@ -435,43 +499,73 @@ def _run_codex_once(
         result["error"] = "codex_cli_unavailable"
         return result, command, False
 
+    process_group_id: int | None = None
+    termination = {"forced_termination": False, "termination_signal": "", "kill_fallback_used": False}
     try:
         codex_environment = _build_codex_environment(stdout_path.parent / "codex_pycache")
-        completed = subprocess.run(
-            command,
-            text=True,
-            capture_output=True,
-            # The prompt is supplied as an argv value.  Closing stdin prevents
-            # Codex from entering its follow-up-input loop after it has emitted
-            # a terminal result, which would otherwise delay effect verification
-            # until the live timeout.
-            stdin=subprocess.DEVNULL,
-            timeout=timeout_seconds,
-            cwd=codex_cwd or None,
-            env=codex_environment,
-        )
+        popen_kwargs: dict[str, Any] = {
+            "stdin": subprocess.DEVNULL,
+            "cwd": codex_cwd or None,
+            "env": codex_environment,
+        }
+        if os.name == "posix":
+            popen_kwargs["start_new_session"] = True
+        elif os.name == "nt":
+            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open("w", encoding="utf-8") as stderr_file:
+            process = subprocess.Popen(command, stdout=stdout_file, stderr=stderr_file, **popen_kwargs)
+            process_group_id = process.pid if os.name == "posix" else None
+            termination = {"forced_termination": False, "termination_signal": "", "kill_fallback_used": False}
+            terminal_result_seen_at: float | None = None
+            deadline = time.monotonic() + timeout_seconds
+            while process.poll() is None:
+                if terminal_result_seen_at is None and stdout_path.exists() and _terminal_success_result(
+                    stdout_path.read_text(encoding="utf-8")
+                ):
+                    terminal_result_seen_at = time.monotonic()
+                    deadline = min(deadline, terminal_result_seen_at + PROCESS_TERMINATION_GRACE_SECONDS)
+                if time.monotonic() >= deadline:
+                    termination = _terminate_process_group(process, process_group_id)
+                    raise subprocess.TimeoutExpired(command, timeout_seconds)
+                time.sleep(0.05)
+            process.wait()
+            # A direct Codex exit can leave descendants holding artifact file
+            # descriptors.  They cannot block the parent wait, and are reaped
+            # through the dedicated session before effect verification starts.
+            if _process_group_exists(process_group_id):
+                termination = _terminate_process_group(process, process_group_id)
+        stdout_text = stdout_path.read_text(encoding="utf-8")
+        stderr_text = stderr_path.read_text(encoding="utf-8")
         finished_at = _utc_now()
-        _write_text(stdout_path, completed.stdout or "")
-        _write_text(stderr_path, completed.stderr or "")
-        status = "success" if completed.returncode == 0 else "failed"
+        terminal_success = _terminal_success_result(stdout_text)
+        status = "success" if process.returncode == 0 and terminal_success else "failed"
         result = _base_result(
             status=status,
-            returncode=completed.returncode,
+            returncode=process.returncode,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
-            stop_reason="codex_completed" if completed.returncode == 0 else "codex_failed",
+            stop_reason=("codex_completed" if status == "success" else "codex_terminal_result_invalid" if process.returncode == 0 else "codex_failed"),
             started_at=started_at,
             finished_at=finished_at,
         )
+        result["execution"].update({
+            "process_group_id": process_group_id,
+            "process_group_created": os.name == "posix",
+            "terminal_result_valid": terminal_success,
+            "terminal_result_grace_seconds": PROCESS_TERMINATION_GRACE_SECONDS,
+            "terminal_result_grace_expired": False,
+            **termination,
+        })
         return result, command, True
     except subprocess.TimeoutExpired as exc:
         finished_at = _utc_now()
-        stdout_text = exc.stdout if isinstance(exc.stdout, str) else ""
-        stderr_text = exc.stderr if isinstance(exc.stderr, str) else ""
+        # Output is streamed directly to artifacts, so a timeout never needs
+        # to wait for inherited pipe descriptors to reach EOF.
+        stdout_text = stdout_path.read_text(encoding="utf-8") if stdout_path.exists() else ""
+        stderr_text = stderr_path.read_text(encoding="utf-8") if stderr_path.exists() else ""
         if stderr_text:
             stderr_text += "\n"
         stderr_text += f"Codex timed out after {timeout_seconds} seconds.\n"
-        _write_text(stdout_path, stdout_text)
         _write_text(stderr_path, stderr_text)
         result = _base_result(
             status="failed",
@@ -484,6 +578,14 @@ def _run_codex_once(
         )
         result["execution"]["status"] = "timed_out"
         result["execution"]["attempt_count"] = 1
+        result["execution"].update({
+            "process_group_id": process_group_id,
+            "process_group_created": os.name == "posix",
+            "terminal_result_valid": _terminal_success_result(stdout_text),
+            "terminal_result_grace_seconds": PROCESS_TERMINATION_GRACE_SECONDS,
+            "terminal_result_grace_expired": _terminal_success_result(stdout_text),
+            **termination,
+        })
         result["timed_out"] = True
         return result, command, True
 

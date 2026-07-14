@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -38,6 +39,42 @@ def _make_sandbox_repo(tmp_dir: Path) -> Path:
         encoding="utf-8",
     )
     return repo
+
+
+def _write_lifecycle_fake_codex(tmp_dir: Path) -> Path:
+    script = tmp_dir / "fake_codex_lifecycle.py"
+    script.write_text(
+        """
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+mode = os.environ["FAKE_CODEX_LIFECYCLE_MODE"]
+repo = Path.cwd()
+target = repo / "calculator.py"
+target.write_text(target.read_text(encoding="utf-8") + "\\n\\ndef subtract(a, b):\\n    return a - b\\n", encoding="utf-8")
+if mode == "child_holds_output":
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    print(json.dumps({"status": "success", "summary": "child holds output", "child_pid": child.pid}), flush=True)
+elif mode == "success_stays_alive":
+    print(json.dumps({"status": "success", "summary": "parent stays alive"}), flush=True)
+    time.sleep(30)
+elif mode == "malformed_stays_alive":
+    print('{"status":"success"', flush=True)
+    time.sleep(30)
+elif mode == "unauthorized_child":
+    child = subprocess.Popen([sys.executable, "-c", "from pathlib import Path; Path('unauthorized.txt').write_text('bad\\\\n')"])
+    child.wait()
+    print(json.dumps({"status": "success", "summary": "unauthorized child artifact"}), flush=True)
+else:
+    print(json.dumps({"status": "success", "summary": "normal success"}), flush=True)
+""".lstrip(),
+        encoding="utf-8",
+    )
+    return script
 
 
 def _fake_codex_factory(side_effect=None, returncode: int = 0, record: dict | None = None):
@@ -122,8 +159,19 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
             prompt_path = tmp_dir / "prompt.md"
             prompt_path.write_text("safe prompt\n", encoding="utf-8")
             observed: dict = {"effect_calls": 0}
+            real_popen = subprocess.Popen
 
-            def _fake_run(command, **kwargs):
+            class _FakeProcess:
+                pid = 4242
+                returncode = 0
+
+                def wait(self, timeout=None):
+                    return self.returncode
+
+                def poll(self):
+                    return self.returncode
+
+            def _fake_popen(command, **kwargs):
                 self.assertEqual(kwargs["stdin"], live_codex_gate.subprocess.DEVNULL)
                 environment = kwargs["env"]
                 cache_dir = Path(environment["PYTHONPYCACHEPREFIX"])
@@ -132,7 +180,7 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
                 self.assertFalse(cache_dir.is_relative_to(repo))
                 self.assertIn("-q --strict-markers", environment["PYTEST_ADDOPTS"])
                 self.assertEqual(environment["PYTEST_ADDOPTS"].count("no:cacheprovider"), 1)
-                child = subprocess.Popen(
+                child = real_popen(
                     [
                         sys.executable,
                         "-c",
@@ -159,12 +207,9 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
                     "def subtract(a, b):\n    return a - b\n",
                     encoding="utf-8",
                 )
-                return live_codex_gate.subprocess.CompletedProcess(
-                    command,
-                    0,
-                    stdout='{"status":"success","summary":"fake"}\n',
-                    stderr="",
-                )
+                kwargs["stdout"].write('{"status":"success","summary":"fake"}\n')
+                kwargs["stderr"].write("")
+                return _FakeProcess()
 
             original_verify = live_codex_gate._verify_effects
 
@@ -175,7 +220,7 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
             with (
                 mock.patch.dict(os.environ, {"PYTEST_ADDOPTS": "-q --strict-markers"}, clear=False),
                 mock.patch.object(live_codex_gate.shutil, "which", return_value="/fake/codex"),
-                mock.patch.object(live_codex_gate.subprocess, "run", side_effect=_fake_run),
+                mock.patch.object(live_codex_gate.subprocess, "Popen", side_effect=_fake_popen),
                 mock.patch.object(live_codex_gate, "_verify_effects", side_effect=_verify_once),
             ):
                 state = live_codex_gate.run_live_codex_gate(
@@ -380,6 +425,112 @@ class LiveCodexGateEffectVerificationTests(unittest.TestCase):
         self.assertEqual(state["status"], "blocked")
         self.assertEqual(state["effect_verification_status"], "passed")
         self.assertNotEqual(state["next_action"], "commit_tag_gate")
+
+
+class LiveCodexProcessLifecycleTests(unittest.TestCase):
+    def _run_once(self, tmp_dir: Path, repo: Path, mode: str, timeout_seconds: int = 2):
+        script = _write_lifecycle_fake_codex(tmp_dir)
+        prompt = tmp_dir / "prompt.md"
+        prompt.write_text("bounded prompt\n", encoding="utf-8")
+        with (
+            mock.patch.dict(os.environ, {"FAKE_CODEX_LIFECYCLE_MODE": mode}, clear=False),
+            mock.patch.object(live_codex_gate.shutil, "which", return_value=sys.executable),
+            mock.patch.object(
+                live_codex_gate,
+                "_build_codex_command",
+                return_value=[sys.executable, script.as_posix()],
+            ),
+        ):
+            return live_codex_gate._run_codex_once(
+                generated_prompt_path=prompt,
+                stdout_path=tmp_dir / "out" / "codex_stdout.txt",
+                stderr_path=tmp_dir / "out" / "codex_stderr.txt",
+                timeout_seconds=timeout_seconds,
+                codex_cwd=repo.as_posix(),
+            )
+
+    def _run_gate(self, tmp_dir: Path, repo: Path, mode: str):
+        script = _write_lifecycle_fake_codex(tmp_dir)
+        prompt = tmp_dir / "prompt.md"
+        prompt.write_text("bounded prompt\n", encoding="utf-8")
+        spec_path = _write_spec(tmp_dir, repo)
+        with (
+            mock.patch.dict(os.environ, {"FAKE_CODEX_LIFECYCLE_MODE": mode}, clear=False),
+            mock.patch.object(live_codex_gate.shutil, "which", return_value=sys.executable),
+            mock.patch.object(
+                live_codex_gate,
+                "_build_codex_command",
+                return_value=[sys.executable, script.as_posix()],
+            ),
+        ):
+            return live_codex_gate.run_live_codex_gate(
+                generated_prompt_path=prompt,
+                out_dir=tmp_dir / "out",
+                live_codex_enable_token=live_codex_gate.LIVE_CODEX_GATE_ENABLE_TOKEN,
+                timeout_seconds=2,
+                effect_spec_path=spec_path,
+            )
+
+    def test_parent_exit_with_child_holding_output_is_reaped_before_effects(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            started = time.monotonic()
+            state = self._run_gate(tmp_dir, repo, "child_holds_output")
+            elapsed = time.monotonic() - started
+            output = json.loads((tmp_dir / "out" / "codex_execution_result.json").read_text())
+            terminal = json.loads((tmp_dir / "out" / "codex_stdout.txt").read_text())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(terminal["child_pid"], 0)
+        self.assertLess(elapsed, 5)
+        self.assertEqual(state["status"], "success")
+        self.assertEqual(state["effect_verification_status"], "passed")
+        self.assertTrue(output["execution"]["terminal_result_valid"])
+        self.assertTrue(output["execution"]["forced_termination"])
+
+    def test_terminal_success_that_keeps_parent_alive_times_out_without_success(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            started = time.monotonic()
+            result, _, invoked = self._run_once(tmp_dir, repo, "success_stays_alive", timeout_seconds=1)
+            elapsed = time.monotonic() - started
+        self.assertTrue(invoked)
+        self.assertLess(elapsed, 5)
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(result["timed_out"])
+        self.assertTrue(result["execution"]["terminal_result_valid"])
+        self.assertTrue(result["execution"]["forced_termination"])
+
+    def test_normal_terminal_success_requires_clean_exit_and_remains_successful(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            result, _, invoked = self._run_once(tmp_dir, repo, "normal")
+        self.assertTrue(invoked)
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["returncode"], 0)
+        self.assertTrue(result["execution"]["terminal_result_valid"])
+        self.assertFalse(result["execution"]["forced_termination"])
+
+    def test_malformed_terminal_output_never_becomes_success(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            result, _, invoked = self._run_once(tmp_dir, repo, "malformed_stays_alive", timeout_seconds=1)
+        self.assertTrue(invoked)
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(result["timed_out"])
+        self.assertFalse(result["execution"]["terminal_result_valid"])
+
+    def test_unauthorized_child_artifact_still_fails_effect_verification(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp_dir = Path(raw)
+            repo = _make_sandbox_repo(tmp_dir)
+            state = self._run_gate(tmp_dir, repo, "unauthorized_child")
+        self.assertEqual(state["status"], "blocked")
+        self.assertEqual(state["effect_verification_status"], "failed")
+        self.assertIn("unauthorized.txt", state["effect_unexpected_files"])
 
 
 class VerifyCommandTests(unittest.TestCase):
