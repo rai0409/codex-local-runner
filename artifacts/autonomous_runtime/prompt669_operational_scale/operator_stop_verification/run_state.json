@@ -1,0 +1,32 @@
+{
+  "artifact_paths": [
+    "artifacts/autonomous_runtime/prompt669_operational_scale/operator_stop_verification/tick_1_evidence.json"
+  ],
+  "completed_ticks": [
+    {
+      "bounded_daemon_queue_path": "artifacts/autonomous_runtime/prompt669_operational_scale/operator_stop_verification/tick_1_bounded_daemon/daemon_queue.json",
+      "bounded_daemon_report_path": "artifacts/autonomous_runtime/prompt669_operational_scale/operator_stop_verification/tick_1_bounded_daemon/bounded_daemon_runner_report.json",
+      "bounded_daemon_state_path": "artifacts/autonomous_runtime/prompt669_operational_scale/operator_stop_verification/tick_1_bounded_daemon/daemon_state.json",
+      "evidence_path": "artifacts/autonomous_runtime/prompt669_operational_scale/operator_stop_verification/tick_1_evidence.json",
+      "internal_codex_executor_used": true,
+      "local_only_evidence_captured": true,
+      "run_id": "prompt669_operational_scale_operator_stop",
+      "schema_version": "prompt669_tick_evidence_v1",
+      "status": "success",
+      "stop_reason": "max_cycles_reached",
+      "tick_id": "prompt669_item_01",
+      "tick_index": 1
+    }
+  ],
+  "lock_path": "artifacts/autonomous_runtime/prompt669_operational_scale/operator_stop_verification/operational_scale.lock",
+  "max_cycles": 5,
+  "max_items": 10,
+  "max_ticks": 10,
+  "queue_path": "artifacts/autonomous_runtime/prompt669_operational_scale/operator_stop_verification/task_queue.json",
+  "run_id": "prompt669_operational_scale_operator_stop",
+  "schema_version": "prompt669_operational_scale_state_v1",
+  "status": "success",
+  "stop_reason": "operator_stop_requested",
+  "terminal": true,
+  "updated_at": "2026-06-27T08:38:13.999943Z"
+}

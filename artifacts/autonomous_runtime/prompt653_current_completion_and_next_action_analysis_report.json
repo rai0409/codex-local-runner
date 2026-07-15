@@ -1,0 +1,77 @@
+{
+  "analysis_status": "success",
+  "current_head": "650c2b7",
+  "current_head_subject": "prompt652 soak deferral + project-level autonomy loop final report",
+  "tags_at_head": [],
+  "tags_at_head_note": "HEAD (650c2b7) is the loop's final reporting commit and is intentionally untagged; the implementation tags sit on the layer commits (prompt648/649/651).",
+  "latest_confirmed_implementation": "prompt651",
+  "project_level_autonomy_complete": false,
+  "current_capability_boundary": "offline_project_autonomy_chain_complete_and_e2e_proven_live_auto_execution_pending",
+  "final_score_out_of_100_if_available": 88,
+
+  "confirmed_completed_components": [
+    {"layer": "runtime self-healing daemon (L7.5)", "evidence": "effect_gate.py + run_task_queue_daemon.py (--max-fix-attempts, run_targeted_fix_retry) + targeted_fix_retry.py; accepted live in prompt644a (commit 3170ddc, tag prompt644a-current-capability-acceptance)"},
+    {"layer": "ProjectIntent + ProjectTaskPlan models (Prompt645)", "evidence": "project_intent.py, project_plan.py + tests/test_project_intent_plan_model.py; tag prompt645-project-intent-schema-task-plan-model"},
+    {"layer": "deterministic plan generation (Prompt646)", "evidence": "project_task_generator.py + tests/test_project_task_generator_from_intent.py; tag prompt646-project-task-generator-from-intent"},
+    {"layer": "queue population from plan (Prompt647)", "evidence": "project_queue_population.py + tests/test_project_queue_population_from_plan.py; tag prompt647-auto-queue-population-from-project-plan"},
+    {"layer": "project completion gate (Prompt648)", "evidence": "project_completion_gate.py + tests/test_project_completion_gate.py; tag prompt648-project-progress-completion-gate"},
+    {"layer": "bounded offline iterate-until-done controller (Prompt649)", "evidence": "project_loop_controller.py + tests/test_project_loop_controller.py; tag prompt649-project-level-iterate-until-done-controller"},
+    {"layer": "offline project-level E2E acceptance (Prompt651)", "evidence": "tests/test_project_level_e2e_acceptance.py; tag prompt651-project-level-e2e-acceptance"}
+  ],
+  "offline_only_components": [
+    "project_loop_controller.run_project_loop chains generate -> populate -> completion gate but DOES NOT run the daemon or Codex; it stops at next_step=wait_for_execution_results",
+    "project_completion_gate consumes SIMULATED task-result dicts / plan status fields, not REAL daemon run_reports",
+    "the full chain is proven only with simulated results in /tmp (Prompt651 E2E is deterministic/offline)"
+  ],
+  "generated_not_implemented": [
+    "No orphan project-chain capability: every generated implementation prompt through Prompt647 was implemented and tagged. Prompt653 (this) is analysis-only. There is NO implementation prompt for the live auto-execution bridge yet."
+  ],
+  "intentionally_deferred": [
+    {"target": "task_kind_expansion_minimal_safe (Prompt650)", "reason": "a new executable task kind must be wired into the Codex-facing prompt/effect-spec generation and requires a live effect-verified runtime acceptance (per add_function precedent 638d/639/644a), outside the offline loop scope; recorded in prompt650_report.json (status blocked, no tag)"},
+    {"target": "long_running_daemon_soak_proof (Prompt652)", "reason": "soak is hardening requiring live daemon runtime; bounded daemon + self-healing already accepted in 644a; recorded in prompt652_report.json (status blocked, no tag)"}
+  ],
+  "missing_critical_gaps": [
+    "live_auto_execution_bridge (PRIMARY): no component runs the daemon over the populated queue, ingests REAL run_reports, and feeds them back into the completion gate / controller to iterate. project_live_execution_bridge.py and tests/test_project_live_execution_bridge.py are ABSENT. This is the single gap blocking unattended project-level autonomy.",
+    "real run_report ingestion into the completion gate (currently simulated)",
+    "broad task kinds beyond add_function (deferred)",
+    "long-running production soak (deferred)"
+  ],
+  "exact_chain_now_possible": "OFFLINE/operator-assisted: ProjectIntent + structured descriptors -> generate_project_task_plan -> populate_queue_from_plan into an explicit /tmp queue dir (daemon-consumable, topologically ordered) -> [operator runs scripts/run_task_queue_daemon.py against that queue dir, with the confirmed strict effect gate + targeted-fix retry] -> task outcomes -> (manually) evaluate_project_completion -> run_project_loop reports complete/in_progress/failed/blocked and a next_step. Every step except the daemon run is automatic and deterministic; the daemon run and the result hand-off are still manual.",
+  "exact_chain_not_yet_possible": [
+    "automatic live daemon/Codex execution driven FROM the project loop (controller does not invoke the daemon)",
+    "automatic ingestion of REAL daemon run_reports into evaluate_project_completion (results are simulated today)",
+    "automatic iterate-until-done over REAL execution outcomes",
+    "executing task kinds other than add_function",
+    "long-running unattended production soak"
+  ],
+  "next_recommended_target": "live_auto_execution_bridge",
+  "next_recommended_rationale": "It is the one missing layer that converts the proven OFFLINE chain into a real autonomous loop: it would run the daemon over the populated queue (using the already-confirmed strict effect gate + targeted-fix retry), read the resulting run_reports, map them into per-task results, feed them into the completion gate, and let the controller decide continue/finish/fix. Task-kind expansion and soak are breadth/hardening and lower leverage; the bridge is the critical path to the user's goal. No project_live_execution_bridge.py exists, so this target is genuinely missing.",
+  "next_recommended_action": "generate_prompt653_live_auto_execution_bridge",
+  "safety_constraints_for_next_prompt": [
+    "operator-triggered; DRY-RUN by default (plan+populate+report without running the daemon unless explicitly enabled)",
+    "explicit enable token required to actually run the daemon (reuse existing token discipline)",
+    "bounded: cap max_jobs / max_cycles / max_seconds; never an uncontrolled daemon loop",
+    "use only explicit /tmp queue dirs and /tmp sandbox repos; never mutate a live/default queue",
+    "ingest run_reports read-only (no secret/.env parsing); map status into the completion gate",
+    "preserve the strict effect gate and main-repo safety (HEAD/tag/source unchanged during runtime)",
+    "no push/PR/merge; commit/tag only on all-PASS per prior policy",
+    "additive only; do not modify daemon_queue.py/task_spec.py/effect_gate.py behavior"
+  ],
+  "evidence_files_inspected": [
+    "git log/tag/status/show --stat HEAD",
+    "artifacts/autonomous_runtime/project_level_autonomy_loop_final_report.json (partial, complete=false, score 88, boundary as expected)",
+    "prompt651/649/648/647/646/645 reports + summaries (tagged implementations)",
+    "prompt650/652 reports (deferral, status blocked, no tag)"
+  ],
+  "source_files_inspected": [
+    "project_intent.py, project_plan.py, project_task_generator.py, project_queue_population.py, project_completion_gate.py, project_loop_controller.py (all present+tracked)",
+    "project_live_execution_bridge.py (ABSENT)",
+    "daemon_queue.py, targeted_fix_retry.py, task_spec.py, scripts/run_task_queue_daemon.py (present)"
+  ],
+  "tests_detected": [
+    "test_project_intent_plan_model, test_project_task_generator_from_intent, test_project_queue_population_from_plan, test_project_completion_gate, test_project_loop_controller, test_project_level_e2e_acceptance (all present)",
+    "test_project_live_execution_bridge (ABSENT)"
+  ],
+  "untracked_risk_summary": "Working tree carries many untracked artifacts (artifacts/archive/, handoff_reports/, and prior generation/analysis outputs + generated prompt files). These are known/risky areas — reported, NOT touched. They do not interfere with current scope and are not failures. The current analysis adds only the prompt653 analysis report/summary.",
+  "final_decision": "Confirmed: the OFFLINE project-autonomy chain (intent -> plan -> queue files -> completion gate -> bounded loop controller) is implemented, tagged, and E2E-proven on the confirmed L7.5 self-healing daemon (latest tagged implementation prompt651). Project-level autonomy is NOT complete: the loop runs offline with simulated results and does not actually execute the daemon or ingest real run_reports. The single critical missing gap is the live auto-execution bridge. Best next action: GENERATE the Prompt653 live_auto_execution_bridge implementation prompt (operator-triggered, dry-run-default, token-gated, bounded, /tmp-only, completion-gate-integrated), then execute it."
+}

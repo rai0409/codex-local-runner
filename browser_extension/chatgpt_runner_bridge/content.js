@@ -1,3 +1,113 @@
+// Prompt658 browser_chatgpt_operator_adapter.
+// Provenance:
+//   reused_from_commit: d698389
+//   reused_path: browser_extension/chatgpt_runner_bridge/content.js
+// This content script preserves the historical visible-DOM ChatGPT send/capture flow,
+// but emits a bounded JSON response envelope for offline repo-side validation.
+// It does not inspect browser profile/session storage or account data.
+
+const RESPONSE_ENVELOPE_SCHEMA = "browser_chatgpt_response_envelope_v1";
+
+const ALLOWED_STRUCTURED_ARTIFACT_SCHEMA_VERSIONS = new Set([
+  "analysis_artifact_v1",
+  "analysis_artifact_v2",
+  "project_analysis_artifact_v1",
+  "browser_analysis_artifact_v1",
+  "task_batch_recommendation_v1"
+]);
+
+function extractJsonObjectsFromText(text) {
+  const source = String(text || "");
+  const results = [];
+
+  for (let start = 0; start < source.length; start += 1) {
+    if (source[start] !== "{") {
+      continue;
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = start; index < source.length; index += 1) {
+      const char = source[index];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) {
+        continue;
+      }
+
+      if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          results.push(source.slice(start, index + 1));
+          start = index;
+          break;
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+function normalizeStructuredArtifactJson(parsed) {
+  return JSON.stringify(parsed, null, 2);
+}
+
+function findAllowedStructuredArtifact(text, requestId) {
+  for (const candidate of extractJsonObjectsFromText(text)) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        continue;
+      }
+
+      if (!ALLOWED_STRUCTURED_ARTIFACT_SCHEMA_VERSIONS.has(parsed.schema_version)) {
+        continue;
+      }
+
+      if (requestId && parsed.request_id !== requestId) {
+        continue;
+      }
+
+      return {
+        ok: true,
+        schema_version: parsed.schema_version,
+        request_id: parsed.request_id || "",
+        normalized_json: normalizeStructuredArtifactJson(parsed)
+      };
+    } catch (_error) {
+      continue;
+    }
+  }
+
+  return {
+    ok: false,
+    schema_version: "",
+    request_id: "",
+    normalized_json: ""
+  };
+}
+
+
+const ADAPTER_NAME = "browser_chatgpt_operator_adapter";
 const RESPONSE_TIMEOUT_MS = 600000;
 const RESPONSE_POLL_INTERVAL_MS = 10000;
 const STABLE_POLLS_REQUIRED = 3;
@@ -9,6 +119,7 @@ let runInProgress = false;
 let runOverlay = null;
 let currentTaskId = "";
 let currentTaskFingerprint = "";
+let currentRequireStructuredArtifact = true;
 const runHighlightCleanups = [];
 
 function sleep(ms) {
@@ -36,6 +147,32 @@ function compactPreview(value, maxLength = 160) {
     return text;
   }
   return `${text.slice(0, maxLength)}…`;
+}
+
+function parseBrowserRequestEnvelope(value) {
+  const text = String(value || "").trim();
+  if (!text.startsWith("{")) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || parsed.schema_version !== "browser_chatgpt_request_envelope_v1") {
+      return null;
+    }
+    const promptText = String(parsed.prompt_text || "").trim();
+    const requestId = String(parsed.request_id || "").trim();
+    if (!promptText || !requestId) {
+      return null;
+    }
+    return {
+      promptText,
+      requestId,
+      promptFingerprint: String(parsed.prompt_fingerprint || "").trim(),
+      requireStructuredArtifact: parsed.require_structured_artifact !== false
+    };
+  } catch (_error) {
+    return null;
+  }
 }
 
 function createBridgeError(reason, details = {}) {
@@ -893,9 +1030,31 @@ async function waitForStableAssistantResponse() {
       continue;
     }
 
+    const structuredArtifact = findAllowedStructuredArtifact(current.text, currentTaskId || "");
+    const comparableText = structuredArtifact.ok ? structuredArtifact.normalized_json : current.text;
+
     if (stopButtonVisible || loadingIndicatorVisible) {
-      stableCount = 0;
-      previous = current.text;
+      if (structuredArtifact.ok && comparableText === previous) {
+        stableCount += 1;
+        if (stableCount >= STABLE_POLLS_REQUIRED) {
+          return {
+            text: structuredArtifact.normalized_json,
+            selector_used: current.selector_used,
+            stable_polls: stableCount,
+            transient_candidate_seen: transientCandidateSeen,
+            structured_artifact_detected: true,
+            structured_artifact_schema_version: structuredArtifact.schema_version,
+            structured_artifact_request_id: structuredArtifact.request_id,
+            loading_indicator_ignored_for_structured_artifact: Boolean(loadingIndicatorVisible),
+            stop_button_ignored_for_structured_artifact: Boolean(stopButtonVisible)
+          };
+        }
+      } else {
+        stableCount = 1;
+        previous = comparableText;
+        responseSelectorUsed = current.selector_used;
+      }
+
       await sleep(RESPONSE_POLL_INTERVAL_MS);
       continue;
     }
@@ -932,9 +1091,26 @@ async function waitForStableAssistantResponse() {
 }
 
 async function postResult(responseText, metadata) {
+  const responseEnvelope = {
+    schema_version: RESPONSE_ENVELOPE_SCHEMA,
+    adapter: ADAPTER_NAME,
+    request_id: currentTaskId || "",
+    status: "response_captured",
+    chatgpt_output: responseText,
+    captured_at: new Date().toISOString(),
+    require_structured_artifact: currentRequireStructuredArtifact,
+    metadata: {
+      ...metadata,
+      provenance: {
+        reused_from_commit: "d698389",
+        reused_path: "browser_extension/chatgpt_runner_bridge/content.js"
+      }
+    },
+    errors: []
+  };
   await bridgePostResult({
-    response: responseText,
-    metadata,
+    response: JSON.stringify(responseEnvelope, null, 2),
+    metadata: responseEnvelope.metadata,
     task_id: currentTaskId || undefined,
     request_fingerprint: currentTaskFingerprint || undefined,
     task_fingerprint: currentTaskFingerprint || undefined
@@ -1040,6 +1216,7 @@ async function runChatGptBridgeOnce(options = {}) {
   runInProgress = true;
   currentTaskId = "";
   currentTaskFingerprint = "";
+  currentRequireStructuredArtifact = true;
 
   let composerCandidates = [];
   let selectedComposerCandidate = null;
@@ -1058,7 +1235,8 @@ async function runChatGptBridgeOnce(options = {}) {
       return;
     }
 
-    let promptToUse = task.prompt;
+    const requestEnvelope = parseBrowserRequestEnvelope(task.prompt);
+    let promptToUse = requestEnvelope ? requestEnvelope.promptText : task.prompt;
     const normalizedPrompt = normalizeText(task.prompt);
     const diagnosticOnly = normalizedPrompt.startsWith(DIAG_MARKER);
 
@@ -1069,16 +1247,21 @@ async function runChatGptBridgeOnce(options = {}) {
     currentTaskFingerprint =
       (typeof options.request_fingerprint === "string" && options.request_fingerprint.trim()) ||
       (typeof options.task_fingerprint === "string" && options.task_fingerprint.trim()) ||
+      (requestEnvelope && requestEnvelope.promptFingerprint) ||
       (typeof task.requestFingerprint === "string" && task.requestFingerprint.trim()) ||
       (typeof task.taskFingerprint === "string" && task.taskFingerprint.trim()) ||
       computeTaskFingerprint(promptToUse);
     currentTaskId =
+      (requestEnvelope && requestEnvelope.requestId) ||
       (typeof options.task_id === "string" && options.task_id.trim()) ||
       (typeof task.taskId === "string" && task.taskId.trim()) ||
       "";
+    currentRequireStructuredArtifact = requestEnvelope
+      ? requestEnvelope.requireStructuredArtifact
+      : true;
 
-    await postStatus("running", "task_fetched", {
-      step: "task_fetched",
+    await postStatus("request_loaded", "task_fetched", {
+      step: "request_loaded",
       prompt_length: normalizeText(promptToUse).length,
       task_status: task.status || "",
       attempt_count: task.attemptCount,
@@ -1200,8 +1383,8 @@ async function runChatGptBridgeOnce(options = {}) {
       });
     }
 
-    await postStatus("sent", "user_message_detected", {
-      step: "user_message_detected",
+    await postStatus("submitted", "user_message_detected", {
+      step: "submitted",
       send_method: sendMethod
     });
 
@@ -1213,14 +1396,19 @@ async function runChatGptBridgeOnce(options = {}) {
       response_selector_used: response.selector_used,
       stable_polls: response.stable_polls,
       transient_candidate_seen: response.transient_candidate_seen,
+      structured_artifact_detected: Boolean(response.structured_artifact_detected),
+      structured_artifact_schema_version: response.structured_artifact_schema_version || undefined,
+      structured_artifact_request_id: response.structured_artifact_request_id || undefined,
+      loading_indicator_ignored_for_structured_artifact: Boolean(response.loading_indicator_ignored_for_structured_artifact),
+      stop_button_ignored_for_structured_artifact: Boolean(response.stop_button_ignored_for_structured_artifact),
       task_id: currentTaskId || undefined,
       request_fingerprint: currentTaskFingerprint || undefined
     };
 
     await postResult(response.text, metadata);
-    await postStatus("response_saved", "result_saved", {
+    await postStatus("artifact_ready", "result_saved", {
       ...metadata,
-      step: "response_saved"
+      step: "artifact_ready"
     });
   } catch (error) {
     const reason = mapFailureReason(error);
@@ -1238,6 +1426,7 @@ async function runChatGptBridgeOnce(options = {}) {
     runInProgress = false;
     currentTaskId = "";
     currentTaskFingerprint = "";
+    currentRequireStructuredArtifact = true;
   }
 }
 

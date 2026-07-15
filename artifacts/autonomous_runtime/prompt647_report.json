@@ -1,0 +1,55 @@
+{
+  "prompt647_status": "success",
+  "prompt647_base_commit": "894fac8",
+  "prompt647_base_tags_at_head": ["prompt646-project-task-generator-from-intent"],
+  "prompt647_layer": "ProjectTaskPlan -> daemon queue population (deterministic, offline)",
+  "prompt647_queue_population_created": true,
+  "prompt647_plan_to_queue_conversion_created": true,
+  "prompt647_files_created": [
+    "automation/orchestration/planned_runner/project_queue_population.py",
+    "tests/test_project_queue_population_from_plan.py"
+  ],
+  "prompt647_files_modified": [
+    "automation/orchestration/planned_runner/project_queue_population.py",
+    "tests/test_project_queue_population_from_plan.py"
+  ],
+  "prompt647_existing_source_modified": false,
+  "prompt647_api": "populate_queue_from_plan(plan, output_queue_dir, *, repo_path_override=None, create_dirs=True) -> {status, errors, warnings, output_dir, written_files, task_count}; never raises.",
+  "prompt647_behavior": {
+    "plan_validation": "validates via validate_project_task_plan; invalid plan -> status blocked, errors, NO files written",
+    "explicit_output_dir_required": "empty/None output_queue_dir -> blocked; NEVER falls back to a live/default queue",
+    "topological_order": "deterministic Kahn topo order (tie-break by order then task_id); files written pending/<NNN>-<task_id>.json so a sequential daemon claims them in dependency order; clean task_id preserved inside each spec",
+    "conversion": "planned_task_to_task_spec(task, overrides={repo_path: repo_path_override} if provided); written specs are task_spec.validate_task_spec-compatible (repo existence is execution-time)",
+    "dependency_representation": "deterministic warning emitted when any depends_on edges exist, stating the daemon queue represents deps as processing order only (no hard enforcement)",
+    "determinism": "sorted-keys JSON content + index-prefixed filenames -> byte-identical output for identical inputs",
+    "create_dirs": "create_dirs=True uses ensure_queue_dirs under the explicit dir; create_dirs=False requires pending/ to already exist",
+    "no_side_effects": "no daemon run, no claim/complete, no Codex, no network, no git; writes only under the explicit output dir; no live/default queue mutation"
+  },
+  "prompt647_queue_files_validation_passed": true,
+  "prompt647_deterministic_population_tests_passed": true,
+  "prompt647_topological_order_preserved": true,
+  "prompt647_dependency_representation_explicit": true,
+  "prompt647_explicit_output_dir_required": true,
+  "prompt647_no_live_queue_mutation": true,
+  "prompt647_no_execution_side_effects": true,
+  "prompt647_validation_tests_detail": "tests/test_project_queue_population_from_plan.py = 10 tests OK: valid plan populates pending files; written specs pass task_spec.validate_task_spec with repo_path override; invalid plan safe-fail (no files); explicit output dir required (None/''/' '); deterministic filenames+content+order; topological order respects deps (dependency listed after dependent still ordered first); dependency warning emitted; no warning when no deps; create_dirs=False requires existing pending; no side effects outside explicit dir.",
+  "prompt647_existing_model_tests_passed": true,
+  "prompt647_existing_generator_tests_passed": true,
+  "prompt647_existing_runtime_regression_tests_passed": true,
+  "prompt647_regression_detail": "49 tests OK across test_project_queue_population_from_plan (10), test_project_intent_plan_model (17), test_project_task_generator_from_intent (12), test_daemon_queue, test_targeted_fix_retry. No existing source modified (additive new module + test only).",
+  "prompt647_integration_boundary_respected": {
+    "no_daemon_run": true,
+    "no_codex": true,
+    "no_task_execution": true,
+    "no_planner_or_llm": true,
+    "no_completion_gate": true,
+    "no_loop_controller": true,
+    "no_task_kind_expansion": true,
+    "no_live_queue_mutation": true,
+    "no_network_or_git_runtime": true
+  },
+  "prompt647_main_repo_safe": true,
+  "prompt647_archive_touched": false,
+  "prompt647_handoff_reports_touched": false,
+  "prompt647_next_action": "project_progress_and_completion_gate"
+}

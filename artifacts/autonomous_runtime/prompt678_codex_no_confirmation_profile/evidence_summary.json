@@ -1,0 +1,46 @@
+{
+  "command": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "never",
+    "-"
+  ],
+  "exit_status": "not_run_dry_run",
+  "live_codex_smoke_test": "skipped",
+  "live_codex_smoke_test_reason": "dry_run_only_acceptance_does_not_invoke_model_or_network",
+  "max_profile_checks": 10,
+  "max_runtime_seconds": 120,
+  "max_smoke_test_attempts": 1,
+  "profile_checks": {
+    "approval_policy_never": true,
+    "arbitrary_free_text_prompt_rejected": true,
+    "command_valid": true,
+    "missing_approval_blocks_execution": true,
+    "output_capture_supported": true,
+    "safe_item_valid": true,
+    "sandbox_bypass_flags_rejected": true,
+    "sandbox_workspace_write": true,
+    "stdin_prompt_mode_supported": true,
+    "unsafe_prompt_item_rejected": true
+  },
+  "profile_name": "no_confirmation_workspace_write",
+  "protected_artifacts_preserved": {
+    "prompt667": true,
+    "prompt668": true,
+    "prompt669": true,
+    "prompt670": true,
+    "prompt671": true,
+    "prompt672": true,
+    "prompt673": true,
+    "prompt674": true,
+    "prompt675": "not_present",
+    "prompt676": true,
+    "prompt677": true
+  },
+  "run_id": "prompt678_codex_no_confirmation_profile",
+  "schema_version": "prompt678_evidence_summary_v1",
+  "validation_status": "passed"
+}

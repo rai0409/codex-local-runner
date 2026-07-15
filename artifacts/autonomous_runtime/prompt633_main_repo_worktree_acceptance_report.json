@@ -1,0 +1,26 @@
+{
+  "clone_after": "git status shows only '?? prompt633_marker.py'; HEAD unchanged (c32d90f); no new commit/tag",
+  "commit_tag_disabled": true,
+  "decision": "adopt",
+  "explicit_limitation": "Automatic modification of the ACTUAL main repo remains gated and unproven by design; this proves the runner+codex handle a real-codebase-sized repo with effect+test verification in full isolation",
+  "generated_at": "2026-06-12T11:07:59.262003Z",
+  "isolation_method": "git clone of /home/rai/codex-local-runner (HEAD c32d90f) to /tmp/prompt633_mainrepo_clone — fully independent .git; actual main repo never the runtime target",
+  "live_codex_invocations": 1,
+  "live_result": {
+    "codex_invoked": true,
+    "effect_verification_status": "passed",
+    "effect_verify_commands_passed": true,
+    "returncode": 0,
+    "status": "success",
+    "unexpected_files": [],
+    "verify_command": [
+      "python",
+      "prompt633_marker.py"
+    ]
+  },
+  "main_repo_after": "git status md5 identical before/after the run",
+  "objective": "Main-repo-like acceptance via isolated full clone, without committing",
+  "phase": 633,
+  "prompt633_status": "success",
+  "task": "create prompt633_marker.py at clone root with exact marker function"
+}

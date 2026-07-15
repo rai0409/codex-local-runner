@@ -1,0 +1,15 @@
+# Prompt665 Bounded Unattended Acceptance
+
+- run_id: prompt668_operational_use_unattended
+- status: success
+- stop_reason: max_ticks_reached
+- queue_item_count: 3
+- tick_count: 3
+- state_path: artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/bounded_unattended_state.json
+- queue_path: artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/bounded_unattended_queue.json
+- long_running_report_path: artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/long_running_daemon/long_running_daemon_acceptance_report.json
+
+## Evidence
+- artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/long_running_daemon/tick_1_evidence.json
+- artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/long_running_daemon/tick_2_evidence.json
+- artifacts/autonomous_runtime/prompt668_operational_use/operational_unattended_acceptance/long_running_daemon/tick_3_evidence.json

@@ -1,0 +1,82 @@
+{
+  "blocking_gaps": [
+    {
+      "evidence_commit": "none",
+      "evidence_field": "prompt675_verified=not_present",
+      "evidence_prompt": "prompt675",
+      "evidence_tag": "none",
+      "id": 4,
+      "missing_proof": "Prompt675 absent; no later report proves actual code change.",
+      "name": "Actual code change performed",
+      "pass_criteria": "A bounded code change is made, tested, evidenced, committed, and tagged.",
+      "required_prompt": "Prompt682 or Prompt681B",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "28bf7af3ce7563b0301384ec296f0f3733914d4a",
+      "evidence_field": "current_real_development_responsibility_score_after=52",
+      "evidence_prompt": "prompt674",
+      "evidence_tag": "none",
+      "id": 5,
+      "missing_proof": "Test addition proven separately, not tied to a real code change chain.",
+      "name": "Tests added or updated for code change",
+      "pass_criteria": "Tests are added for the actual chain code change.",
+      "required_prompt": "Prompt682 or Prompt681B",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "partially_proven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "bugfix_readiness only",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 6,
+      "missing_proof": "Readiness plan exists; no failing-test bugfix acceptance proves implementation.",
+      "name": "Failing test to bounded bugfix to tests pass",
+      "pass_criteria": "A failing test is observed, a bounded bugfix is applied, and tests pass.",
+      "required_prompt": "Prompt683",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "a3c33057a4fd4d5e6b0c93a6816b126fc5c56066",
+      "evidence_field": "bounded 50 tick soak",
+      "evidence_prompt": "prompt671",
+      "evidence_tag": "none",
+      "id": 14,
+      "missing_proof": "Bounded acceptance exists; production repeated new-goal daemon not proven.",
+      "name": "Repeated new safe project goals over time",
+      "pass_criteria": "Daemon accepts a new safe project goal and completes bounded real operation.",
+      "required_prompt": "Prompt684",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "partially_proven"
+    },
+    {
+      "evidence_commit": "4551010e8306eceadda880ec1ee5f6537d9f27bc",
+      "evidence_field": "codex_exec_command_supported=dry_run_only; live_codex_smoke_test=skipped",
+      "evidence_prompt": "prompt678",
+      "evidence_tag": "prompt678-codex-no-confirmation-execution-profile",
+      "id": 16,
+      "missing_proof": "Prompt678 is dry_run_only and live smoke test skipped.",
+      "name": "Live Codex execution if required",
+      "pass_criteria": "Live Codex smoke test passes or operation is explicitly scoped dry-run-only.",
+      "required_prompt": "Prompt685",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "release_docs_readiness only",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 17,
+      "missing_proof": "Readiness exists; final release docs/demo pack not proven.",
+      "name": "Release documentation/demo pack",
+      "pass_criteria": "Release docs and demo pack are generated and validated.",
+      "required_prompt": "Prompt686",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    }
+  ]
+}

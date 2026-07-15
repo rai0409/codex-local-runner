@@ -1,0 +1,14 @@
+{
+  "all_prompt_items_use_no_confirmation_profile": true,
+  "profile_name": "no_confirmation_workspace_write",
+  "schema_version": "prompt680_profile_selection_summary_v1",
+  "selected_profiles": {
+    "real_task_chain_001_docs_followup": "no_confirmation_workspace_write",
+    "real_task_chain_002_test_followup": "no_confirmation_workspace_write",
+    "real_task_chain_003_small_code_change_readiness": "no_confirmation_workspace_write",
+    "real_task_chain_004_bugfix_readiness": "no_confirmation_workspace_write",
+    "real_task_chain_005_multi_responsibility_chain_readiness": "no_confirmation_workspace_write",
+    "real_task_chain_006_release_docs_readiness": "no_confirmation_workspace_write",
+    "real_task_chain_007_final_summary": "no_confirmation_workspace_write"
+  }
+}

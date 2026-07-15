@@ -1,0 +1,22 @@
+{
+  "additions": 0,
+  "attempt_count": 1,
+  "changed_files": [],
+  "cost": {
+    "tokens_input": 0,
+    "tokens_output": 0
+  },
+  "deletions": 0,
+  "finished_at": "2026-06-27T08:38:13.992944Z",
+  "generated_patch_summary": "local proof transport; no prompt text executed",
+  "run_id": "prompt662_bounded_internal_executor_loop:prompt669_item_10:cycle-1",
+  "started_at": "2026-06-27T08:38:13.992939Z",
+  "status": "completed",
+  "stderr_path": "artifacts/autonomous_runtime/prompt669_operational_scale/tick_10_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+  "stdout_path": "artifacts/autonomous_runtime/prompt669_operational_scale/tick_10_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+  "verify": {
+    "commands": [],
+    "reason": "proof_transport_local_evidence",
+    "status": "passed"
+  }
+}

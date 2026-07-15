@@ -1,0 +1,3 @@
+{
+  "required_next_action": "Install or update to a Codex CLI/runtime that exposes a safe non-interactive workspace-write approval mode, then rerun a live Codex smoke acceptance Prompt."
+}

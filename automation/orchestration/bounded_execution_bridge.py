@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Any
 from typing import Mapping
 
+from automation.orchestration.completion_contract import (
+    evaluate_prompt353_local_only_verified_no_change_posture,
+)
+
 BOUNDED_EXECUTION_BRIDGE_SCHEMA_VERSION = "v1"
 
 BOUNDED_EXECUTION_STATUSES = {
@@ -580,6 +584,11 @@ def build_bounded_execution_bridge_surface(
         or reconcile_status == "waiting_for_truth"
         or repair_suggestion_decision == "gather_truth"
     )
+    local_only_posture = evaluate_prompt353_local_only_verified_no_change_posture(
+        objective_contract_payload=objective,
+        run_state_payload=run_state,
+        completion_contract_payload=completion,
+    )
 
     coherent_waiting_posture = bool(
         execution_authorization_status == "pending"
@@ -602,7 +611,9 @@ def build_bounded_execution_bridge_surface(
     binding_stale = binding_validity == "stale"
     binding_superseded = binding_validity == "superseded"
 
-    if plan_not_needed:
+    if bool(local_only_posture.get("eligible")):
+        bounded_status = "not_applicable"
+    elif plan_not_needed:
         bounded_status = "not_applicable"
     elif explicit_denial:
         bounded_status = "blocked"
@@ -648,7 +659,9 @@ def build_bounded_execution_bridge_surface(
         default="insufficient_truth",
     )
 
-    if bounded_status == "ready":
+    if bool(local_only_posture.get("eligible")):
+        bounded_decision = "no_execution"
+    elif bounded_status == "ready":
         bounded_decision = "attempt_bounded_execution"
     elif bounded_status == "not_applicable":
         bounded_decision = "no_execution"
@@ -675,7 +688,9 @@ def build_bounded_execution_bridge_surface(
         default="none",
     )
     derived_binding_scope = _BINDING_SCOPE_TO_BOUNDED_SCOPE.get(binding_scope, "none")
-    if bounded_status == "not_applicable":
+    if bool(local_only_posture.get("eligible")):
+        bounded_scope = "none"
+    elif bounded_status == "not_applicable":
         bounded_scope = "none"
     elif (
         replan_required
@@ -712,7 +727,9 @@ def build_bounded_execution_bridge_surface(
         default="none",
     )
 
-    if bounded_status == "not_applicable":
+    if bool(local_only_posture.get("eligible")):
+        bounded_validity = "valid"
+    elif bounded_status == "not_applicable":
         bounded_validity = "valid"
     elif binding_superseded or execution_authorization_validity == "superseded":
         bounded_validity = "superseded"
@@ -734,7 +751,9 @@ def build_bounded_execution_bridge_surface(
     )
 
     reason_candidates: list[str] = []
-    if not authorization_eligible:
+    if bool(local_only_posture.get("eligible")):
+        reason_candidates.append("plan_not_needed")
+    elif not authorization_eligible:
         if explicit_denial:
             reason_candidates.append("authorization_denied")
         elif execution_authorization_status == "pending":
@@ -763,7 +782,9 @@ def build_bounded_execution_bridge_surface(
         reason_candidates.insert(0, "bounded_execution_ready")
 
     reason_codes = _normalize_reason_codes(reason_candidates)
-    if bounded_status == "ready":
+    if bool(local_only_posture.get("eligible")):
+        reason_codes = ["plan_not_needed"]
+    elif bounded_status == "ready":
         if "bounded_execution_ready" not in reason_codes:
             reason_codes = ["bounded_execution_ready"]
         elif reason_codes[0] != "bounded_execution_ready":
@@ -785,7 +806,9 @@ def build_bounded_execution_bridge_surface(
     primary_reason = reason_codes[0] if reason_codes else "authorization_insufficient"
 
     blocked_reasons: list[str] = []
-    if bounded_status not in {"ready", "not_applicable"}:
+    if bool(local_only_posture.get("eligible")):
+        blocked_reasons = []
+    elif bounded_status not in {"ready", "not_applicable"}:
         blocked_reasons = _normalize_reason_codes(
             [code for code in reason_codes if code not in {"bounded_execution_ready", "no_reason"}]
         )
@@ -808,7 +831,12 @@ def build_bounded_execution_bridge_surface(
         default="insufficient_truth",
     )
 
-    if (
+    if bool(local_only_posture.get("eligible")):
+        bounded_confidence = "strong"
+        manual_required = False
+        replan_required = False
+        truth_gathering_required = False
+    elif (
         bounded_status == "ready"
         and bounded_validity == "valid"
         and authorization_eligible
@@ -869,10 +897,16 @@ def build_bounded_execution_bridge_surface(
         "bounded_execution_denied": bool(bounded_denied),
         "bounded_execution_source_status": source_status,
         "bounded_execution_authorization_status": (
-            execution_authorization_status or "insufficient_truth"
+            "not_applicable"
+            if bool(local_only_posture.get("eligible"))
+            else (execution_authorization_status or "insufficient_truth")
         ),
-        "bounded_execution_binding_status": binding_status or "missing",
-        "bounded_execution_plan_status": repair_plan_status or "missing",
+        "bounded_execution_binding_status": (
+            "not_needed" if bool(local_only_posture.get("eligible")) else (binding_status or "missing")
+        ),
+        "bounded_execution_plan_status": (
+            "not_needed" if bool(local_only_posture.get("eligible")) else (repair_plan_status or "missing")
+        ),
         "supporting_compact_truth_refs": _build_supporting_refs(
             next_safe_action=next_safe_action,
             policy_primary_action=policy_primary_action,

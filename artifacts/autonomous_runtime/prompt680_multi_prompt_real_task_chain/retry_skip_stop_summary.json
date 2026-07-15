@@ -1,0 +1,10 @@
+{
+  "controlled_failure_injection_verified": true,
+  "failure_injections": 1,
+  "max_retries_per_prompt": 1,
+  "retry_policy_verified": true,
+  "schema_version": "prompt680_retry_skip_stop_summary_v1",
+  "skip_policy_verified": true,
+  "stop_policy_verified": true,
+  "stop_reason": "real_task_chain_complete"
+}

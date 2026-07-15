@@ -1,0 +1,14 @@
+{
+  "cycles": [
+    {
+      "approved_for_execution": true,
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt669_operational_scale/tick_1_evidence.json",
+      "prompt_id": "prompt669_item_01",
+      "prompt_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/prompts/prompt669_item_01.md",
+      "status": "running"
+    }
+  ],
+  "schema_version": "bounded_daemon_queue_v1",
+  "updated_at": "2026-06-27T08:38:14.002090Z"
+}

@@ -1,0 +1,9 @@
+{
+  "live_smoke_attempted": false,
+  "live_smoke_exit_code": null,
+  "live_smoke_marker_content_valid": false,
+  "live_smoke_marker_created": false,
+  "live_smoke_succeeded": false,
+  "unexpected_file_modifications": [],
+  "unexpected_file_modifications_detected": false
+}

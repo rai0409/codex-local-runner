@@ -1,0 +1,22 @@
+{
+  "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+  "controlled_failure_injection": {
+    "failure_type": "simulated_retryable_policy_probe",
+    "injected": true,
+    "recovered": true,
+    "retry_attempts": 1
+  },
+  "evidence_path": "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_006_retry_skip_policy_check_evidence.json",
+  "item_id": "prompt_queue_item_006_retry_skip_policy_check",
+  "item_type": "policy_check",
+  "local_only_evidence_captured": true,
+  "next_prompt_selection": "next_queue_item",
+  "run_id": "prompt677_multi_prompt_queue_scale",
+  "schema_version": "prompt676_prompt_item_evidence_v1",
+  "source_exists": true,
+  "source_path": "artifacts/autonomous_runtime/prompt676_multi_prompt_queue/retry_skip_stop_summary.json",
+  "status": "success",
+  "tick_index": 6,
+  "validation_command": "local_artifact_presence_and_content_check",
+  "validation_passed": true
+}

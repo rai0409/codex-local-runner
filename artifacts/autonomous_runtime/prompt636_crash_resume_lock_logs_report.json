@@ -1,0 +1,22 @@
+{
+  "behaviors_proven": {
+    "interrupted_task_resume": "task left in running/ requeued to pending/ with _recovery_attempts=1 and timestamp (live synthetic acceptance via --recover-only)",
+    "lock_contention": "second daemon refused with exit 1 while a live pid holds the lock (live synthetic acceptance + unit test)",
+    "persistent_logs": "JSONL daemon_log.jsonl with daemon_started/recovery/task_*/daemon_stopped events; daemon_state.json updated through lifecycle",
+    "recovery_exhaustion": "task exceeding max recovery attempts moves to failed/ with _recovery_exhausted (unit test)",
+    "stale_lock_recovery": "lock held by a dead pid is detected stale and replaced (live synthetic acceptance + unit test)"
+  },
+  "decision": "adopt",
+  "files_added": [
+    "automation/orchestration/planned_runner/daemon_state.py",
+    "tests/test_daemon_state_resume.py"
+  ],
+  "generated_at": "2026-06-12T11:16:02.149278Z",
+  "limitation": "resume requeues the whole task; mid-cycle resume of a partially executed loop is not implemented",
+  "live_codex_invoked": false,
+  "objective": "Crash resume, locking, persistent logs for the daemon candidate",
+  "phase": 636,
+  "prompt636_status": "success",
+  "synthetic_acceptance": "queue with stuck running task + stale dead-pid lock + stale state -> run_task_queue_daemon.py --recover-only -> recovered_count=1, task back in pending with attempt count, lock released, state=stopped, logs persisted; second-instance contention refused (RC=1)",
+  "unit_tests": "tests/test_daemon_state_resume.py (4) passed"
+}

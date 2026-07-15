@@ -1,0 +1,8 @@
+{
+  "arbitrary_prompt_execution": false,
+  "bounded_acceptance_result": true,
+  "executed_by": "codex",
+  "implementation_target_path": "docs/autonomous_runtime/browser_to_codex_full_cycle_acceptance.md",
+  "prompt_id": "prompt660_bridge_acceptance_report_only",
+  "status": "done"
+}

@@ -1,0 +1,11 @@
+# Prompt619 two-cycle live smoke retry
+
+status=success
+base_commit=ca37581231fbed04248025589097ee51d817e0de
+required_prompt618_tag_present=True
+cycle_count=1
+codex_invoked_count=1
+runtime_commit_or_tag=False
+archive_touched=False
+source_modified=False
+next_action=daemon_lite_observed_live_run

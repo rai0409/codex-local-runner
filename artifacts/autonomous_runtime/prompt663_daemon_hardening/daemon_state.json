@@ -1,0 +1,34 @@
+{
+  "approval_gate_persisted": true,
+  "artifact_paths": [
+    "artifacts/autonomous_runtime/prompt663_daemon_hardening/cycle_1_executor/cycle_1_evidence.json",
+    "artifacts/autonomous_runtime/prompt663_daemon_hardening/cycle_2_executor/cycle_1_evidence.json"
+  ],
+  "completed_cycles": [
+    {
+      "bounded_executor_report_path": "artifacts/autonomous_runtime/prompt663_daemon_hardening/cycle_1_executor/bounded_internal_executor_loop_report.json",
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt663_daemon_hardening/cycle_1_executor/cycle_1_evidence.json",
+      "prompt_fingerprint": "sha256:abd46bca67993b85226e4615a18a94afa8492026b8d2359c4ac2ab806335e9d0",
+      "prompt_id": "prompt663_daemon_cycle_1_local_proof"
+    },
+    {
+      "bounded_executor_report_path": "artifacts/autonomous_runtime/prompt663_daemon_hardening/cycle_2_executor/bounded_internal_executor_loop_report.json",
+      "cycle_index": 2,
+      "evidence_path": "artifacts/autonomous_runtime/prompt663_daemon_hardening/cycle_2_executor/cycle_1_evidence.json",
+      "prompt_fingerprint": "sha256:aeb3f9dc446b27ab46d5cdc743dbb1c010a19d5fb64e5c0f31458d5fb71bd8ff",
+      "prompt_id": "prompt663_daemon_cycle_2_local_proof"
+    }
+  ],
+  "failure_threshold": 1,
+  "lock_path": "artifacts/autonomous_runtime/prompt663_daemon_hardening/daemon.lock",
+  "max_cycles": 2,
+  "pid": 2,
+  "queue_path": "artifacts/autonomous_runtime/prompt663_daemon_hardening/daemon_queue.json",
+  "run_id": "prompt663_daemon_hardening",
+  "schema_version": "bounded_daemon_state_v1",
+  "status": "success",
+  "stop_reason": "max_cycles_reached",
+  "terminal": true,
+  "updated_at": "2026-06-27T04:53:09.488262Z"
+}

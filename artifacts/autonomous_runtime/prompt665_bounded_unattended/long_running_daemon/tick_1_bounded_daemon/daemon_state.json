@@ -1,0 +1,26 @@
+{
+  "approval_gate_persisted": true,
+  "artifact_paths": [
+    "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json"
+  ],
+  "completed_cycles": [
+    {
+      "bounded_executor_report_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_1_bounded_daemon/cycle_1_executor/bounded_internal_executor_loop_report.json",
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json",
+      "prompt_fingerprint": "sha256:99db919e80ff6b4b70a0252f7e0c528f06f0e85172e15a1d5ffa69f59475c045",
+      "prompt_id": "prompt665_item_1_unattended_local_proof"
+    }
+  ],
+  "failure_threshold": 1,
+  "lock_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_1_bounded_daemon/daemon.lock",
+  "max_cycles": 1,
+  "pid": 3,
+  "queue_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_1_bounded_daemon/daemon_queue.json",
+  "run_id": "prompt665_bounded_unattended_long_running_tick_1",
+  "schema_version": "bounded_daemon_state_v1",
+  "status": "success",
+  "stop_reason": "max_cycles_reached",
+  "terminal": true,
+  "updated_at": "2026-06-27T05:58:25.136947Z"
+}

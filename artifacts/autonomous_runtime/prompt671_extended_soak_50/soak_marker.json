@@ -1,0 +1,8 @@
+{
+  "bounded": true,
+  "created_at": "2026-06-27T09:24:38.282979Z",
+  "queue_item_count": 50,
+  "run_id": "prompt671_extended_soak_50",
+  "schema_version": "prompt671_soak_marker_v1",
+  "tick_count": 50
+}

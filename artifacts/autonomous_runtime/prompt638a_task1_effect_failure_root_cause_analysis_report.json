@@ -1,0 +1,92 @@
+{
+  "prompt638a_status": "success",
+  "prompt638a_root_cause": "effect_failed_not_gated_before_success_commit_tag",
+  "prompt638a_base_commit": "2a87cb17a999984c6b33b970201d8ed21178013f",
+  "prompt638a_base_commit_subject": "Record Fable runtime validation and commit-tag reports",
+  "prompt638a_base_tags_at_head": [
+    "codex-runner-fable-runtime-evidence-20260613"
+  ],
+  "prompt638a_base_commit_note": "Prompt context stated HEAD=409b0fa (prompt637-sandbox-generated-artifact-cleanup-policy); actual live HEAD is 2a87cb17, one commit ahead, with 409b0fa as a confirmed ancestor. Does not affect the analysis.",
+  "prompt638a_main_repo_modified": false,
+  "prompt638a_task1_sandbox_repo": "/tmp/prompt638_no_claude_real_task_batch/repos/task1_cleanup",
+  "prompt638a_task1_latest_commit": "c183c26e99b6a1db37e1b0161df12911bcd2b20b",
+  "prompt638a_task1_latest_commit_subject": "sandbox auto commit: task1-cleanup-add-function",
+  "prompt638a_task1_latest_tags": [
+    "sandbox-task1-cleanup-add-function"
+  ],
+  "prompt638a_task1_target_file": "automation/orchestration/planned_runner/sandbox_cleanup.py",
+  "prompt638a_task1_actual_inserted_code": "def is_generated_artifact_count(a: Any, b: Any) -> int:\n    return 1 if a else b",
+  "prompt638a_task1_required_text_present": [
+    "return 1 if a else b"
+  ],
+  "prompt638a_task1_required_text_missing": [
+    "def is_generated_artifact_count(a, b):"
+  ],
+  "prompt638a_task1_required_text_missing_reason": "Codex emitted a type-annotated signature 'def is_generated_artifact_count(a: Any, b: Any) -> int:' so the exact-substring required_text 'def is_generated_artifact_count(a, b):' did not match. The function IS present and well-formed.",
+  "prompt638a_task1_effect_verification_statuses": [
+    "failed"
+  ],
+  "prompt638a_task1_effect_verification_error": "required text missing in automation/orchestration/planned_runner/sandbox_cleanup.py: 'def is_generated_artifact_count(a, b):'",
+  "prompt638a_task1_live_gate_status": "failed",
+  "prompt638a_task1_live_gate_returncode": 0,
+  "prompt638a_task1_live_gate_returncode_classification": "failed",
+  "prompt638a_task1_live_gate_stop_reason": "effect_verification_failed",
+  "prompt638a_task1_classification_status": "success",
+  "prompt638a_task1_classification_label": "codex_result_success",
+  "prompt638a_task1_loop_status": "success",
+  "prompt638a_task1_loop_final_status": "success",
+  "prompt638a_task1_run_report_status": "success",
+  "prompt638a_task1_sandbox_commit_performed": true,
+  "prompt638a_task1_sandbox_tag_performed": true,
+  "prompt638a_task1_sandbox_final_status_clean": true,
+  "prompt638a_task1_queue_result": "done (queue_final_path=/tmp/prompt638_no_claude_real_task_batch/queue/done/task1-cleanup-add-function.json)",
+  "prompt638a_task1_failure_cause": "Two-part: (1) proximate trigger = task1 effect spec required_text exact-substring mismatch (typed signature vs literal '(a, b):'); (2) reportable root cause = effect_verification_failed was NOT gated before final success and sandbox commit/tag. A failed effect verification became a final success with commit+tag.",
+  "prompt638a_general_safety_bug_confirmed": true,
+  "prompt638a_safety_bug_failure_layers": [
+    {
+      "layer": "cycle result classifier",
+      "module": "automation/orchestration/planned_runner/autonomous_cycle.py",
+      "function": "_result_status",
+      "lines": "92-115",
+      "defect": "When status='failed' and returncode_classification='failed' but returncode==0, line 107 (returncode==0 -> 'success') is evaluated BEFORE the failed-signal checks on lines 109-114, so the cycle is classified 'codex_result_success'. The explicit failed status/classification set by the live gate is silently overridden by the zero exit code."
+    },
+    {
+      "layer": "autonomous live loop",
+      "module": "automation/orchestration/planned_runner/autonomous_live_loop.py",
+      "function": "build_autonomous_live_loop / loop body",
+      "lines": "530-532, 558-578, 610",
+      "defect": "final_status is derived solely from _cycle_stop_state(classification=...). per_cycle_effect_statuses are recorded into the payload (line 610) but never consulted when computing final_status/status. A cycle with effect status 'failed' can still yield final_status='success'."
+    },
+    {
+      "layer": "daemon queue task runner",
+      "module": "scripts/run_task_queue_daemon.py",
+      "function": "_process_task",
+      "lines": "153-160, 172-202",
+      "defect": "Records per_cycle_effect_verification_statuses (lines 154-156) but the only gate (line 158) checks loop_state['status'] != 'success'. It never inspects per_cycle_effect_verification_statuses, so when loop_status='success' it proceeds to sandbox_cleanup, sandbox_commit_tag, final clean check, and sets status='success'."
+    }
+  ],
+  "prompt638a_success_gate_current_behavior": "Final task success is gated ONLY on loop_state['status']=='success'. The loop's status is computed from the per-cycle classification, which treats returncode==0 as success even when the live gate explicitly returned status='failed'/stop_reason='effect_verification_failed'. per_cycle_effect_verification_statuses is never a gating input at any layer.",
+  "prompt638a_commit_tag_gate_current_behavior": "execute_sandbox_commit_tag runs whenever loop_status=='success' and sandbox cleanup succeeds. It is NOT blocked by a failed effect verification status; Task1 committed (c183c26) and tagged (sandbox-task1-cleanup-add-function) despite per_cycle_effect_verification_statuses=['failed'].",
+  "prompt638a_recommended_fix_summary": "Implement a strict effect-verification success gate with defense in depth across three modules. (1) autonomous_cycle._result_status: honor explicit status/classification 'failed' before the returncode==0 success shortcut so a zero exit code cannot override an explicit failure. (2) autonomous_live_loop: incorporate per_cycle_effect_statuses into final_status — if any cycle effect status is 'failed' (or not 'passed' when verification was enabled), final_status must be 'blocked'/'failed', not 'success'. (3) run_task_queue_daemon._process_task: before sandbox cleanup/commit/tag, block when per_cycle_effect_verification_statuses contains any non-'passed' value; mark run_report status failed/blocked, route queue_final_path to failed instead of done, and never commit/tag. loop_status=success must be ignored if effect statuses contain 'failed'. Separately, the task1 effect spec required_text exact-substring is brittle; effect-spec generation should match the function regardless of type annotations (or assert def-name + return-expression) — but that is secondary; the gate is the safety-critical fix.",
+  "prompt638a_recommended_files_to_modify": [
+    "automation/orchestration/planned_runner/autonomous_cycle.py",
+    "automation/orchestration/planned_runner/autonomous_live_loop.py",
+    "scripts/run_task_queue_daemon.py"
+  ],
+  "prompt638a_gate_owner_module": "automation/orchestration/planned_runner/autonomous_live_loop.py (primary: final_status must reflect effect verification), with defense-in-depth gates in autonomous_cycle._result_status and scripts/run_task_queue_daemon.py",
+  "prompt638a_recommended_tests": [
+    "tests/test_autonomous_cycle_result_status_failed_with_zero_returncode.py",
+    "tests/test_autonomous_live_loop_effect_failed_blocks_success.py",
+    "tests/test_daemon_queue_effect_failed_blocks_commit_tag.py"
+  ],
+  "prompt638a_recommended_tests_intent": {
+    "tests/test_autonomous_cycle_result_status_failed_with_zero_returncode.py": "Assert _result_status returns 'failed' when payload status='failed'/returncode_classification='failed' even if returncode==0.",
+    "tests/test_autonomous_live_loop_effect_failed_blocks_success.py": "Assert loop final_status/status is blocked (not success) when any per_cycle_effect_verification_status is 'failed'.",
+    "tests/test_daemon_queue_effect_failed_blocks_commit_tag.py": "Assert _process_task does not run commit/tag, sets run_report status!=success, and routes queue final path to failed when per_cycle_effect_verification_statuses contains 'failed'."
+  },
+  "prompt638a_rerun_required": true,
+  "prompt638a_rerun_intent": "After the gate is implemented, rerun Task1 as a regression case: with the same brittle effect spec, the failed effect verification must now produce a failed/blocked task with NO sandbox commit/tag. Optionally also add a corrected-spec Task1 to confirm a genuine pass still succeeds.",
+  "prompt638a_next_prompt_scope": "prompt638b: implement strict effect-verification success gate (defense-in-depth across autonomous_cycle._result_status, autonomous_live_loop final_status, and run_task_queue_daemon commit/tag/queue routing), add the three regression tests, then rerun the Task1 batch entry to confirm effect failure blocks commit/tag.",
+  "prompt638a_final_decision": "Task1's effect verification correctly FAILED (legitimate required_text mismatch), but the runtime incorrectly converted that failure into a final success with sandbox commit and tag. This is a general safety bug, not a Task1-only artifact: any task whose Codex run exits 0 while effect verification fails will be marked success and committed/tagged. The fix is a strict effect-verification success gate.",
+  "prompt638a_next_action": "implement_strict_effect_verification_success_gate"
+}

@@ -1,0 +1,26 @@
+{
+  "approval_gate_persisted": true,
+  "artifact_paths": [
+    "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_1_attempt_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json"
+  ],
+  "completed_cycles": [
+    {
+      "bounded_executor_report_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_1_attempt_1_bounded_daemon/cycle_1_executor/bounded_internal_executor_loop_report.json",
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_1_attempt_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json",
+      "prompt_fingerprint": "sha256:268b75b0be8e91eef14e42b50e4fff0eb971d70f51853419b813e6e7a39e3bc2",
+      "prompt_id": "prompt670_item_01"
+    }
+  ],
+  "failure_threshold": 1,
+  "lock_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_1_attempt_1_bounded_daemon/daemon.lock",
+  "max_cycles": 1,
+  "pid": 1953396,
+  "queue_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_1_attempt_1_bounded_daemon/daemon_queue.json",
+  "run_id": "prompt670_operational_soak_interrupted_tick_1_attempt_1",
+  "schema_version": "bounded_daemon_state_v1",
+  "status": "success",
+  "stop_reason": "max_cycles_reached",
+  "terminal": true,
+  "updated_at": "2026-06-27T08:54:45.388630Z"
+}

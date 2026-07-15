@@ -1,0 +1,71 @@
+{
+  "prompt661a_fix2_status": "success",
+  "goal_confirmed": "project_level_autonomous_development_runner",
+  "current_head_before": "4b833e7ca70a9c44dd86c422ae777f7969b5eb1d",
+  "selected_target": "request_envelope_normalization_newline_exactness",
+  "root_cause_confirmed": true,
+  "root_cause": "instruction-style request envelopes were normalized to prompt_text with a trailing newline, while request.md writing and tests did not consistently preserve exact prompt_text bytes",
+  "default_request_id": "prompt659a_bridge_server",
+  "custom_request_id": "prompt660c_next_analysis",
+  "request_md_equals_saved_prompt_text": true,
+  "request_envelope_path_prepare_supported": true,
+  "next_task_returns_custom_request_id": true,
+  "next_task_excludes_default_request_id": true,
+  "tests_passed": true,
+  "browser_extension_js_syntax_passed": true,
+  "protected_paths_untouched": true,
+  "credential_storage_prevented": true,
+  "implementation_files": [
+    "automation/orchestration/planned_runner/chatgpt_runner_bridge_server.py",
+    "tests/test_chatgpt_runner_bridge_server.py"
+  ],
+  "report_files": [
+    "artifacts/autonomous_runtime/prompt661a_fix2_report.json",
+    "artifacts/autonomous_runtime/prompt661a_fix2_summary.md",
+    "artifacts/autonomous_runtime/prompt661a_fix2_goal_aligned_implementation_report.json",
+    "artifacts/autonomous_runtime/prompt661a_fix2_goal_aligned_implementation_summary.md"
+  ],
+  "validation_commands": [
+    {
+      "command": "python -m pytest tests/test_chatgpt_runner_bridge_server.py -q",
+      "status": "environment_missing_pytest",
+      "summary": "/usr/bin/python: No module named pytest"
+    },
+    {
+      "command": "PATH=.venv/bin:$PATH python -m pytest tests/test_chatgpt_runner_bridge_server.py -q",
+      "status": "passed",
+      "summary": "27 passed, 2 subtests passed in 0.18s"
+    },
+    {
+      "command": "node --check browser_extension/chatgpt_runner_bridge/content.js",
+      "status": "passed"
+    },
+    {
+      "command": "node --check browser_extension/chatgpt_runner_bridge/background.js",
+      "status": "passed"
+    },
+    {
+      "command": "node --check browser_extension/chatgpt_runner_bridge/options.js",
+      "status": "passed"
+    },
+    {
+      "command": "PATH=.venv/bin:$PATH python scripts/run_chatgpt_runner_bridge_server.py prepare --repo-root /home/rai/codex-local-runner --work-root /tmp/codex-local-runner-chatgpt-bridge-prompt661a-fix2-check --request-envelope-path artifacts/autonomous_runtime/prompt660c_next_chatgpt_analysis_request.json",
+      "status": "passed",
+      "summary": "status=success request_id=prompt660c_next_analysis"
+    },
+    {
+      "command": "curl -s http://127.0.0.1:8772/next-task",
+      "status": "passed",
+      "summary": "has_task=true task_id=prompt660c_next_analysis and no prompt659a_bridge_server in response"
+    }
+  ],
+  "manual_acceptance_notes": [
+    "The sandbox blocked loopback socket bind until the local serve command was rerun with approved escalation.",
+    "The requested exact pytest command was run first and failed only because system python lacks pytest; the same command shape passed with the repository .venv first on PATH.",
+    "The /next-task raw response was valid JSON and confirmed task_id=prompt660c_next_analysis without prompt659a_bridge_server."
+  ],
+  "commit_message": "prompt661a fix instruction request envelope normalization",
+  "tag_name": "prompt661a-fix2-request-envelope-normalization",
+  "current_capability_boundary": "instruction_request_envelope_normalization_exact_prompt_text_verified",
+  "next_recommended_action": "resume_prompt661a_second_cycle"
+}

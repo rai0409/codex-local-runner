@@ -1,0 +1,6 @@
+{
+  "complete_as_real_no_human_autonomous_development": false,
+  "completed_as_dry_run_boundary_operational_runner": true,
+  "completed_as_live_codex_no_human_autonomous_development_runner": false,
+  "completed_as_local_only_bounded_autonomous_development_runner": true
+}

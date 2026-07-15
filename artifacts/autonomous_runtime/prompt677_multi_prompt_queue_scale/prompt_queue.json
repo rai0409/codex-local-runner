@@ -1,0 +1,88 @@
+{
+  "failure_injections": 1,
+  "items": [
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "verify Prompt673 roadmap and create a local prompt-queue docs evidence note",
+      "item_id": "prompt_queue_item_001_docs_followup",
+      "item_type": "documentation_followup",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "verify Prompt674 test artifact and create a local prompt-queue test evidence summary",
+      "item_id": "prompt_queue_item_002_test_followup",
+      "item_type": "test_followup",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "prepare a local-only small-code-change readiness note without applying a broad code change",
+      "item_id": "prompt_queue_item_003_code_change_readiness",
+      "item_type": "small_code_change_readiness",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "prepare a local-only failing-test bugfix readiness note and safety criteria",
+      "item_id": "prompt_queue_item_004_bugfix_readiness",
+      "item_type": "bugfix_readiness",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "prepare a local-only multi-responsibility queue readiness note",
+      "item_id": "prompt_queue_item_005_multi_responsibility_readiness",
+      "item_type": "multi_responsibility_readiness",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "exercise a controlled retry/skip/stop prompt item policy without unsafe execution",
+      "item_id": "prompt_queue_item_006_retry_skip_policy_check",
+      "item_type": "policy_check",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "prepare a local-only release documentation readiness note without generating final README yet",
+      "item_id": "prompt_queue_item_007_release_docs_readiness",
+      "item_type": "release_docs_readiness",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    }
+  ],
+  "max_prompt_cycles": 5,
+  "max_prompt_items": 7,
+  "max_prompt_ticks": 7,
+  "max_retries_per_prompt": 1,
+  "preapproved": true,
+  "schema_version": "prompt677_prompt_queue_v1"
+}

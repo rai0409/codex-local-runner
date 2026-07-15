@@ -1,0 +1,57 @@
+{
+  "prompt610_status": "blocked",
+  "prompt610_git_write_check": "failed",
+  "prompt610_allowed_files": [
+    "automation/orchestration/planned_runner/loop_controller.py",
+    "automation/orchestration/planned_runner/daemon.py",
+    "automation/orchestration/planned_runner/commit_tag.py",
+    "artifacts/legacy_success_path_extraction/prompt607_extraction_report.json",
+    "artifacts/legacy_success_path_extraction/prompt607_extraction_summary.md",
+    "artifacts/legacy_success_path_extraction/prompt608_review_report.json",
+    "artifacts/legacy_success_path_extraction/prompt608_review_summary.md"
+  ],
+  "prompt610_excluded_files": [
+    "artifacts/archive/",
+    "artifacts/archive/old_single_file_full_code/",
+    "old_planned_execution_runner_full.py",
+    "old_single_file_full_code.tar.gz",
+    "prompt609_commit_tag_report.json",
+    "prompt609_commit_tag_summary.md",
+    "prompt610_retry_commit_tag_report.json",
+    "prompt610_retry_commit_tag_summary.md"
+  ],
+  "prompt610_staged_files": [],
+  "prompt610_commit_created": false,
+  "prompt610_commit_sha": null,
+  "prompt610_tag_created": false,
+  "prompt610_tag_name": null,
+  "prompt610_py_compile_results": {
+    "automation/orchestration/planned_runner/loop_controller.py": "not_run",
+    "automation/orchestration/planned_runner/daemon.py": "not_run",
+    "automation/orchestration/planned_runner/commit_tag.py": "not_run"
+  },
+  "prompt610_import_results": {
+    "automation.orchestration.planned_runner.loop_controller": "not_run",
+    "automation.orchestration.planned_runner.daemon": "not_run",
+    "automation.orchestration.planned_runner.commit_tag": "not_run"
+  },
+  "prompt610_exported_function_results": {
+    "dirty_paths_outside_allowed_artifacts": "not_run",
+    "classify_loop_stop": "not_run",
+    "run_bounded_success_loop": "not_run",
+    "build_daemon_lite_observed_run_state": "not_run",
+    "build_commit_tag_execution_gate": "not_run",
+    "execute_bounded_commit_tag": "not_run"
+  },
+  "prompt610_archive_exclusion_confirmed": "not_run",
+  "prompt610_receipt_artifacts_committed": false,
+  "prompt610_final_git_status": [
+    "?? artifacts/archive/",
+    "?? artifacts/legacy_success_path_extraction/",
+    "?? automation/orchestration/planned_runner/commit_tag.py",
+    "?? automation/orchestration/planned_runner/daemon.py",
+    "?? automation/orchestration/planned_runner/loop_controller.py"
+  ],
+  "prompt610_final_decision": "blocked because .git write check failed before staging",
+  "prompt610_next_action": "manual_review_required"
+}

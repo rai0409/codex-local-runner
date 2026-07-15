@@ -1,0 +1,32 @@
+{
+  "bounded_summary": {
+    "max_prompt_cycles": 5,
+    "max_prompt_items": 7,
+    "max_prompt_ticks": 7
+  },
+  "evidence_paths": [
+    "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_001_docs_followup_evidence.json",
+    "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_002_test_followup_evidence.json",
+    "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_003_code_change_readiness_evidence.json",
+    "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_004_bugfix_readiness_evidence.json",
+    "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_005_multi_responsibility_readiness_evidence.json",
+    "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_006_retry_skip_policy_check_evidence.json",
+    "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_007_release_docs_readiness_evidence.json"
+  ],
+  "prompt_item_count": 7,
+  "prompt_tick_count": 7,
+  "protected_artifacts_preserved": {
+    "prompt667": true,
+    "prompt668": true,
+    "prompt669": true,
+    "prompt670": true,
+    "prompt671": true,
+    "prompt672": true,
+    "prompt673": true,
+    "prompt674": true,
+    "prompt675": "not_present",
+    "prompt676": true
+  },
+  "run_id": "prompt677_multi_prompt_queue_scale",
+  "schema_version": "prompt677_evidence_summary_v1"
+}

@@ -1,0 +1,28 @@
+{
+  "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+  "dry_run_command_construction_attached": true,
+  "effective_command_shape": "codex exec --sandbox workspace-write --ask-for-approval never -",
+  "item_id": "prompt679_docs_profile_check",
+  "item_type": "documentation_followup",
+  "local_only_evidence_captured": true,
+  "non_interactive_command_preview": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "never",
+    "-"
+  ],
+  "profile_name": "no_confirmation_workspace_write",
+  "run_id": "prompt679_no_confirmation_multi_prompt_queue",
+  "schema_version": "prompt679_prompt_item_evidence_v1",
+  "selected_execution_profile": "no_confirmation_workspace_write",
+  "status": "success",
+  "stop_reason": "prompt_item_completed",
+  "terminal": true,
+  "tick_index": 1,
+  "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_no_confirmation_multi_prompt_queue.py -q",
+  "validation_policy_errors": [],
+  "validation_result": "dry_run_policy_verified"
+}

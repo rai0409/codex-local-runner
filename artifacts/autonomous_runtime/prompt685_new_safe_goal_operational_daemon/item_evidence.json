@@ -1,0 +1,105 @@
+{
+  "items": [
+    {
+      "item_id": "new_goal_daemon_001_goal_intake",
+      "item_type": "goal_intake",
+      "non_interactive_command_preview": [
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "-"
+      ],
+      "profile_name": "no_confirmation_workspace_write",
+      "run_id": "prompt685_new_safe_goal_operational_daemon",
+      "schema_version": "prompt685_item_evidence_v1",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 1,
+      "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_new_safe_goal_operational_daemon.py -q",
+      "validation_policy_errors": [],
+      "validation_result": "new_safe_goal_daemon_item_verified"
+    },
+    {
+      "item_id": "new_goal_daemon_002_queue_plan",
+      "item_type": "queue_plan",
+      "non_interactive_command_preview": [
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "-"
+      ],
+      "profile_name": "no_confirmation_workspace_write",
+      "run_id": "prompt685_new_safe_goal_operational_daemon",
+      "schema_version": "prompt685_item_evidence_v1",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 2,
+      "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_new_safe_goal_operational_daemon.py -q",
+      "validation_policy_errors": [],
+      "validation_result": "new_safe_goal_daemon_item_verified"
+    },
+    {
+      "item_id": "new_goal_daemon_003_operational_note",
+      "item_type": "operational_note",
+      "non_interactive_command_preview": [
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "-"
+      ],
+      "profile_name": "no_confirmation_workspace_write",
+      "run_id": "prompt685_new_safe_goal_operational_daemon",
+      "schema_version": "prompt685_item_evidence_v1",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 3,
+      "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_new_safe_goal_operational_daemon.py -q",
+      "validation_policy_errors": [],
+      "validation_result": "new_safe_goal_daemon_item_verified"
+    },
+    {
+      "item_id": "new_goal_daemon_004_validation_summary",
+      "item_type": "validation_summary",
+      "non_interactive_command_preview": [
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "-"
+      ],
+      "profile_name": "no_confirmation_workspace_write",
+      "run_id": "prompt685_new_safe_goal_operational_daemon",
+      "schema_version": "prompt685_item_evidence_v1",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 4,
+      "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_new_safe_goal_operational_daemon.py -q",
+      "validation_policy_errors": [],
+      "validation_result": "new_safe_goal_daemon_item_verified"
+    }
+  ],
+  "schema_version": "prompt685_item_evidence_collection_v1"
+}

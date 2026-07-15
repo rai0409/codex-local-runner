@@ -1,0 +1,6 @@
+{
+  "command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_bugfix_from_failing_test_inside_multi_prompt_chain.py -q",
+  "controlled_failing_test_created": true,
+  "expected_failure": "extract_blocking_gap_ids returned [] for blocking_gaps-only matrix before fix",
+  "targeted_test_failed_before_fix": true
+}

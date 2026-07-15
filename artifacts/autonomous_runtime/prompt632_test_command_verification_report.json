@@ -1,0 +1,30 @@
+{
+  "behavior": [
+    "disallowed executable invalidates the spec BEFORE Codex is invoked (effect_spec_invalid)",
+    "commands run after the file-effect snapshot comparison so test bytecode cannot count as Codex output",
+    "stdout/stderr captured per command under the gate out dir",
+    "success requires file effects passed AND all verify commands returncode 0",
+    "failing command -> effect_verification_failed -> failure digest class effect_verification_failed (retryable)"
+  ],
+  "decision": "adopt",
+  "default_behavior_preserved": true,
+  "files_modified": [
+    "automation/orchestration/planned_runner/live_codex_gate.py",
+    "tests/test_live_codex_gate_effect_verification.py"
+  ],
+  "generated_at": "2026-06-12T11:07:16.812786Z",
+  "live_codex_invoked": false,
+  "objective": "Test-command verification layer in effect specs",
+  "phase": 632,
+  "prompt632_status": "success",
+  "spec_extension": {
+    "allowlist": [
+      "python",
+      "python3",
+      "pytest"
+    ],
+    "verify_command_timeout_seconds": "per-command timeout, default 120",
+    "verify_commands": "list of argv arrays (no shell), executed with cwd=spec repo_path only"
+  },
+  "unit_tests": "3 new tests (pass/fail/disallowed) in tests/test_live_codex_gate_effect_verification.py; 51/51 across all 8 program-related modules"
+}

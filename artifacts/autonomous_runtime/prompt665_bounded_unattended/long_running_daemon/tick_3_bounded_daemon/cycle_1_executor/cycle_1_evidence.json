@@ -1,0 +1,77 @@
+{
+  "approved_for_execution": true,
+  "artifacts": {
+    "artifacts": [
+      "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+      "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt"
+    ],
+    "stderr_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+    "stdout_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt"
+  },
+  "cycle_index": 1,
+  "internal_executor_entrypoint": "automation.execution.codex_executor_adapter.CodexExecutorAdapter",
+  "normalized_result": {
+    "additions": 0,
+    "changed_files": [],
+    "cost": {
+      "tokens_input": 0,
+      "tokens_output": 0
+    },
+    "deletions": 0,
+    "execution": {
+      "attempt_count": 1,
+      "finished_at": "2026-06-27T05:58:25.143772Z",
+      "started_at": "2026-06-27T05:58:25.143767Z",
+      "status": "completed",
+      "stderr_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+      "stdout_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+      "verify": {
+        "commands": [],
+        "reason": "proof_transport_local_evidence",
+        "status": "passed"
+      }
+    },
+    "failure_message": null,
+    "failure_type": null,
+    "generated_patch_summary": "local proof transport; no prompt text executed",
+    "job_id": "prompt662_bounded_internal_executor_loop",
+    "pr_id": "prompt665_item_3_unattended_local_proof",
+    "raw_execution": {
+      "artifacts": {
+        "artifacts": [
+          "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+          "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt"
+        ],
+        "stderr_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+        "stdout_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt"
+      },
+      "result": {
+        "additions": 0,
+        "attempt_count": 1,
+        "changed_files": [],
+        "cost": {
+          "tokens_input": 0,
+          "tokens_output": 0
+        },
+        "deletions": 0,
+        "finished_at": "2026-06-27T05:58:25.143772Z",
+        "generated_patch_summary": "local proof transport; no prompt text executed",
+        "run_id": "prompt662_bounded_internal_executor_loop:prompt665_item_3_unattended_local_proof:cycle-1",
+        "started_at": "2026-06-27T05:58:25.143767Z",
+        "status": "completed",
+        "stderr_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+        "stdout_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/long_running_daemon/tick_3_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+        "verify": {
+          "commands": [],
+          "reason": "proof_transport_local_evidence",
+          "status": "passed"
+        }
+      }
+    }
+  },
+  "passed": true,
+  "prompt_fingerprint": "sha256:8e78728f0e2d641719abf0574c4e646b7334e30a7ff52eae3357169dce3c54da",
+  "prompt_id": "prompt665_item_3_unattended_local_proof",
+  "prompt_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/preapproved_queue/prompts/prompt665_item_3_unattended_local_proof.md",
+  "run_id": "prompt662_bounded_internal_executor_loop:prompt665_item_3_unattended_local_proof:cycle-1"
+}

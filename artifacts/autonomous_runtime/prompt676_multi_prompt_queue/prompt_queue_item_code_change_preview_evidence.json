@@ -1,0 +1,15 @@
+{
+  "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+  "item_id": "prompt_queue_item_code_change_preview",
+  "item_type": "small_code_change_preview",
+  "local_only_evidence_captured": true,
+  "next_prompt_selection": "stop_queue_complete",
+  "run_id": "prompt676_multi_prompt_queue",
+  "schema_version": "prompt676_prompt_item_evidence_v1",
+  "source_exists": true,
+  "source_path": "artifacts/autonomous_runtime/prompt674_report.json",
+  "status": "success",
+  "tick_index": 3,
+  "validation_command": "local_artifact_presence_and_content_check",
+  "validation_passed": true
+}

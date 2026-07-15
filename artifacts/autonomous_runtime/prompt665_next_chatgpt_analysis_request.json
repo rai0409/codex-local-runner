@@ -1,0 +1,14 @@
+{
+  "schema_version": "browser_chatgpt_request_envelope_v1",
+  "request_id": "prompt665_next_analysis",
+  "source": "codex_local_runner",
+  "status": "ready",
+  "prompt_text": "Analyze Prompt665 bounded unattended acceptance and propose the next local-only prompt for a project-level autonomy completion gate. Preserve all safety constraints: no remote push, no PR creation, no merge, no destructive cleanup, no credential/cookie/browser-profile/.env/private-session access, and no arbitrary free-text prompt execution. Focus on objective evidence audit before project_level_autonomy_complete may be true.",
+  "metadata": {
+    "current_capability_boundary": "unattended_acceptance_proven",
+    "project_level_autonomy_complete": false,
+    "recommended_next_action": "continue_to_project_level_autonomy_completion_gate",
+    "evidence_report": "artifacts/autonomous_runtime/prompt665_report.json",
+    "acceptance_doc": "docs/autonomous_runtime/bounded_unattended_acceptance.md"
+  }
+}

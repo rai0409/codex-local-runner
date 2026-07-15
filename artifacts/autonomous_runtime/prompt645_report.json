@@ -1,0 +1,51 @@
+{
+  "prompt645_status": "success",
+  "prompt645_base_commit": "3170ddc",
+  "prompt645_base_tags_at_head": ["prompt644a-current-capability-acceptance"],
+  "prompt645_layer": "project-level data model (container layer only)",
+  "prompt645_project_intent_model_created": true,
+  "prompt645_task_plan_model_created": true,
+  "prompt645_files_created": [
+    "automation/orchestration/planned_runner/project_intent.py",
+    "automation/orchestration/planned_runner/project_plan.py",
+    "tests/test_project_intent_plan_model.py"
+  ],
+  "prompt645_files_modified": [
+    "automation/orchestration/planned_runner/project_intent.py",
+    "automation/orchestration/planned_runner/project_plan.py",
+    "tests/test_project_intent_plan_model.py"
+  ],
+  "prompt645_existing_source_modified": false,
+  "prompt645_model_capabilities": {
+    "project_intent": "project_id (slug), project_name, goal, success_criteria, constraints, allowed_task_kinds (subset of SUPPORTED_TASK_KINDS), safety_limits (max_tasks/max_cycles_per_task/max_total_seconds hard-bounded by daemon caps 5/2/1800), human_approval_policy (require_human_approval + approval_required_for risk categories), repo_target, completion_criteria placeholder, provenance/audit (schema_version/created_by/source/notes); non-raising validate_project_intent + JSON serialization/round-trip.",
+    "project_plan": "embeds a validated intent + ordered planned tasks (task_id slug+unique, kind in intent.allowed_task_kinds, task_spec_payload OR generated_task_spec_ref, depends_on, order, status in PLANNED_TASK_STATUSES, generated_task_spec_path), completion_criteria placeholder, provenance; validation rejects duplicate ids, dependency cycles, dangling deps, self-deps, unsupported/not-allowed kinds, task count over safety_limits.max_tasks; JSON serialization/round-trip.",
+    "conversion_helper": "planned_task_to_task_spec(): pure offline conversion of a planned task into the daemon task-spec dict shape (with optional overrides), no I/O and no enqueue; output accepted by task_spec.validate_task_spec."
+  },
+  "prompt645_validation_tests_passed": true,
+  "prompt645_validation_tests_detail": "tests/test_project_intent_plan_model.py = 17 tests OK: valid/invalid intent (safe, non-raising), unknown allowed kind rejected, safety_limits bounded by daemon caps, intent round-trip; valid plan, kind-not-allowed rejected, duplicate ids, dangling dep, dependency cycle, valid DAG, max_tasks bound, payload-or-ref required, plan round-trip, backward-compatible task-spec conversion, no-execution-side-effects.",
+  "prompt645_no_execution_side_effects": true,
+  "prompt645_backward_compatible_task_spec_conversion": true,
+  "prompt645_existing_runtime_regression_tests_passed": true,
+  "prompt645_regression_detail": "39 tests OK across: test_project_intent_plan_model (17), test_daemon_queue, test_daemon_queue_targeted_fix_retry_integration, test_targeted_fix_retry, test_sandbox_commit_tag_gate. No existing behavior changed (additive new modules only).",
+  "prompt645_integration_boundary_respected": {
+    "no_enqueue": true,
+    "no_codex": true,
+    "no_daemon_queue_call": true,
+    "no_planner_or_llm_decomposition": true,
+    "no_completion_gate_or_loop_controller": true,
+    "no_task_kind_expansion": true,
+    "no_network_or_git_runtime": true
+  },
+  "prompt645_main_repo_safe": true,
+  "prompt645_archive_touched": false,
+  "prompt645_handoff_reports_touched": false,
+  "prompt645_remaining_gaps": [
+    "Planner Layer (goal -> task decomposition / automatic task-spec generation)",
+    "Automatic queue population from a plan (orchestrator)",
+    "Project completion-gate evaluation + project-level auto loop controller",
+    "Broad task-kind support beyond add_function",
+    "Long-running daemon soak proof"
+  ],
+  "prompt645_final_decision": "Created the minimal Project Intent and Project Task Plan data-model layer: pure, offline, deterministic, side-effect-free, with non-raising validation, JSON round-trip, dependency/ordering/bounds checks, daemon-cap-bounded safety limits, and a backward-compatible planned-task -> daemon task-spec conversion helper. 17 model tests + 22 regression tests pass; no existing source modified; no execution side effects; main repo safe. This unblocks the future planner/orchestrator stack without crossing any execution boundary.",
+  "prompt645_next_action": "project_task_generator_from_intent"
+}

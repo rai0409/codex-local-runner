@@ -1,0 +1,75 @@
+{
+  "items": [
+    {
+      "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+      "evidence_path": "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_001_docs_followup_evidence.json",
+      "item_id": "prompt_queue_item_001_docs_followup",
+      "item_type": "documentation_followup",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "tick_index": 1
+    },
+    {
+      "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+      "evidence_path": "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_002_test_followup_evidence.json",
+      "item_id": "prompt_queue_item_002_test_followup",
+      "item_type": "test_followup",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "tick_index": 2
+    },
+    {
+      "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+      "evidence_path": "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_003_code_change_readiness_evidence.json",
+      "item_id": "prompt_queue_item_003_code_change_readiness",
+      "item_type": "small_code_change_readiness",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "tick_index": 3
+    },
+    {
+      "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+      "evidence_path": "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_004_bugfix_readiness_evidence.json",
+      "item_id": "prompt_queue_item_004_bugfix_readiness",
+      "item_type": "bugfix_readiness",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "tick_index": 4
+    },
+    {
+      "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+      "evidence_path": "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_005_multi_responsibility_readiness_evidence.json",
+      "item_id": "prompt_queue_item_005_multi_responsibility_readiness",
+      "item_type": "multi_responsibility_readiness",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "tick_index": 5
+    },
+    {
+      "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+      "evidence_path": "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_006_retry_skip_policy_check_evidence.json",
+      "item_id": "prompt_queue_item_006_retry_skip_policy_check",
+      "item_type": "policy_check",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "tick_index": 6
+    },
+    {
+      "commit_tag_decision_record": "record_only_no_commit_for_queue_item",
+      "evidence_path": "artifacts/autonomous_runtime/prompt677_multi_prompt_queue_scale/prompt_queue_item_007_release_docs_readiness_evidence.json",
+      "item_id": "prompt_queue_item_007_release_docs_readiness",
+      "item_type": "release_docs_readiness",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "tick_index": 7
+    }
+  ],
+  "schema_version": "prompt677_prompt_item_statuses_v1"
+}

@@ -1,0 +1,49 @@
+{
+  "items": [
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "verify documentation followup with no-confirmation profile",
+      "item_id": "prompt679_docs_profile_check",
+      "item_type": "documentation_followup",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "verify test followup with no-confirmation profile",
+      "item_id": "prompt679_tests_profile_check",
+      "item_type": "test_followup",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "bounded": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "execution_profile": "no_confirmation_workspace_write",
+      "goal": "verify validation command policy with no-confirmation profile",
+      "item_id": "prompt679_policy_profile_check",
+      "item_type": "policy_check",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    }
+  ],
+  "max_prompt_cycles": 3,
+  "max_prompt_items": 3,
+  "max_prompt_ticks": 3,
+  "max_retries_per_prompt": 1,
+  "preapproved": true,
+  "schema_version": "prompt679_no_confirmation_prompt_queue_v1"
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "browser_chatgpt_request_envelope_v1",
+  "request_id": "prompt664_next_analysis",
+  "source": "codex_local_runner",
+  "status": "ready",
+  "prompt_text": "Analyze Prompt664 long-running daemon acceptance and propose the next bounded local-only prompt for unattended acceptance. Preserve all safety constraints: no remote push, no PR creation, no merge, no destructive cleanup, no credential/cookie/browser-profile/.env/private-session access, and no arbitrary free-text prompt execution. Focus on explicit operator controls, bounded unattended runtime, evidence retention, health/status reporting, and fail-closed recovery.",
+  "metadata": {
+    "current_capability_boundary": "long_running_daemon_acceptance_proven",
+    "project_level_autonomy_complete": false,
+    "recommended_next_action": "continue_to_unattended_acceptance",
+    "evidence_report": "artifacts/autonomous_runtime/prompt664_report.json",
+    "acceptance_doc": "docs/autonomous_runtime/long_running_daemon_acceptance.md"
+  }
+}

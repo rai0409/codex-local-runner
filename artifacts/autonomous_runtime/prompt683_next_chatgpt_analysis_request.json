@@ -1,0 +1,7 @@
+{
+  "preserve_safety_constraints": true,
+  "prompt_text": "Run Prompt684 to prove release documentation and demo pack acceptance under the same safety constraints.",
+  "recommended_next_action": "continue_to_release_docs_demo_pack_acceptance",
+  "schema_version": "next_chatgpt_analysis_request_v1",
+  "source_prompt": "Prompt683"
+}

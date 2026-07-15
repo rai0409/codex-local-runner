@@ -1,0 +1,6 @@
+{
+  "executed": false,
+  "reason": "arbitrary free-text goal rejected before execution",
+  "rejected": true,
+  "schema_version": "prompt685_rejected_arbitrary_goal_v1"
+}

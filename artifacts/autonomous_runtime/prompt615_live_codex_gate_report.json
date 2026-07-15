@@ -1,0 +1,155 @@
+{
+  "prompt615_archive_touched": false,
+  "prompt615_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt615_live_codex_gate_report.json",
+    "artifacts/autonomous_runtime/prompt615_live_codex_gate_summary.md",
+    "/tmp/prompt615_live_disabled_out/live_codex_gate_state.json",
+    "/tmp/prompt615_live_missing_prompt_out/live_codex_gate_state.json"
+  ],
+  "prompt615_base_commit": "4f9a92b",
+  "prompt615_base_tag": "prompt613-autonomous-runtime-cycle-wiring",
+  "prompt615_cli_flags_added": [
+    "--live-codex-gate",
+    "--live-codex-enable-token",
+    "--live-codex-timeout-seconds",
+    "--live-codex-result-path"
+  ],
+  "prompt615_codex_invoked_during_validation": false,
+  "prompt615_commit_or_tag_performed": false,
+  "prompt615_current_equivalent_functions": [
+    "automation.execution.codex_live_transport.CodexLiveExecutionTransport",
+    "automation.execution.codex_executor_adapter.normalize_result_json",
+    "automation.orchestration.planned_runner.autonomous_cycle.run_autonomous_cycle_metadata",
+    "automation.orchestration.planned_runner.live_codex_gate.run_live_codex_gate"
+  ],
+  "prompt615_default_behavior_preserved": true,
+  "prompt615_disabled_live_gate_smoke": {
+    "codex_invoked": false,
+    "command": "python scripts/run_planned_execution.py --live-codex-gate --generated-prompt-path /tmp/prompt615_missing_prompt.md --out-dir /tmp/prompt615_live_disabled_out --json",
+    "commit_performed": false,
+    "returncode": 0,
+    "status": "disabled",
+    "stop_reason": "disabled_missing_enable_token",
+    "tag_performed": false
+  },
+  "prompt615_final_decision": "success",
+  "prompt615_help_result": {
+    "flags_present": true,
+    "returncode": 0
+  },
+  "prompt615_legacy_ast_parse": "success",
+  "prompt615_legacy_candidates": [
+    {
+      "classification": "already_present_current",
+      "current_equivalent": "automation/orchestration/planned_runner/transports.py",
+      "legacy_location": "class line 257906",
+      "name": "DryRunCodexExecutionTransport"
+    },
+    {
+      "classification": "legacy_suitable_migrate",
+      "legacy_location": "function line 59746",
+      "migrated_as": "live gate prompt-path validation/result bridge pattern",
+      "name": "_build_prompt379_generated_prompt_codex_execution_bridge_state"
+    },
+    {
+      "classification": "present_but_not_wired",
+      "legacy_location": "function line 25157",
+      "name": "_build_local_codex_one_shot_execution_handoff_state",
+      "reason": "old broad handoff surface; current gate uses smaller direct wrapper"
+    },
+    {
+      "classification": "present_but_not_wired",
+      "legacy_location": "function line 25912",
+      "name": "_build_local_codex_one_shot_execution_result_state",
+      "reason": "old broad result surface; current gate writes smaller codex_execution_result.json"
+    },
+    {
+      "classification": "legacy_suitable_migrate",
+      "legacy_location": "function line 64590",
+      "migrated_as": "explicit request/allow, timeout, stdout/stderr/result capture pattern",
+      "name": "_build_prompt417_selected_prompt_codex_execution_adapter_state"
+    },
+    {
+      "classification": "legacy_suitable_migrate",
+      "legacy_location": "function line 66609",
+      "migrated_as": "local-only safety invariants and bounded execution capture pattern",
+      "name": "_build_prompt422_targeted_fix_codex_execution_adapter_state"
+    },
+    {
+      "classification": "skip_out_of_scope",
+      "legacy_location": "not found by exact name",
+      "name": "_build_prompt507_one_shot_live_execution_contract_state",
+      "reason": "no exact legacy symbol found"
+    },
+    {
+      "classification": "skip_out_of_scope",
+      "legacy_location": "not found by exact name",
+      "name": "_build_prompt509_dispatch_ingest_prompt379_execution_result_state",
+      "reason": "no exact legacy symbol found"
+    },
+    {
+      "classification": "skip_out_of_scope",
+      "legacy_location": "function line 117716",
+      "name": "_build_project_browser_autonomous_codex_result_assimilation_state",
+      "reason": "too broad for Phase 1 minimal local gate"
+    },
+    {
+      "classification": "skip_out_of_scope",
+      "legacy_location": "function line 177728",
+      "name": "_build_project_browser_autonomous_codex_execution_gate_state",
+      "reason": "project-browser surface is unrelated to current CLI gate"
+    }
+  ],
+  "prompt615_legacy_candidates_total": 129,
+  "prompt615_legacy_functions_migrated": [
+    "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+    "_build_prompt417_selected_prompt_codex_execution_adapter_state",
+    "_build_prompt422_targeted_fix_codex_execution_adapter_state"
+  ],
+  "prompt615_legacy_source_exists": true,
+  "prompt615_legacy_source_path": "/tmp/old_planned_execution_runner_full.py",
+  "prompt615_live_codex_gate_entrypoint": "automation.orchestration.planned_runner.live_codex_gate.run_live_codex_gate",
+  "prompt615_missing_prompt_live_gate_smoke": {
+    "codex_invoked": false,
+    "command": "python scripts/run_planned_execution.py --live-codex-gate --live-codex-enable-token LOCAL_LIVE_CODEX_GATE_ENABLE --generated-prompt-path /tmp/prompt615_missing_prompt.md --out-dir /tmp/prompt615_live_missing_prompt_out --json",
+    "commit_performed": false,
+    "returncode": 0,
+    "status": "blocked",
+    "stop_reason": "missing_generated_prompt",
+    "tag_performed": false
+  },
+  "prompt615_modified_files": [
+    "scripts/run_planned_execution.py"
+  ],
+  "prompt615_new_files": [
+    "automation/orchestration/planned_runner/live_codex_gate.py",
+    "artifacts/autonomous_runtime/prompt615_live_codex_gate_report.json",
+    "artifacts/autonomous_runtime/prompt615_live_codex_gate_summary.md"
+  ],
+  "prompt615_next_action": "commit_tag_gate",
+  "prompt615_py_compile_results": {
+    "automation/orchestration/planned_runner/autonomous_cycle.py": "success",
+    "automation/orchestration/planned_runner/autonomous_runtime.py": "success",
+    "automation/orchestration/planned_runner/live_codex_gate.py": "success",
+    "scripts/run_planned_execution.py": "success"
+  },
+  "prompt615_safety_constraints_confirmed": {
+    "disabled_by_default": true,
+    "local_only": true,
+    "no_commit": true,
+    "no_merge": true,
+    "no_pr": true,
+    "no_push": true,
+    "no_rollback": true,
+    "no_stage": true,
+    "no_tag": true,
+    "no_unbounded_loop": true,
+    "one_attempt_max": true
+  },
+  "prompt615_source_modified": true,
+  "prompt615_status": "success",
+  "prompt615_valid_live_gate_smoke": {
+    "reason": "valid live Codex execution intentionally not run during validation",
+    "status": "not_run_safely"
+  }
+}

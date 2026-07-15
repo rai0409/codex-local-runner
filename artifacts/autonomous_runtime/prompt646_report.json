@@ -1,0 +1,60 @@
+{
+  "prompt646_status": "success",
+  "prompt646_base_commit": "8d46ca4",
+  "prompt646_base_tags_at_head": ["prompt645-project-intent-schema-task-plan-model"],
+  "prompt646_layer": "project task generator (deterministic, non-LLM, offline)",
+  "prompt646_project_task_generator_created": true,
+  "prompt646_intent_to_plan_generation_created": true,
+  "prompt646_files_created": [
+    "automation/orchestration/planned_runner/project_task_generator.py",
+    "tests/test_project_task_generator_from_intent.py"
+  ],
+  "prompt646_files_modified": [
+    "automation/orchestration/planned_runner/project_task_generator.py",
+    "tests/test_project_task_generator_from_intent.py"
+  ],
+  "prompt646_existing_source_modified": false,
+  "prompt646_api": "generate_project_task_plan(intent, task_descriptors, *, generated_at='') -> {status, errors, warnings, plan}; never raises.",
+  "prompt646_behavior": {
+    "intent_validation": "delegates to validate_project_intent; invalid intent -> status blocked, intent errors, empty plan",
+    "deterministic": "stable task_ids (descriptor id/name slug else <project_id>-t<index:03d>), order=descriptor index, deterministic dependency wiring; no Date.now/random (generated_at is an input)",
+    "allowed_task_kinds_enforced": "descriptor kind defaults to intent.allowed_task_kinds[0]; disallowed kind -> plan validator flags -> status blocked",
+    "max_tasks_bound": "len(descriptors) > intent.safety_limits.max_tasks -> status blocked (no silent truncation)",
+    "payload": "add_function payloads built from intent.repo_target + descriptor target_file/function_name/expression (+ optional verify_commands/expected_unmodified_files/allow_extra_files); missing required fields -> blocked; non-add_function kinds get a generated_task_spec_ref stub and are rejected by the plan validator",
+    "dependency_resolution": "depends_on refs by index (int/str) or descriptor id/name resolved to generated task_ids; unresolved -> blocked; self-dep -> blocked; plan validator additionally rejects cycles/dangling",
+    "plan_validation": "assembled plan validated via validate_project_task_plan; any plan errors surface and set status blocked",
+    "no_side_effects": "no queue/daemon/Codex/network/git; pure data transform"
+  },
+  "prompt646_generated_plan_validation_passed": true,
+  "prompt646_deterministic_generation_tests_passed": true,
+  "prompt646_allowed_task_kinds_enforced": true,
+  "prompt646_max_tasks_bound_enforced": true,
+  "prompt646_backward_compatible_task_spec_conversion": true,
+  "prompt646_no_execution_side_effects": true,
+  "prompt646_validation_tests_detail": "tests/test_project_task_generator_from_intent.py = 12 tests OK: valid intent->valid plan (passes validate_project_task_plan), deterministic ids/order/deps, repeatable output, allowed_task_kinds enforced, max_tasks bound enforced, invalid intent safe-fail, empty descriptors blocked, missing add_function fields blocked, unresolved dependency blocked, valid DAG accepted, backward-compatible task-spec conversion (validate_task_spec accepts with /tmp repo_path override), no-execution-side-effects.",
+  "prompt646_existing_model_tests_passed": true,
+  "prompt646_existing_runtime_regression_tests_passed": true,
+  "prompt646_regression_detail": "39 tests OK across test_project_intent_plan_model (17), test_project_task_generator_from_intent (12), test_daemon_queue, test_targeted_fix_retry. No existing source changed (additive new module + test only).",
+  "prompt646_integration_boundary_respected": {
+    "no_enqueue": true,
+    "no_daemon_queue_call": true,
+    "no_codex": true,
+    "no_llm_decomposition": true,
+    "no_completion_gate": true,
+    "no_loop_controller": true,
+    "no_task_kind_expansion": true,
+    "no_network": true
+  },
+  "prompt646_main_repo_safe": true,
+  "prompt646_archive_touched": false,
+  "prompt646_handoff_reports_touched": false,
+  "prompt646_remaining_gaps": [
+    "Automatic queue population from a project plan (enqueue generated tasks)",
+    "Project completion-gate evaluation + project-level iterate-until-done controller",
+    "Real LLM-driven decomposition (free-text goal -> descriptors)",
+    "Broad task-kind support beyond add_function",
+    "Long-running daemon soak proof"
+  ],
+  "prompt646_final_decision": "Created the deterministic, non-LLM project task generator that converts a validated ProjectIntent + structured task descriptors into a bounded ProjectTaskPlan passing the Prompt645 validators, with deterministic ids/order/dependency wiring, allowed_task_kinds and max_tasks enforcement, safe failure on invalid input, and backward-compatible task-spec conversion. 12 generator tests + 27 model/regression tests pass; no existing source modified; no execution side effects; main repo safe. This is the safe bridge from intent to plan, unblocking automatic queue population.",
+  "prompt646_next_action": "auto_queue_population_from_project_plan"
+}

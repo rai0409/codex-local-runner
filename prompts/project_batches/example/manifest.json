@@ -1,0 +1,28 @@
+{
+  "batch_id": "example",
+  "goal": "Example two-step batch demonstrating the safe prompt-batch controller",
+  "max_prompts": 5,
+  "stop_on_failure": true,
+  "require_clean_source_before_each_prompt": true,
+  "require_commit_tag_per_prompt": true,
+  "prompts": [
+    {
+      "prompt_id": "prompt-example-001",
+      "prompt_path": "001_example_prompt.md",
+      "expected_tag": "prompt-example-001",
+      "expected_report_path": "artifacts/autonomous_runtime/prompt_example_001_report.json",
+      "expected_summary_path": "artifacts/autonomous_runtime/prompt_example_001_summary.md",
+      "required_tests": ["python -m unittest tests.test_project_prompt_batch_controller"],
+      "pass_conditions": {"status_field": "example_001_status", "status_value": "success"}
+    },
+    {
+      "prompt_id": "prompt-example-002",
+      "prompt_path": "002_example_prompt.md",
+      "expected_tag": "prompt-example-002",
+      "expected_report_path": "artifacts/autonomous_runtime/prompt_example_002_report.json",
+      "expected_summary_path": "artifacts/autonomous_runtime/prompt_example_002_summary.md",
+      "required_tests": [],
+      "pass_conditions": {"status_field": "example_002_status", "status_value": "success"}
+    }
+  ]
+}

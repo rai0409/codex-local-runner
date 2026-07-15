@@ -1,0 +1,139 @@
+{
+  "generated_at": "2026-06-11T22:09:59.473216Z",
+  "prompt623_archive_touched": false,
+  "prompt623_artifact_paths": [
+    "artifacts/autonomous_runtime/prompt623_real_change_sandbox_cycle_report.json",
+    "artifacts/autonomous_runtime/prompt623_real_change_sandbox_cycle_summary.md",
+    "/tmp/prompt623_real_change_live_out/live_codex_gate_state.json",
+    "/tmp/prompt623_real_change_live_out/codex_stderr.txt",
+    "/tmp/prompt623_real_change_live_out_attempt2/live_codex_gate_state.json",
+    "/tmp/prompt623_real_change_live_out_attempt2/codex_execution_result.json",
+    "/tmp/prompt623_real_change_live_out_attempt2/codex_stdout.txt",
+    "/tmp/prompt623_real_change_live_out_attempt2/codex_stderr.txt",
+    "/tmp/prompt623_real_change_live_out_attempt2/autonomous_cycle/autonomous_cycle_state.json",
+    "/tmp/prompt623_real_change_prompt.md",
+    "/tmp/prompt623_codex_shim/codex"
+  ],
+  "prompt623_attempt_history": [
+    {
+      "attempt": 1,
+      "calculator_modified": false,
+      "codex_invoked": true,
+      "codex_returncode": 0,
+      "evidence": "codex_stderr.txt line: 'patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings'",
+      "important_finding": "Codex still replied {\"status\":\"success\",...} and the gate classified the run as success based on returncode alone. The gate does not verify actual effects. Known weakness to address in a future prompt.",
+      "out_dir": "/tmp/prompt623_real_change_live_out",
+      "sandbox": "read-only (codex default)"
+    },
+    {
+      "attempt": 2,
+      "calculator_modified": true,
+      "codex_invoked": true,
+      "codex_returncode": 0,
+      "out_dir": "/tmp/prompt623_real_change_live_out_attempt2",
+      "sandbox": "workspace-write (via PATH shim)"
+    }
+  ],
+  "prompt623_base_commit": "bde2d7e",
+  "prompt623_base_tags_at_head": [
+    "prompt622-true-two-cycle-live-proof"
+  ],
+  "prompt623_calculator_modified": true,
+  "prompt623_codex_invoked": true,
+  "prompt623_codex_returncode": 0,
+  "prompt623_dirty_artifacts_isolated": false,
+  "prompt623_dirty_artifacts_note": "Isolation was not needed: the --live-codex-gate route performs no dirty-worktree check, and the main repo was never the runtime target. Nothing was moved, so nothing needed restoring.",
+  "prompt623_dirty_artifacts_restored": true,
+  "prompt623_final_decision": "success",
+  "prompt623_live_gate_state": {
+    "artifact_paths": [
+      "/tmp/prompt623_real_change_live_out_attempt2/live_codex_gate_state.json",
+      "/tmp/prompt623_real_change_live_out_attempt2/live_codex_gate_summary.md",
+      "/tmp/prompt623_real_change_live_out_attempt2/codex_execution_result.json",
+      "/tmp/prompt623_real_change_live_out_attempt2/codex_stdout.txt",
+      "/tmp/prompt623_real_change_live_out_attempt2/codex_stderr.txt",
+      "/tmp/prompt623_real_change_live_out_attempt2/autonomous_cycle/autonomous_cycle_state.json",
+      "/tmp/prompt623_real_change_live_out_attempt2/autonomous_cycle/autonomous_cycle_summary.md"
+    ],
+    "autonomous_cycle_state_path": "/tmp/prompt623_real_change_live_out_attempt2/autonomous_cycle/autonomous_cycle_state.json",
+    "codex_command": [
+      "codex",
+      "exec",
+      "--skip-git-repo-check",
+      "You are operating only inside /tmp/prompt623_real_change_sandbox_repo.\nModify only calculator.py.\nAdd a function named subtract(a, b) that returns a - b.\nDo not modify test_calculator.py.\nDo not create new files.\nDo not commit.\nDo not tag.\nDo not push.\nDo not modify /home/rai/codex-local-runner.\nAfter editing, reply only with:\n{\"status\":\"success\",\"summary\":\"subtract function added\"}\n"
+    ],
+    "codex_invoked": true,
+    "codex_result_path": "/tmp/prompt623_real_change_live_out_attempt2/codex_execution_result.json",
+    "commit_performed": false,
+    "enable_token_valid": true,
+    "enabled": true,
+    "explicit_enable_required": true,
+    "finished_at": "2026-06-11T22:08:38.214754Z",
+    "generated_prompt_exists": true,
+    "generated_prompt_path": "/tmp/prompt623_real_change_prompt.md",
+    "legacy_source_used": true,
+    "live_codex_enabled": true,
+    "local_only": true,
+    "migrated_legacy_functions": [
+      "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+      "_build_prompt417_selected_prompt_codex_execution_adapter_state",
+      "_build_prompt422_targeted_fix_codex_execution_adapter_state"
+    ],
+    "next_action": "commit_tag_gate",
+    "result_assimilation_status": "assimilated",
+    "returncode": 0,
+    "started_at": "2026-06-11T22:08:14.828000Z",
+    "status": "success",
+    "stderr_path": "/tmp/prompt623_real_change_live_out_attempt2/codex_stderr.txt",
+    "stdout_path": "/tmp/prompt623_real_change_live_out_attempt2/codex_stdout.txt",
+    "stop_reason": "codex_completed",
+    "tag_performed": false,
+    "timeout_seconds": 90
+  },
+  "prompt623_live_result_path": "/tmp/prompt623_real_change_live_out_attempt2/codex_execution_result.json",
+  "prompt623_main_repo_source_modified": false,
+  "prompt623_next_action": "commit_tag_real_change_sandbox_cycle",
+  "prompt623_process_returncode": 0,
+  "prompt623_runtime_command": [
+    "python",
+    "/home/rai/codex-local-runner/scripts/run_planned_execution.py",
+    "--live-codex-gate",
+    "--live-codex-enable-token",
+    "LOCAL_LIVE_CODEX_GATE_ENABLE",
+    "--generated-prompt-path",
+    "/tmp/prompt623_real_change_prompt.md",
+    "--live-codex-timeout-seconds",
+    "90",
+    "--repo-path",
+    "/tmp/prompt623_real_change_sandbox_repo",
+    "--out-dir",
+    "/tmp/prompt623_real_change_live_out_attempt2",
+    "--json"
+  ],
+  "prompt623_runtime_commit_or_tag_performed": false,
+  "prompt623_runtime_entrypoint": "scripts/run_planned_execution.py --live-codex-gate (cwd=scratch repo)",
+  "prompt623_runtime_environment_notes": {
+    "cwd": "/tmp/prompt623_real_change_sandbox_repo",
+    "path_shim": "/tmp/prompt623_codex_shim/codex prepended to PATH; inserts --sandbox workspace-write into 'codex exec' so writes are confined to the scratch workspace",
+    "reason": "live_codex_gate hardcodes ['codex','exec','--skip-git-repo-check',<prompt>] with no sandbox flag, and planned_runner files must not be modified (Prompt623 constraint). Codex CLI default sandbox is read-only."
+  },
+  "prompt623_sandbox_py_compile_ok": true,
+  "prompt623_sandbox_runtime_check_ok": true,
+  "prompt623_scratch_commit_count_after": 1,
+  "prompt623_scratch_diff": "diff --git a/calculator.py b/calculator.py\nindex 4693ad3..3b474e9 100644\n--- a/calculator.py\n+++ b/calculator.py\n@@ -1,2 +1,6 @@\n def add(a, b):\n     return a + b\n+\n+\n+def subtract(a, b):\n+    return a - b\n",
+  "prompt623_scratch_git_status_after": [
+    " M calculator.py"
+  ],
+  "prompt623_scratch_git_status_before": [],
+  "prompt623_scratch_initial_commit": "a39e727 initial sandbox fixture",
+  "prompt623_scratch_repo_path": "/tmp/prompt623_real_change_sandbox_repo",
+  "prompt623_scratch_status_note": "__pycache__/ briefly appeared from the validation's own py_compile/import checks (not from Codex) and was removed before final status capture.",
+  "prompt623_scratch_tag_count_after": 0,
+  "prompt623_status": "success",
+  "prompt623_stderr_path": "/tmp/prompt623_real_change_live_out_attempt2/codex_stderr.txt",
+  "prompt623_stdout_path": "/tmp/prompt623_real_change_live_out_attempt2/codex_stdout.txt",
+  "prompt623_subtract_function_present": true,
+  "prompt623_test_file_md5_after": "9ce3e8ec5ff03e9bee3aebfd5f993e06",
+  "prompt623_test_file_md5_before": "9ce3e8ec5ff03e9bee3aebfd5f993e06",
+  "prompt623_test_file_unchanged": true
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": "analysis_artifact_v1",
+  "request_id": "analysis-example-001",
+  "source": "chatgpt_browser",
+  "status": "success",
+  "current_state_summary": "Project-level autonomous loop is live-proven; add_function and add_file task kinds exist; prompt batch controller and external analysis handoff are in place.",
+  "confirmed_completed": ["live project-level E2E", "prompt batch controller", "add_function", "add_file"],
+  "missing_gaps": ["replace_text task kind", "long-running daemon soak"],
+  "recommended_next_action": "generate_prompt_batch",
+  "recommended_prompts": [
+    {
+      "prompt_id": "prompt658-replace-text",
+      "title": "Add replace_text task kind",
+      "body": "Implement a replace_text task kind with strict old/new text validation, no path traversal, no secret paths, bounded content size, and live /tmp acceptance, mirroring add_file safety.",
+      "expected_tag": "prompt658-replace-text-task-kind",
+      "expected_report_path": "artifacts/autonomous_runtime/prompt658_report.json",
+      "expected_summary_path": "artifacts/autonomous_runtime/prompt658_summary.md",
+      "pass_conditions": {"status_field": "prompt658_status", "status_value": "success"}
+    }
+  ],
+  "evaluation_score_out_of_100": 93,
+  "risk_notes": ["preserve strict effect gate", "keep path/secret validation strict"]
+}

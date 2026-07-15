@@ -1,0 +1,33 @@
+{
+  "schema_version": "long_running_daemon_queue_v1",
+  "ticks": [
+    {
+      "approval_id": "prompt665_preapproval_1",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "prompt_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/preapproved_queue/prompts/prompt665_item_1_unattended_local_proof.md",
+      "status": "done",
+      "tick_id": "prompt665_item_1_unattended_local_proof",
+      "tick_index": 1
+    },
+    {
+      "approval_id": "prompt665_preapproval_2",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "prompt_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/preapproved_queue/prompts/prompt665_item_2_unattended_local_proof.md",
+      "status": "done",
+      "tick_id": "prompt665_item_2_unattended_local_proof",
+      "tick_index": 2
+    },
+    {
+      "approval_id": "prompt665_preapproval_3",
+      "approved_for_execution": true,
+      "preapproved": true,
+      "prompt_path": "artifacts/autonomous_runtime/prompt665_bounded_unattended/preapproved_queue/prompts/prompt665_item_3_unattended_local_proof.md",
+      "status": "done",
+      "tick_id": "prompt665_item_3_unattended_local_proof",
+      "tick_index": 3
+    }
+  ],
+  "updated_at": "2026-06-27T05:58:25.146251Z"
+}

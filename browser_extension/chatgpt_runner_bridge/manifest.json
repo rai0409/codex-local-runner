@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Runner Bridge",
-  "version": "0.1.0",
-  "description": "One-click bridge from logged-in ChatGPT tab to local runner server.",
+  "version": "0.1.1",
+  "description": "Operator-controlled ChatGPT page bridge that emits local validation envelopes.",
   "permissions": [
     "activeTab",
     "storage",
@@ -11,7 +11,7 @@
   "host_permissions": [
     "http://127.0.0.1:8765/*",
     "http://localhost:8765/*",
-    "http://172.25.238.255:8765/*"
+    "http://*/*"
   ],
   "action": {
     "default_title": "Run ChatGPT Bridge"
@@ -19,6 +19,7 @@
   "background": {
     "service_worker": "background.js"
   },
+  "options_page": "options.html",
   "content_scripts": [
     {
       "matches": [

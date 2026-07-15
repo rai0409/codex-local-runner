@@ -1,0 +1,432 @@
+{
+  "current_capability_boundary_before": "extended_operational_soak_50_ticks_proven",
+  "current_head_before": "a3c33057a4fd4d5e6b0c93a6816b126fc5c56066",
+  "generated_at": "2026-06-27T09:43:21.327147Z",
+  "next_prompt_sequence": [
+    {
+      "categories": [
+        14,
+        20,
+        21,
+        22,
+        23
+      ],
+      "prompt_id": "Prompt673",
+      "safety": "local-only; no README/release pack; no remote/destructive/secret access",
+      "target": "Validate one scoped documentation update as a practical local-only task.",
+      "title": "documentation_update_real_task_acceptance"
+    },
+    {
+      "categories": [
+        8,
+        15,
+        23
+      ],
+      "prompt_id": "Prompt674",
+      "safety": "repository-supported pytest only; no network or secret access",
+      "target": "Add one focused test for an existing helper and prove queue/state/evidence handling.",
+      "title": "test_addition_real_task_acceptance"
+    },
+    {
+      "categories": [
+        5,
+        6,
+        7,
+        9,
+        16,
+        19,
+        23
+      ],
+      "prompt_id": "Prompt675",
+      "safety": "bounded source edits; no broad features; no remote actions",
+      "target": "Implement one small local-only helper or CLI enhancement with tests.",
+      "title": "small_code_change_real_task_acceptance"
+    },
+    {
+      "categories": [
+        10,
+        11,
+        17
+      ],
+      "prompt_id": "Prompt676",
+      "safety": "controlled failing test; no fabricated pass evidence",
+      "target": "Prove a red-green bugfix flow for a controlled local defect.",
+      "title": "failing_test_bugfix_real_task_acceptance"
+    },
+    {
+      "categories": [
+        16,
+        18,
+        22,
+        23
+      ],
+      "prompt_id": "Prompt677",
+      "safety": "max 8 items; no README/release docs; no destructive cleanup",
+      "target": "Run a bounded 5-8 item real-task queue combining docs, tests, and a tiny code change.",
+      "title": "multi_responsibility_queue_real_task_acceptance"
+    },
+    {
+      "categories": [
+        24,
+        25
+      ],
+      "prompt_id": "Prompt678",
+      "safety": "local-only draft; no push, PR, merge, or public publishing",
+      "target": "Create local release documentation and demo pack after real-task validation passes.",
+      "title": "release_documentation_demo_pack"
+    }
+  ],
+  "next_prompt_sequence_created": true,
+  "prompt671_baseline": {
+    "capability_boundary_verified": true,
+    "project_level_autonomy_complete": true,
+    "prompt671_extended_soak_artifact_exists": true,
+    "prompt671_report_exists": true,
+    "prompt671_status_success": true,
+    "prompt671_tag_reachable": true
+  },
+  "prompt671_verified": true,
+  "responsibilities": [
+    {
+      "category_id": 1,
+      "category_name": "Safe project goal intake",
+      "confidence_score_out_of_100": 95,
+      "evidence_source": "Prompt667-671 safe goal gates and unsafe goal rejection reports",
+      "missing_proof": "None for local-only bounded goals.",
+      "pass_criteria": "Unsafe wording is rejected and safe goal is accepted.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Use a bounded local-only real development goal.",
+      "safety_notes": "Keep remote/destructive/secret access prohibited.",
+      "status": "proven"
+    },
+    {
+      "category_id": 2,
+      "category_name": "Safe task queue generation/loading",
+      "confidence_score_out_of_100": 95,
+      "evidence_source": "Prompt668 queue=3, Prompt669 queue=10, Prompt670 queue=24, Prompt671 queue=50",
+      "missing_proof": "General project decomposition from arbitrary goals is not proven.",
+      "pass_criteria": "Queue is deterministic, bounded, and local-only.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Generate a queue for one local documentation task.",
+      "safety_notes": "Do not execute arbitrary free-text prompts.",
+      "status": "proven"
+    },
+    {
+      "category_id": 3,
+      "category_name": "Unattended daemon execution",
+      "confidence_score_out_of_100": 96,
+      "evidence_source": "Prompt667-671 unattended run reports",
+      "missing_proof": "None for bounded local operational runs.",
+      "pass_criteria": "No human intervention is recorded during the run.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Run a short unattended documentation validation queue.",
+      "safety_notes": "Keep hard tick/item limits.",
+      "status": "proven"
+    },
+    {
+      "category_id": 4,
+      "category_name": "Internal Codex executor safety-gated execution",
+      "confidence_score_out_of_100": 95,
+      "evidence_source": "Prompt671 internal_codex_executor_used and safety gate evidence",
+      "missing_proof": "Practical code-modification executor use remains only indirectly proven.",
+      "pass_criteria": "Safety gate invocation and local-only evidence are recorded.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Use executor through gate for a tiny local documentation task.",
+      "safety_notes": "No free-text arbitrary execution.",
+      "status": "proven"
+    },
+    {
+      "category_id": 5,
+      "category_name": "Durable state management",
+      "confidence_score_out_of_100": 97,
+      "evidence_source": "Prompt671 run_state.json and state_queue_consistency_verified",
+      "missing_proof": "None for current bounded scale.",
+      "pass_criteria": "State persists after every item.",
+      "recommended_prompt_id": "Prompt675",
+      "safe_validation_task": "Preserve state through a small real task queue.",
+      "safety_notes": "No private session state.",
+      "status": "proven"
+    },
+    {
+      "category_id": 6,
+      "category_name": "Durable queue management",
+      "confidence_score_out_of_100": 97,
+      "evidence_source": "Prompt671 task_queue.json and durable_queue_persisted",
+      "missing_proof": "None for current bounded scale.",
+      "pass_criteria": "Queue persists with item statuses.",
+      "recommended_prompt_id": "Prompt675",
+      "safe_validation_task": "Preserve queue through a small real task queue.",
+      "safety_notes": "No unbounded queue expansion.",
+      "status": "proven"
+    },
+    {
+      "category_id": 7,
+      "category_name": "Lock / duplicate lock / stale lock handling",
+      "confidence_score_out_of_100": 96,
+      "evidence_source": "Prompt670 and Prompt671 lock/stale-lock reports",
+      "missing_proof": "None for local pidfile lock behavior.",
+      "pass_criteria": "Duplicate and stale lock behavior are recorded.",
+      "recommended_prompt_id": "Prompt675",
+      "safe_validation_task": "Include duplicate/stale lock checks in a real-task dry run.",
+      "safety_notes": "No destructive lock cleanup outside prompt-owned paths.",
+      "status": "proven"
+    },
+    {
+      "category_id": 8,
+      "category_name": "Interruption and resume",
+      "confidence_score_out_of_100": 94,
+      "evidence_source": "Prompt670 interruption/resume and Prompt671 controlled_interruption_count=2",
+      "missing_proof": "Real development task resume after file edit is not proven.",
+      "pass_criteria": "Resume continues from saved state without duplicate work.",
+      "recommended_prompt_id": "Prompt674",
+      "safe_validation_task": "Interrupt and resume a bounded test-addition task.",
+      "safety_notes": "Prompt-owned artifacts only.",
+      "status": "proven"
+    },
+    {
+      "category_id": 9,
+      "category_name": "Operator stop handling",
+      "confidence_score_out_of_100": 95,
+      "evidence_source": "Prompt670 and Prompt671 operator_stop_verified",
+      "missing_proof": "None for local bounded stop signal simulation.",
+      "pass_criteria": "Terminal stop reason is operator stop.",
+      "recommended_prompt_id": "Prompt675",
+      "safe_validation_task": "Exercise operator stop during a small validation queue.",
+      "safety_notes": "Do not require human intervention mid-run.",
+      "status": "proven"
+    },
+    {
+      "category_id": 10,
+      "category_name": "Retry / skip / stop policy",
+      "confidence_score_out_of_100": 94,
+      "evidence_source": "Prompt670 and Prompt671 retry/skip/stop policy reports",
+      "missing_proof": "Real failing-test retry policy is not proven.",
+      "pass_criteria": "Retry count and policy result are recorded.",
+      "recommended_prompt_id": "Prompt676",
+      "safe_validation_task": "Inject one local failing test then fix or skip by policy.",
+      "safety_notes": "Retry attempts remain <=2.",
+      "status": "proven"
+    },
+    {
+      "category_id": 11,
+      "category_name": "Failure threshold enforcement",
+      "confidence_score_out_of_100": 96,
+      "evidence_source": "Prompt670 and Prompt671 failure_threshold_stop_verified",
+      "missing_proof": "None for controlled local failures.",
+      "pass_criteria": "Stop occurs at configured threshold.",
+      "recommended_prompt_id": "Prompt676",
+      "safe_validation_task": "Retain failure threshold in the failing-test real task.",
+      "safety_notes": "No destructive recovery.",
+      "status": "proven"
+    },
+    {
+      "category_id": 12,
+      "category_name": "Evidence capture and evidence summary generation",
+      "confidence_score_out_of_100": 95,
+      "evidence_source": "Prompt667-671 evidence summaries and per-item evidence",
+      "missing_proof": "Evidence for practical code diffs needs proof.",
+      "pass_criteria": "Evidence summary remains readable and bounded.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Attach diff/test evidence to each real development task.",
+      "safety_notes": "Exclude executor_runs and unrelated artifacts from commits.",
+      "status": "proven"
+    },
+    {
+      "category_id": 13,
+      "category_name": "Completion gate / operational gate execution",
+      "confidence_score_out_of_100": 94,
+      "evidence_source": "Project completion gate reports through Prompt671",
+      "missing_proof": "Release gate is not proven.",
+      "pass_criteria": "Gate report confirms current capability remains intact.",
+      "recommended_prompt_id": "Prompt675",
+      "safe_validation_task": "Run completion gate after each real-task validation.",
+      "safety_notes": "No fake completion booleans.",
+      "status": "proven"
+    },
+    {
+      "category_id": 14,
+      "category_name": "Documentation generation/update",
+      "confidence_score_out_of_100": 55,
+      "evidence_source": "Prompt667-671 generated acceptance docs",
+      "missing_proof": "A useful real repository documentation update has not been validated.",
+      "pass_criteria": "Doc diff is scoped, reviewed by tests/checks, and local-only.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Update one existing docs page with current local-runner capability boundaries.",
+      "safety_notes": "Do not generate final release README yet.",
+      "status": "partially_proven"
+    },
+    {
+      "category_id": 15,
+      "category_name": "Test addition",
+      "confidence_score_out_of_100": 60,
+      "evidence_source": "Prompt667-671 focused acceptance tests were added",
+      "missing_proof": "A real behavior test for an existing module remains unproven.",
+      "pass_criteria": "New test fails before or proves missing coverage, then passes.",
+      "recommended_prompt_id": "Prompt674",
+      "safe_validation_task": "Add one focused test for an existing queue/state helper edge case.",
+      "safety_notes": "No network or secrets.",
+      "status": "partially_proven"
+    },
+    {
+      "category_id": 16,
+      "category_name": "Small code change",
+      "confidence_score_out_of_100": 50,
+      "evidence_source": "Prompt667-671 acceptance implementation changes",
+      "missing_proof": "A practical small feature or helper change outside acceptance scaffolding is not proven.",
+      "pass_criteria": "Focused tests and relevant suites pass.",
+      "recommended_prompt_id": "Prompt675",
+      "safe_validation_task": "Implement a tiny local-only CLI/report helper improvement.",
+      "safety_notes": "No broad feature changes.",
+      "status": "partially_proven"
+    },
+    {
+      "category_id": 17,
+      "category_name": "Bugfix from failing test",
+      "confidence_score_out_of_100": 25,
+      "evidence_source": "No durable evidence of red-green bugfix workflow for a real defect",
+      "missing_proof": "Need a controlled failing test and minimal fix.",
+      "pass_criteria": "Test fails before fix evidence and passes after fix.",
+      "recommended_prompt_id": "Prompt676",
+      "safe_validation_task": "Create a local failing test for a small parser/helper edge case, then fix it.",
+      "safety_notes": "No fabricated failures.",
+      "status": "unproven"
+    },
+    {
+      "category_id": 18,
+      "category_name": "Multi-file minor refactor",
+      "confidence_score_out_of_100": 20,
+      "evidence_source": "No real multi-file refactor acceptance evidence",
+      "missing_proof": "Need bounded refactor with behavior preservation.",
+      "pass_criteria": "No behavior changes and tests pass.",
+      "recommended_prompt_id": "Prompt677",
+      "safe_validation_task": "Refactor a duplicated local helper across two modules with tests unchanged.",
+      "safety_notes": "Keep scope under three source files.",
+      "status": "unproven"
+    },
+    {
+      "category_id": 19,
+      "category_name": "CLI or script enhancement",
+      "confidence_score_out_of_100": 45,
+      "evidence_source": "Execution adapters and scripts exist, but no real CLI enhancement acceptance",
+      "missing_proof": "Need one useful CLI/script change with tests.",
+      "pass_criteria": "CLI help and tests demonstrate the enhancement.",
+      "recommended_prompt_id": "Prompt675",
+      "safe_validation_task": "Add a dry-run flag or JSON output option to a local inspection script.",
+      "safety_notes": "No remote actions.",
+      "status": "partially_proven"
+    },
+    {
+      "category_id": 20,
+      "category_name": "Report/evidence generation",
+      "confidence_score_out_of_100": 96,
+      "evidence_source": "Prompt667-671 reports and summaries",
+      "missing_proof": "None for acceptance reporting.",
+      "pass_criteria": "Machine and human reports are written.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Continue bounded report generation for real tasks.",
+      "safety_notes": "Do not include unrelated historical artifacts.",
+      "status": "proven"
+    },
+    {
+      "category_id": 21,
+      "category_name": "Existing artifact audit",
+      "confidence_score_out_of_100": 90,
+      "evidence_source": "Prompt668-671 prior artifact preservation checks",
+      "missing_proof": "Broader stale artifact hygiene policy is not proven.",
+      "pass_criteria": "Protected artifacts are unchanged.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Audit only Prompt673-owned artifacts and protected prior reports.",
+      "safety_notes": "Do not clean or delete unrelated artifacts.",
+      "status": "proven"
+    },
+    {
+      "category_id": 22,
+      "category_name": "Queue planning from a project goal",
+      "confidence_score_out_of_100": 65,
+      "evidence_source": "Prompt668-671 deterministic queues from explicit goals",
+      "missing_proof": "General queue planning from practical development goals is not proven.",
+      "pass_criteria": "Queue maps each item to a concrete validation artifact.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Plan a 3-5 item queue for one documentation update.",
+      "safety_notes": "No arbitrary free-text prompt execution.",
+      "status": "partially_proven"
+    },
+    {
+      "category_id": 23,
+      "category_name": "Validation and quality gate execution",
+      "confidence_score_out_of_100": 92,
+      "evidence_source": "Prompt667-671 pytest and node checks",
+      "missing_proof": "Large project-wide validation remains bounded by command scope.",
+      "pass_criteria": "Repository-supported pytest command and node checks pass.",
+      "recommended_prompt_id": "Prompt673",
+      "safe_validation_task": "Run focused and relevant validations for each real task.",
+      "safety_notes": "No network-dependent validation.",
+      "status": "proven"
+    },
+    {
+      "category_id": 24,
+      "category_name": "Final summary / release note generation",
+      "confidence_score_out_of_100": 45,
+      "evidence_source": "Prompt summaries exist for acceptance work",
+      "missing_proof": "User-facing release note/demo pack is not proven.",
+      "pass_criteria": "Draft is accurate, bounded, and references evidence.",
+      "recommended_prompt_id": "Prompt678",
+      "safe_validation_task": "Generate a local-only release note draft after real tasks pass.",
+      "safety_notes": "Not before practical tasks are validated.",
+      "status": "partially_proven"
+    },
+    {
+      "category_id": 25,
+      "category_name": "README / demo / GitHub public documentation",
+      "confidence_score_out_of_100": 15,
+      "evidence_source": "Prompt672 explicitly defers final release README",
+      "missing_proof": "Need responsibility proof before public-facing docs.",
+      "pass_criteria": "Docs are local-only and do not claim unsupported capabilities.",
+      "recommended_prompt_id": "Prompt678",
+      "safe_validation_task": "Prepare a local demo/readme pack after real-task validation succeeds.",
+      "safety_notes": "No GitHub publishing.",
+      "status": "unproven"
+    },
+    {
+      "category_id": 26,
+      "category_name": "Remote git operation",
+      "confidence_score_out_of_100": 0,
+      "evidence_source": "User and repository safety rules prohibit push/PR/merge",
+      "missing_proof": "Intentionally not pursued.",
+      "pass_criteria": "Any recommendation must exclude remote git operations.",
+      "recommended_prompt_id": "none",
+      "safe_validation_task": "No safe validation task; keep prohibited.",
+      "safety_notes": "Remote push, PR creation, and merge remain forbidden.",
+      "status": "out_of_scope_for_safety"
+    },
+    {
+      "category_id": 27,
+      "category_name": "Credential/session/browser-profile handling",
+      "confidence_score_out_of_100": 0,
+      "evidence_source": "Prompt667-671 credential/cookie/browser-profile/.env prevention evidence",
+      "missing_proof": "Intentionally not pursued.",
+      "pass_criteria": "Any recommendation must exclude credential/session access.",
+      "recommended_prompt_id": "none",
+      "safe_validation_task": "No safe validation task; keep prohibited.",
+      "safety_notes": "Never read credentials, cookies, browser profiles, .env values, or private session files.",
+      "status": "out_of_scope_for_safety"
+    }
+  ],
+  "responsibility_categories_count": 27,
+  "responsibility_counts": {
+    "out_of_scope_for_safety": 2,
+    "partially_proven": 6,
+    "proven": 16,
+    "unproven": 3
+  },
+  "safe_real_task_plan_created": true,
+  "schema_version": "prompt672_responsibility_matrix_v1",
+  "score_summary": {
+    "current_autonomy_infrastructure_score_out_of_100": 95,
+    "current_operational_durability_score_out_of_100": 96,
+    "current_real_development_responsibility_score_out_of_100": 38,
+    "current_release_documentation_score_out_of_100": 22
+  },
+  "selected_target": "responsibility_scope_matrix_and_real_task_plan",
+  "unsafe_tasks_excluded": true
+}

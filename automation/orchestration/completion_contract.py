@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 from typing import Mapping
 
@@ -40,6 +42,7 @@ COMPLETION_EVIDENCE_STATUSES = {
     "sufficient",
     "partial",
     "missing",
+    "local_only_sufficient",
 }
 
 LIFECYCLE_ALIGNMENT_STATUSES = {
@@ -59,6 +62,58 @@ COMPLETION_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "completion_manual_required",
     "completion_replan_required",
     "completion_lifecycle_alignment_status",
+)
+
+_PROMPT353_LOCAL_ONLY_OBJECTIVE_SUMMARY = (
+    "Prompt353 local autonomous ordering repair runtime verification"
+)
+_PROMPT353_LOCAL_ONLY_PROGRESS_RULE_ID = "proceed_all_completed_and_verified"
+_PROMPT353_LOCAL_ONLY_RESULT_ACCEPTANCE = "accept_current_result"
+_PROMPT353_LOCAL_ONLY_ACCEPTANCE_STATUSES = {
+    "defined",
+    "complete",
+    "satisfied",
+    "accepted",
+}
+_PROMPT353_LOCAL_ONLY_EXECUTION_STATUSES = {
+    "succeeded",
+    "success",
+    "completed",
+    "complete",
+}
+_PROMPT353_LOCAL_ONLY_EXECUTION_OUTCOMES = {
+    "no_changes",
+    "no_change",
+    "completed_no_changes",
+}
+_PROMPT353_LOCAL_ONLY_CLASSIFICATIONS = {
+    "targeted_contract_fix_completed_no_changes",
+}
+_PROMPT353_LOCAL_ONLY_ROUTE_DECISIONS = {
+    "manual_review_no_changes_after_targeted_fix",
+}
+_PROMPT353_LOCAL_ONLY_ROUTE_NEXT_ACTIONS = {
+    "manual_review_targeted_contract_fix_no_changes",
+}
+_PROMPT353_NEGATIVE_EVIDENCE_TOKENS = (
+    "traceback",
+    "unboundlocalerror",
+)
+_PROMPT167_PLACEHOLDER_TOKENS = (
+    "prompt167 smoke run",
+    "prompt167-smoke",
+    "prompt167-smoke-roadmap",
+)
+_PROMPT353_NON_LOCAL_ARTIFACT_MARKERS = (
+    "github",
+    "approval",
+    "push",
+    "merge",
+    "rollback",
+    "pull_request",
+    "pull-request",
+    "pr_execution",
+    "pr_created",
 )
 
 
@@ -122,6 +177,10 @@ def _normalize_enum(value: Any, *, allowed: set[str], default: str) -> str:
     return default
 
 
+def _normalize_mapping(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
 def _count_defined_acceptance(criteria: Any) -> tuple[int, int]:
     if not isinstance(criteria, list):
         return 0, 0
@@ -145,6 +204,250 @@ def _dedupe(values: list[str]) -> list[str]:
         seen.add(item)
         ordered.append(item)
     return ordered
+
+
+def _read_json_mapping(path_text: str) -> dict[str, Any]:
+    normalized_path = _normalize_text(path_text, default="")
+    if not normalized_path:
+        return {}
+    try:
+        payload = json.loads(Path(normalized_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return {}
+    return _normalize_mapping(payload)
+
+
+def _iter_text_fragments(value: Any) -> list[str]:
+    if isinstance(value, Mapping):
+        fragments: list[str] = []
+        for nested in value.values():
+            fragments.extend(_iter_text_fragments(nested))
+        return fragments
+    if isinstance(value, list):
+        fragments: list[str] = []
+        for nested in value:
+            fragments.extend(_iter_text_fragments(nested))
+        return fragments
+    text = _normalize_text(value, default="")
+    return [text] if text else []
+
+
+def _contains_any_token(value: Any, tokens: tuple[str, ...]) -> bool:
+    lowered = [fragment.lower() for fragment in _iter_text_fragments(value)]
+    return any(token in fragment for fragment in lowered for token in tokens)
+
+
+def _planning_bundle_has_prompt167_placeholder(artifacts_dir: Path) -> bool:
+    bundle_payload: dict[str, Any] = {}
+    for filename in ("project_brief.json", "pr_plan.json", "roadmap.json"):
+        try:
+            payload = json.loads((artifacts_dir / filename).read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            continue
+        if isinstance(payload, Mapping):
+            bundle_payload[filename] = dict(payload)
+    return _contains_any_token(bundle_payload, _PROMPT167_PLACEHOLDER_TOKENS)
+
+
+def _is_prompt353_non_local_required_artifact(artifact_name: str) -> bool:
+    normalized = _normalize_text(artifact_name, default="").lower()
+    if not normalized:
+        return False
+    return any(marker in normalized for marker in _PROMPT353_NON_LOCAL_ARTIFACT_MARKERS)
+
+
+def evaluate_prompt353_local_only_verified_no_change_posture(
+    *,
+    objective_contract_payload: Mapping[str, Any] | None,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_result_contract_payload: Mapping[str, Any] | None = None,
+    next_action_payload: Mapping[str, Any] | None = None,
+    completion_contract_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    objective = _normalize_mapping(objective_contract_payload)
+    run_state = _normalize_mapping(run_state_payload)
+    execution_result = _normalize_mapping(execution_result_contract_payload)
+    next_action = _normalize_mapping(next_action_payload)
+    completion = _normalize_mapping(completion_contract_payload)
+
+    objective_summary = _normalize_text(
+        objective.get("objective_summary") or run_state.get("objective_summary"),
+        default="",
+    )
+    requested_outcome = _normalize_text(
+        objective.get("requested_outcome") or run_state.get("requested_outcome"),
+        default="",
+    )
+    objective_status = _normalize_text(
+        objective.get("objective_status") or run_state.get("objective_contract_status"),
+        default="",
+    )
+    acceptance_status = _normalize_text(
+        objective.get("acceptance_status") or run_state.get("objective_acceptance_status"),
+        default="",
+    )
+    progression_rule_id = _normalize_text(
+        run_state.get("progression_rule_id") or next_action.get("progression_rule_id"),
+        default="",
+    )
+    result_acceptance = _normalize_text(
+        run_state.get("result_acceptance") or next_action.get("result_acceptance"),
+        default="",
+    )
+    execution_result_status = _normalize_text(
+        execution_result.get("execution_result_status") or run_state.get("execution_result_status"),
+        default="",
+    )
+    execution_result_outcome = _normalize_text(
+        execution_result.get("execution_result_outcome") or run_state.get("execution_result_outcome"),
+        default="",
+    )
+
+    post_fix_status = _normalize_text(
+        run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_status")
+        or run_state.get("local_post_targeted_contract_fix_status"),
+        default="",
+    )
+    post_fix_classification = _normalize_text(
+        run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_classification")
+        or run_state.get("local_post_targeted_contract_fix_classification"),
+        default="",
+    )
+    post_fix_route_decision = _normalize_text(
+        run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_route_decision")
+        or run_state.get("local_post_targeted_contract_fix_route_decision"),
+        default="",
+    )
+    post_fix_next_action = _normalize_text(
+        run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_next_action")
+        or run_state.get("local_post_targeted_contract_fix_next_action"),
+        default="",
+    )
+    unexpected_tracked_file_count = 0
+    raw_unexpected_count = (
+        run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_unexpected_tracked_file_count")
+        if "project_browser_autonomous_local_post_targeted_contract_fix_unexpected_tracked_file_count"
+        in run_state
+        else run_state.get("local_post_targeted_contract_fix_unexpected_tracked_file_count")
+    )
+    if isinstance(raw_unexpected_count, int) and raw_unexpected_count >= 0:
+        unexpected_tracked_file_count = raw_unexpected_count
+
+    diff_capture = _read_json_mapping(
+        _normalize_text(
+            run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_diff_capture_path")
+            or run_state.get("local_post_targeted_contract_fix_diff_capture_path"),
+            default="",
+        )
+    )
+    route_decision_payload = _read_json_mapping(
+        _normalize_text(
+            run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_route_decision_path")
+            or run_state.get("local_post_targeted_contract_fix_route_decision_path"),
+            default="",
+        )
+    )
+
+    prompt353_current_objective = (
+        objective_summary == _PROMPT353_LOCAL_ONLY_OBJECTIVE_SUMMARY
+        and bool(requested_outcome)
+        and objective_status == "complete"
+        and acceptance_status in _PROMPT353_LOCAL_ONLY_ACCEPTANCE_STATUSES
+    )
+    progression_verified = (
+        progression_rule_id == _PROMPT353_LOCAL_ONLY_PROGRESS_RULE_ID
+        and result_acceptance == _PROMPT353_LOCAL_ONLY_RESULT_ACCEPTANCE
+    )
+    execution_verified = (
+        execution_result_status in _PROMPT353_LOCAL_ONLY_EXECUTION_STATUSES
+        and execution_result_outcome in _PROMPT353_LOCAL_ONLY_EXECUTION_OUTCOMES
+    ) or post_fix_classification in _PROMPT353_LOCAL_ONLY_CLASSIFICATIONS
+    post_fix_verified = (
+        post_fix_status in {"", "completed"}
+        and post_fix_classification in _PROMPT353_LOCAL_ONLY_CLASSIFICATIONS
+        and post_fix_route_decision in {"", *_PROMPT353_LOCAL_ONLY_ROUTE_DECISIONS}
+        and post_fix_next_action in {"", *_PROMPT353_LOCAL_ONLY_ROUTE_NEXT_ACTIONS}
+        and unexpected_tracked_file_count == 0
+    )
+
+    negative_runtime_evidence = _contains_any_token(
+        [diff_capture, route_decision_payload],
+        _PROMPT353_NEGATIVE_EVIDENCE_TOKENS,
+    ) or _normalize_bool(diff_capture.get("stdout_contains_error_hint")) or _normalize_bool(
+        diff_capture.get("stderr_contains_error_hint")
+    )
+
+    prompt167_placeholder_detected = _contains_any_token(
+        [diff_capture, route_decision_payload],
+        _PROMPT167_PLACEHOLDER_TOKENS,
+    )
+    for path_text in (
+        _normalize_text(
+            run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_diff_capture_path")
+            or run_state.get("local_post_targeted_contract_fix_diff_capture_path"),
+            default="",
+        ),
+        _normalize_text(
+            run_state.get("project_browser_autonomous_local_post_targeted_contract_fix_route_decision_path")
+            or run_state.get("local_post_targeted_contract_fix_route_decision_path"),
+            default="",
+        ),
+    ):
+        if not path_text:
+            continue
+        candidate_dir = Path(path_text).parent
+        if _planning_bundle_has_prompt167_placeholder(candidate_dir):
+            prompt167_placeholder_detected = True
+            break
+
+    required_artifacts = _normalize_string_list(objective.get("required_artifacts"), sort_items=False)
+    ignored_required_artifacts = [
+        artifact_name
+        for artifact_name in required_artifacts
+        if _is_prompt353_non_local_required_artifact(artifact_name)
+    ]
+
+    post_fix_fields_absent = (
+        not post_fix_status
+        and not post_fix_classification
+        and not post_fix_route_decision
+        and not post_fix_next_action
+    )
+
+    local_only_execution_proves_no_change = bool(
+        execution_result_status in _PROMPT353_LOCAL_ONLY_EXECUTION_STATUSES
+        and execution_result_outcome in _PROMPT353_LOCAL_ONLY_EXECUTION_OUTCOMES
+    )
+
+    local_only_completion_closed = bool(
+        _normalize_text(completion.get("local_only_closure_mode"), default="")
+        == "prompt353_verified_no_change"
+        and _normalize_text(completion.get("completion_status"), default="")
+        == "done_and_safely_closed"
+        and _normalize_text(completion.get("safe_closure_status"), default="")
+        == "safely_closed"
+        and _normalize_text(completion.get("closure_decision"), default="") == "close"
+        and not _normalize_bool(completion.get("completion_manual_required"))
+    )
+
+    eligible = bool(
+        prompt353_current_objective
+        and (
+            (
+                progression_verified
+                and execution_verified
+                and (post_fix_verified or (post_fix_fields_absent and local_only_execution_proves_no_change))
+            )
+            or local_only_completion_closed
+        )
+        and not negative_runtime_evidence
+        and not prompt167_placeholder_detected
+    )
+
+    return {
+        "eligible": eligible,
+        "ignored_required_artifacts": ignored_required_artifacts,
+    }
 
 
 def _build_lifecycle_alignment_status(
@@ -185,6 +488,8 @@ def build_completion_contract_surface(
     objective_contract_payload: Mapping[str, Any] | None,
     run_state_payload: Mapping[str, Any] | None,
     artifact_presence: Mapping[str, Any] | None = None,
+    execution_result_contract_payload: Mapping[str, Any] | None = None,
+    next_action_payload: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     objective = dict(objective_contract_payload or {})
     run_state = dict(run_state_payload or {})
@@ -292,7 +597,21 @@ def build_completion_contract_surface(
     execution_complete_not_accepted = bool(execution_completed and done_status != "done")
 
     required_artifacts = _normalize_string_list(objective.get("required_artifacts"), sort_items=True)
-    required_evidence = _build_required_evidence(required_artifacts=required_artifacts)
+    local_only_posture = evaluate_prompt353_local_only_verified_no_change_posture(
+        objective_contract_payload=objective,
+        run_state_payload=run_state,
+        execution_result_contract_payload=execution_result_contract_payload,
+        next_action_payload=next_action_payload,
+    )
+    ignored_required_artifacts = set(
+        _normalize_string_list(local_only_posture.get("ignored_required_artifacts"), sort_items=False)
+    )
+    effective_required_artifacts = [
+        artifact_name
+        for artifact_name in required_artifacts
+        if artifact_name not in ignored_required_artifacts
+    ]
+    required_evidence = _build_required_evidence(required_artifacts=effective_required_artifacts)
 
     acceptance_total, acceptance_defined = _count_defined_acceptance(objective.get("acceptance_criteria"))
 
@@ -303,19 +622,21 @@ def build_completion_contract_surface(
         missing_evidence.append("objective_contract.acceptance_status")
     if acceptance_total <= 0 or acceptance_defined < acceptance_total:
         missing_evidence.append("objective_contract.acceptance_criteria")
-    if not lifecycle_closure_status:
+    if not lifecycle_closure_status and not bool(local_only_posture.get("eligible")):
         missing_evidence.append("run_state.lifecycle_closure_status")
-    if lifecycle_safely_closed is None:
+    if lifecycle_safely_closed is None and not bool(local_only_posture.get("eligible")):
         missing_evidence.append("run_state.lifecycle_safely_closed")
 
-    for artifact_name in required_artifacts:
+    for artifact_name in effective_required_artifacts:
         present = _normalize_bool(artifact_presence_payload.get(artifact_name))
         if not present:
             missing_evidence.append(f"objective_contract.required_artifact:{artifact_name}")
 
     missing_evidence = _dedupe(missing_evidence)
 
-    if not missing_evidence:
+    if bool(local_only_posture.get("eligible")) and not missing_evidence:
+        completion_evidence_status = "local_only_sufficient"
+    elif not missing_evidence:
         completion_evidence_status = "sufficient"
     elif required_evidence and len(missing_evidence) < len(required_evidence):
         completion_evidence_status = "partial"
@@ -367,10 +688,22 @@ def build_completion_contract_surface(
 
     completion_blocked_reasons = _dedupe(completion_blocked_reasons)
 
-    if (
+    if bool(local_only_posture.get("eligible")):
+        safe_closure_status = "safely_closed"
+        lifecycle_alignment_status = "aligned"
+        completion_manual_required = False
+        completion_replan_required = False
+        rollback_complete_not_closed = False
+        delivery_complete_waiting_external_truth = False
+        execution_complete_not_accepted = False
+        completion_blocked_reasons = []
+        completion_status = "done_and_safely_closed"
+        closure_decision = "close"
+        closure_reason = "prompt353_local_only_verified_no_change"
+    elif (
         done_status == "done"
         and safe_closure_status == "safely_closed"
-        and completion_evidence_status == "sufficient"
+        and completion_evidence_status in {"sufficient", "local_only_sufficient"}
         and not completion_manual_required
         and not completion_replan_required
         and not rollback_complete_not_closed
@@ -475,6 +808,10 @@ def build_completion_contract_surface(
         payload["objective_summary"] = objective_summary
     if requested_outcome:
         payload["requested_outcome"] = requested_outcome
+    if ignored_required_artifacts:
+        payload["ignored_required_artifacts"] = sorted(ignored_required_artifacts)
+    if bool(local_only_posture.get("eligible")):
+        payload["local_only_closure_mode"] = "prompt353_verified_no_change"
 
     return payload
 

@@ -1,0 +1,38 @@
+{
+  "bypass_errors": [
+    "sandbox flag required",
+    "ask-for-approval flag required",
+    "sandbox bypass flags rejected"
+  ],
+  "danger_errors": [
+    "workspace-write sandbox required",
+    "danger-full-access rejected"
+  ],
+  "free_text_errors": [
+    "arbitrary free-text prompt rejected"
+  ],
+  "missing_approval_errors": [
+    "preapproval required"
+  ],
+  "profile_checks": {
+    "approval_policy_never": true,
+    "arbitrary_free_text_prompt_rejected": true,
+    "command_valid": true,
+    "missing_approval_blocks_execution": true,
+    "output_capture_supported": true,
+    "safe_item_valid": true,
+    "sandbox_bypass_flags_rejected": true,
+    "sandbox_workspace_write": true,
+    "stdin_prompt_mode_supported": true,
+    "unsafe_prompt_item_rejected": true
+  },
+  "run_id": "prompt678_codex_no_confirmation_profile",
+  "safe_item_errors": [],
+  "schema_version": "prompt678_safety_validation_v1",
+  "unsafe_prompt_item_errors": [
+    "unsafe prompt item rejected"
+  ],
+  "yolo_errors": [
+    "sandbox bypass flags rejected"
+  ]
+}

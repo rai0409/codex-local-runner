@@ -1,0 +1,72 @@
+{
+  "bugfix_edge_case": "extract_blocking_gap_ids falls back to blocking_gaps when criteria is absent",
+  "evidence_paths": [
+    "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_001_baseline_verify_evidence.json",
+    "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_002_controlled_failing_test_evidence.json",
+    "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_003_minimal_bugfix_evidence.json",
+    "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_004_validation_evidence.json",
+    "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_005_evidence_summary_evidence.json"
+  ],
+  "protected_artifacts_preserved": {
+    "prompt667": true,
+    "prompt668": true,
+    "prompt669": true,
+    "prompt670": true,
+    "prompt671": true,
+    "prompt672": true,
+    "prompt673": true,
+    "prompt674": true,
+    "prompt675": "not_present",
+    "prompt676": true,
+    "prompt677": true,
+    "prompt678": true,
+    "prompt679": true,
+    "prompt680": true,
+    "prompt681": true,
+    "prompt682": true
+  },
+  "run_id": "prompt683_bugfix_chain",
+  "schema_version": "prompt683_evidence_summary_v1",
+  "statuses": [
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_001_baseline_verify_evidence.json",
+      "item_id": "bugfix_chain_001_baseline_verify",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "terminal_state": "completed",
+      "tick_index": 1
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_002_controlled_failing_test_evidence.json",
+      "item_id": "bugfix_chain_002_controlled_failing_test",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "terminal_state": "completed",
+      "tick_index": 2
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_003_minimal_bugfix_evidence.json",
+      "item_id": "bugfix_chain_003_minimal_bugfix",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "terminal_state": "completed",
+      "tick_index": 3
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_004_validation_evidence.json",
+      "item_id": "bugfix_chain_004_validation",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "terminal_state": "completed",
+      "tick_index": 4
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt683_bugfix_chain/bugfix_chain_005_evidence_summary_evidence.json",
+      "item_id": "bugfix_chain_005_evidence_summary",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "terminal_state": "completed",
+      "tick_index": 5
+    }
+  ]
+}

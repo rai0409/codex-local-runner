@@ -1,0 +1,16 @@
+{
+  "approval_gate_persisted": true,
+  "artifact_paths": [],
+  "completed_cycles": [],
+  "failure_threshold": 1,
+  "lock_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/daemon.lock",
+  "max_cycles": 1,
+  "pid": 1935472,
+  "queue_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/daemon_queue.json",
+  "run_id": "prompt669_operational_scale_failure_threshold_tick_1",
+  "schema_version": "bounded_daemon_state_v1",
+  "status": "blocked",
+  "stop_reason": "failure_threshold_reached",
+  "terminal": true,
+  "updated_at": "2026-06-27T08:38:14.003640Z"
+}

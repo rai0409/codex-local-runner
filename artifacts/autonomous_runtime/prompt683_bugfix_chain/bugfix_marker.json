@@ -1,0 +1,7 @@
+{
+  "bugfix_from_failing_test_inside_multi_prompt_chain_proven": true,
+  "created_at": "2026-06-28T05:29:24.677485Z",
+  "run_id": "prompt683_bugfix_chain",
+  "schema_version": "prompt683_bugfix_marker_v1",
+  "validated": true
+}

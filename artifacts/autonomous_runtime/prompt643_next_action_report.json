@@ -1,0 +1,73 @@
+{
+  "prompt643_status": "success",
+  "prompt643_base_commit": "714bb11",
+  "prompt643_base_tags_at_head": ["prompt639-multi-cycle-targeted-fix-acceptance"],
+  "prompt643_chosen_category": "daemon queue integration fix (targeted fix retry wiring)",
+  "prompt643_next_action_implemented": "Wired run_targeted_fix_retry into the daemon queue runner: with the new opt-in --max-fix-attempts > 0, scripts/run_task_queue_daemon.py auto-invokes targeted-fix retry as the execution engine, so an effect-verification failure is automatically retried with a fix prompt; the strict effect gate remains authoritative and sandbox commit/tag occurs only after the final fixed effect passes.",
+  "prompt643_rationale": "Prompt641 identified this as the single highest-leverage step toward L8: a project-level autonomous loop is only robust if each queued task can self-heal a fixable effect failure. The retry mechanism existed and was proven standalone (Prompt639) but was not wired into the daemon. This closes the last execution-layer gap without expanding scope into the project planner.",
+  "prompt643_design": "When --max-fix-attempts == 0 the daemon preserves the original single-shot live-loop path exactly (backward compatible). When > 0 (hard-capped at MAX_FIX_ATTEMPTS_CAP=2) the daemon routes execution through run_targeted_fix_retry; the success tail (cleanup -> commit/tag -> final clean -> done) was factored into a shared _finalize_success helper reached only after a strictly-passed effect, guaranteeing commit/tag can never precede a passed effect.",
+
+  "prompt643_files_modified": ["scripts/run_task_queue_daemon.py"],
+  "prompt643_files_added": ["tests/test_daemon_queue_targeted_fix_retry_integration.py"],
+  "prompt643_files_unchanged_intentionally": [
+    "automation/orchestration/planned_runner/targeted_fix_retry.py",
+    "automation/orchestration/planned_runner/effect_gate.py",
+    "automation/orchestration/planned_runner/autonomous_cycle.py",
+    "automation/orchestration/planned_runner/daemon_queue.py"
+  ],
+
+  "prompt643_daemon_behavior_changed": true,
+  "prompt643_backward_compatible_when_fix_attempts_zero": true,
+  "prompt643_effect_verification_preserved": true,
+  "prompt643_commit_tag_only_after_passed_effect": true,
+  "prompt643_strict_gate_blocks_false_success": true,
+
+  "prompt643_tests_added": [
+    "test_effect_failed_triggers_retry_and_resolves_to_done",
+    "test_unresolved_retry_goes_to_failed_no_commit_tag",
+    "test_strict_gate_blocks_false_success_after_retry",
+    "test_backward_compatible_when_fix_attempts_zero"
+  ],
+  "prompt643_tests_result": "passed",
+  "prompt643_test_validation": {
+    "new_suite": "tests.test_daemon_queue_targeted_fix_retry_integration = 4 tests OK",
+    "affected_suites": "58 tests OK (daemon queue, effect gate, targeted fix, commit/tag, live loop, candidate acceptance, resume, lock logs)",
+    "full_suite": "Ran 580 tests: 579 passed, 1 skipped, 1 ERROR",
+    "full_suite_only_failure": "tests.test_planned_execution_runner import error (ImportError: _augment_run_state_with_closed_loop) — PRE-EXISTING and unrelated: the symbol is absent in the committed module at HEAD and planned_execution_runner.py was NOT touched by this change.",
+    "regression_introduced": false
+  },
+
+  "prompt643_runtime_validation_status": "passed",
+  "prompt643_runtime_detail": {
+    "scenario": "/tmp/prompt643_daemon_targeted_fix_integration, live Codex, --max-fix-attempts 1, --sandbox-commit-tag, 2 jobs",
+    "live-normal": {"targeted_fix_invoked": true, "targeted_fix_converged": true, "status": "success", "stage": "done", "sandbox_commit_performed": true, "sandbox_tag_performed": true, "queue": "done", "codex_invoked_count": 1, "note": "attempt 0 passed (first_attempt_succeeded); passing tasks still succeed+commit/tag with retry enabled"},
+    "live-unresolved": {"targeted_fix_invoked": true, "targeted_fix_converged": false, "status": "blocked", "stage": "targeted_fix_unresolved", "sandbox_commit_performed": false, "sandbox_tag_performed": false, "queue": "failed", "codex_invoked_count": 2, "note": "deterministic always-failing verify; base + 1 fix attempt both failed -> safely blocked, no commit/tag"},
+    "daemon_status": "blocked (one task correctly failed)",
+    "queue_done": ["live-normal.json"],
+    "queue_failed": ["live-unresolved.json"]
+  },
+
+  "prompt643_effect_failed_wrongly_succeeded_count": 0,
+  "prompt643_strict_gate_violations": 0,
+  "prompt643_sandbox_isolation_preserved": true,
+  "prompt643_generated_artifacts_leftover_count": 0,
+  "prompt643_main_repo_head_unchanged_during_runtime": true,
+  "prompt643_main_repo_safe": true,
+  "prompt643_main_repo_evidence": "HEAD 714bb11 identical before/after runtime; tag at HEAD unchanged; only scripts/run_task_queue_daemon.py modified plus the new test file; runtime wrote only to /tmp; sandboxes had 0 leftover generated artifacts.",
+  "prompt643_archive_touched": false,
+  "prompt643_handoff_reports_touched": false,
+
+  "prompt643_l7_guarantees_preserved": true,
+  "prompt643_capability_after": "L7.5+ (daemon now self-heals: effect-failed tasks auto-retry; the execution layer is fully self-healing end-to-end, the prerequisite for the project-level loop).",
+  "prompt643_remaining_gaps": [
+    "Project intent schema + plan model",
+    "Goal -> task decomposition (planner) and automatic task-spec generation",
+    "Automatic queue population from a plan + result feedback (orchestrator)",
+    "Project completion criterion + project-level auto loop controller",
+    "Broad task-kind support beyond add_function",
+    "Long-running daemon soak proof"
+  ],
+  "prompt643_final_decision": "Implemented the highest-leverage step toward L8 autonomy — automatic targeted-fix retry inside the daemon queue runner — as a minimal, opt-in, backward-compatible change. All required behaviors are proven by 4 new deterministic unit tests plus a bounded live runtime validation: effect-failed tasks auto-trigger retry; a resolved fix yields commit/tag + queue done only after the fixed effect passes; an unresolved fix stays blocked/failed with no commit/tag; the strict gate blocks false success; --max-fix-attempts 0 is identical to prior behavior. No regression (the only full-suite failure is a pre-existing unrelated import error), main repo safe, sandbox isolation and strict effect verification preserved. Committed and tagged.",
+  "prompt643_next_implementation_target": "implement_project_intent_schema",
+  "prompt643_next_action": "continue"
+}

@@ -1,0 +1,55 @@
+{
+  "prompt664_goal_aligned_implementation_status": "success",
+  "goal": "Advance from daemon-ready bounded autonomy to a bounded long-running daemon acceptance proof.",
+  "implementation_scope": [
+    "bounded long-running daemon acceptance layer",
+    "three tick scheduled local proof",
+    "durable state file",
+    "durable queue file",
+    "lock file",
+    "operator stop file",
+    "resume from interrupted state",
+    "per-tick evidence capture",
+    "terminal state and stop reason recording"
+  ],
+  "out_of_scope_preserved": [
+    "unbounded daemon",
+    "fully unattended project-level autonomy",
+    "remote push",
+    "pull request creation",
+    "merge",
+    "destructive cleanup",
+    "credential access",
+    "cookie access",
+    "browser profile access",
+    ".env value access",
+    "private session file access",
+    "arbitrary free-text prompt execution"
+  ],
+  "files_added_or_updated": [
+    "automation/orchestration/planned_runner/long_running_daemon_acceptance.py",
+    "tests/test_long_running_daemon_acceptance.py",
+    "docs/autonomous_runtime/long_running_daemon_acceptance.md",
+    "artifacts/autonomous_runtime/prompt664_report.json",
+    "artifacts/autonomous_runtime/prompt664_summary.md",
+    "artifacts/autonomous_runtime/prompt664_goal_aligned_implementation_report.json",
+    "artifacts/autonomous_runtime/prompt664_goal_aligned_implementation_summary.md",
+    "artifacts/autonomous_runtime/prompt664_next_chatgpt_analysis_request.json"
+  ],
+  "acceptance_result": {
+    "status": "success",
+    "run_id": "prompt664_long_running_daemon",
+    "tick_count": 3,
+    "stop_reason": "max_ticks_reached",
+    "internal_codex_executor_used": true,
+    "local_only_evidence_captured": true
+  },
+  "validation": {
+    "focused_python_tests": "92 passed, 21 subtests passed",
+    "chatgpt_runner_bridge_server_tests": "32 passed, 2 subtests passed under .venv",
+    "node_checks_passed": true,
+    "bare_python_pytest_blocker": "/usr/bin/python: No module named pytest"
+  },
+  "current_capability_boundary_after": "long_running_daemon_acceptance_proven",
+  "project_level_autonomy_complete": false
+}

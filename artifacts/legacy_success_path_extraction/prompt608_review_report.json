@@ -1,0 +1,106 @@
+{
+  "prompt608_bounded_loop_contract_ok": {
+    "blocked_terminal_stop": true,
+    "dry_run_disabled_default": true,
+    "explicit_enable_required": true,
+    "max_cycles_or_equivalent": true,
+    "max_seconds_or_equivalent": true,
+    "no_progress_stop": true,
+    "ok": true,
+    "repeated_failure_stop": true,
+    "terminal_success_stop": true
+  },
+  "prompt608_commit_tag_conflict_check": {
+    "existing_git_ops_module": "automation/orchestration/planned_runner/git_ops/commit_tag.py",
+    "finding": "Separate module paths; Prompt608 import checks loaded the new module directly and found no import conflict.",
+    "new_module": "automation/orchestration/planned_runner/commit_tag.py",
+    "ok": true
+  },
+  "prompt608_commit_tag_gate_contract_ok": {
+    "does_not_execute_commit_tag_by_default": true,
+    "dry_run_disabled_default": true,
+    "enabled_or_explicit_flag_required": true,
+    "ok": true,
+    "remote_operations_allowed": false,
+    "returns_receipt_like_payload": true
+  },
+  "prompt608_daemon_lite_contract_ok": {
+    "dry_run_disabled_default": true,
+    "explicit_enable_required": true,
+    "final_status": true,
+    "max_cycles": true,
+    "max_seconds": true,
+    "ok": true,
+    "per_cycle_result_paths": true,
+    "stop_reason": true
+  },
+  "prompt608_exported_function_results": {
+    "build_commit_tag_execution_gate": true,
+    "build_daemon_lite_observed_run_state": true,
+    "classify_loop_stop": true,
+    "dirty_paths_outside_allowed_artifacts": true,
+    "execute_bounded_commit_tag": true,
+    "run_bounded_success_loop": true
+  },
+  "prompt608_final_decision": "Prompt607 extraction is safe and valid; partial status was caused only by an invalid/missing planning artifact bundle for the dry-run smoke.",
+  "prompt608_import_results": [
+    {
+      "module": "automation.orchestration.planned_runner.loop_controller",
+      "status": "passed"
+    },
+    {
+      "module": "automation.orchestration.planned_runner.daemon",
+      "status": "passed"
+    },
+    {
+      "module": "automation.orchestration.planned_runner.commit_tag",
+      "status": "passed"
+    }
+  ],
+  "prompt608_modified_files": [
+    "artifacts/legacy_success_path_extraction/prompt607_extraction_report.json",
+    "artifacts/legacy_success_path_extraction/prompt607_extraction_summary.md"
+  ],
+  "prompt608_new_files": [
+    "artifacts/legacy_success_path_extraction/prompt608_review_report.json",
+    "artifacts/legacy_success_path_extraction/prompt608_review_summary.md"
+  ],
+  "prompt608_next_action": "commit_tag_gate",
+  "prompt608_prompt607_partial_reason": "skipped_no_valid_planning_artifact_bundle",
+  "prompt608_prompt607_status_updated": true,
+  "prompt608_py_compile_results": [
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/loop_controller.py",
+      "path": "automation/orchestration/planned_runner/loop_controller.py",
+      "returncode": 0,
+      "status": "passed"
+    },
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/daemon.py",
+      "path": "automation/orchestration/planned_runner/daemon.py",
+      "returncode": 0,
+      "status": "passed"
+    },
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/commit_tag.py",
+      "path": "automation/orchestration/planned_runner/commit_tag.py",
+      "returncode": 0,
+      "status": "passed"
+    }
+  ],
+  "prompt608_reviewed_files": [
+    "automation/orchestration/planned_runner/loop_controller.py",
+    "automation/orchestration/planned_runner/daemon.py",
+    "automation/orchestration/planned_runner/commit_tag.py",
+    "artifacts/legacy_success_path_extraction/prompt607_extraction_report.json",
+    "artifacts/legacy_success_path_extraction/prompt607_extraction_summary.md"
+  ],
+  "prompt608_status": "success",
+  "prompt608_validation_commands": [
+    "python -m py_compile automation/orchestration/planned_runner/loop_controller.py",
+    "python -m py_compile automation/orchestration/planned_runner/daemon.py",
+    "python -m py_compile automation/orchestration/planned_runner/commit_tag.py",
+    "python - <<'PY'\nimport importlib\n...\nPY",
+    "python scripts/run_planned_execution.py --help"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "item_id": "release_docs_003_release_docs_generate",
+  "item_type": "release_docs_generate",
+  "no_confirmation_policy_applied": true,
+  "non_interactive_command_preview": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "never",
+    "-"
+  ],
+  "profile_name": "no_confirmation_workspace_write",
+  "run_id": "prompt684_release_docs_demo_pack",
+  "schema_version": "prompt684_prompt_item_evidence_v1",
+  "selected_execution_profile": "no_confirmation_workspace_write",
+  "status": "success",
+  "stop_reason": "prompt_item_completed",
+  "terminal": true,
+  "terminal_state": "completed",
+  "tick_index": 3,
+  "validation_command": "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_release_docs_demo_pack.py -q",
+  "validation_policy_errors": [],
+  "validation_result": "release_docs_chain_step_verified"
+}

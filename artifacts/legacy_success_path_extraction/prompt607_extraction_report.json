@@ -1,0 +1,374 @@
+{
+  "prompt607_added_functions": [
+    "dirty_paths_outside_allowed_artifacts",
+    "classify_loop_stop",
+    "run_bounded_success_loop",
+    "build_daemon_lite_observed_run_state",
+    "build_commit_tag_execution_gate",
+    "execute_bounded_commit_tag"
+  ],
+  "prompt607_candidates": [
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 16539,
+          "lineno": 15403,
+          "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py"
+        }
+      ],
+      "legacy_end_lineno": 60881,
+      "legacy_exists": true,
+      "legacy_lineno": 59746,
+      "name": "_build_prompt379_generated_prompt_codex_execution_bridge_state",
+      "notes": ""
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 20731,
+          "lineno": 20099,
+          "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py"
+        }
+      ],
+      "legacy_end_lineno": 88098,
+      "legacy_exists": true,
+      "legacy_lineno": 87466,
+      "name": "_build_prompt385_success_path_next_cycle_handoff_state",
+      "notes": ""
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 21796,
+          "lineno": 21160,
+          "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py"
+        }
+      ],
+      "legacy_end_lineno": 89165,
+      "legacy_exists": true,
+      "legacy_lineno": 88529,
+      "name": "_build_prompt387_success_path_loop_dispatch_bridge_state",
+      "notes": ""
+    },
+    {
+      "classification": "missing_add_new_file",
+      "current_equivalents": [],
+      "legacy_end_lineno": null,
+      "legacy_exists": false,
+      "legacy_lineno": null,
+      "name": "_build_prompt389_bounded_repeated_success_path_loop_state",
+      "notes": "Legacy exact function was absent; added generic bounded loop controller in loop_controller.py."
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 23559,
+          "lineno": 22559,
+          "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py"
+        }
+      ],
+      "legacy_end_lineno": 90930,
+      "legacy_exists": true,
+      "legacy_lineno": 89930,
+      "name": "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+      "notes": ""
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 3897,
+          "lineno": 3729,
+          "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_400_449.py"
+        }
+      ],
+      "legacy_end_lineno": 66078,
+      "legacy_exists": true,
+      "legacy_lineno": 65910,
+      "name": "_build_prompt420_success_only_next_cycle_loop_state",
+      "notes": ""
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 1187,
+          "lineno": 689,
+          "path": "automation/orchestration/planned_runner/artifacts/paths.py"
+        }
+      ],
+      "legacy_end_lineno": 15376,
+      "legacy_exists": true,
+      "legacy_lineno": 14878,
+      "name": "_build_local_daemon_lite_wrapper_artifacts",
+      "notes": ""
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 5618,
+          "lineno": 5150,
+          "path": "automation/orchestration/planned_runner/summaries/compact.py"
+        }
+      ],
+      "legacy_end_lineno": 25625,
+      "legacy_exists": true,
+      "legacy_lineno": 25157,
+      "name": "_build_local_codex_one_shot_execution_handoff_state",
+      "notes": ""
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 6454,
+          "lineno": 5785,
+          "path": "automation/orchestration/planned_runner/summaries/compact.py"
+        }
+      ],
+      "legacy_end_lineno": 26581,
+      "legacy_exists": true,
+      "legacy_lineno": 25912,
+      "name": "_build_local_codex_one_shot_execution_result_state",
+      "notes": ""
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 2301,
+          "lineno": 1812,
+          "path": "automation/orchestration/planned_runner/git_ops/commit_tag.py"
+        }
+      ],
+      "legacy_end_lineno": 27437,
+      "legacy_exists": true,
+      "legacy_lineno": 26948,
+      "name": "_run_approve_commit_tag_execution_if_enabled",
+      "notes": ""
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 1810,
+          "lineno": 1676,
+          "path": "automation/orchestration/planned_runner/git_ops/commit_tag.py"
+        }
+      ],
+      "legacy_end_lineno": 26945,
+      "legacy_exists": true,
+      "legacy_lineno": 26811,
+      "name": "_build_approve_commit_tag_execution_gate_state",
+      "notes": ""
+    },
+    {
+      "classification": "skip_out_of_scope",
+      "current_equivalents": [],
+      "legacy_end_lineno": 17524,
+      "legacy_exists": true,
+      "legacy_lineno": 16827,
+      "name": "_build_local_bounded_approve_commit_tag_execution_artifacts",
+      "notes": "Equivalent historical commit/tag execution artifacts are covered by current git_ops commit_tag surfaces; no duplicate legacy artifact builder copied."
+    },
+    {
+      "classification": "already_present",
+      "current_equivalents": [
+        {
+          "end_lineno": 2669,
+          "lineno": 2444,
+          "path": "automation/orchestration/planned_runner/git_ops/commit_tag.py"
+        }
+      ],
+      "legacy_end_lineno": 40687,
+      "legacy_exists": true,
+      "legacy_lineno": 40462,
+      "name": "_execute_bounded_commit",
+      "notes": ""
+    }
+  ],
+  "prompt607_candidates_total": 13,
+  "prompt607_current_repo_path": "/home/rai/codex-local-runner",
+  "prompt607_equivalent_existing_functions": {
+    "_build_approve_commit_tag_execution_gate_state": [
+      {
+        "end_lineno": 1810,
+        "lineno": 1676,
+        "path": "automation/orchestration/planned_runner/git_ops/commit_tag.py"
+      }
+    ],
+    "_build_local_codex_one_shot_execution_handoff_state": [
+      {
+        "end_lineno": 5618,
+        "lineno": 5150,
+        "path": "automation/orchestration/planned_runner/summaries/compact.py"
+      }
+    ],
+    "_build_local_codex_one_shot_execution_result_state": [
+      {
+        "end_lineno": 6454,
+        "lineno": 5785,
+        "path": "automation/orchestration/planned_runner/summaries/compact.py"
+      }
+    ],
+    "_build_local_daemon_lite_wrapper_artifacts": [
+      {
+        "end_lineno": 1187,
+        "lineno": 689,
+        "path": "automation/orchestration/planned_runner/artifacts/paths.py"
+      }
+    ],
+    "_build_prompt379_generated_prompt_codex_execution_bridge_state": [
+      {
+        "end_lineno": 16539,
+        "lineno": 15403,
+        "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py"
+      }
+    ],
+    "_build_prompt385_success_path_next_cycle_handoff_state": [
+      {
+        "end_lineno": 20731,
+        "lineno": 20099,
+        "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py"
+      }
+    ],
+    "_build_prompt387_success_path_loop_dispatch_bridge_state": [
+      {
+        "end_lineno": 21796,
+        "lineno": 21160,
+        "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py"
+      }
+    ],
+    "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state": [
+      {
+        "end_lineno": 23559,
+        "lineno": 22559,
+        "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py"
+      }
+    ],
+    "_build_prompt420_success_only_next_cycle_loop_state": [
+      {
+        "end_lineno": 3897,
+        "lineno": 3729,
+        "path": "automation/orchestration/planned_runner/prompt_surfaces/prompts_400_449.py"
+      }
+    ],
+    "_execute_bounded_commit": [
+      {
+        "end_lineno": 2669,
+        "lineno": 2444,
+        "path": "automation/orchestration/planned_runner/git_ops/commit_tag.py"
+      }
+    ],
+    "_run_approve_commit_tag_execution_if_enabled": [
+      {
+        "end_lineno": 2301,
+        "lineno": 1812,
+        "path": "automation/orchestration/planned_runner/git_ops/commit_tag.py"
+      }
+    ]
+  },
+  "prompt607_final_status": "success",
+  "prompt607_legacy_source_exists": true,
+  "prompt607_legacy_source_path": "/tmp/old_planned_execution_runner_full.py",
+  "prompt607_modified_files": [],
+  "prompt607_new_files": [
+    "automation/orchestration/planned_runner/loop_controller.py",
+    "automation/orchestration/planned_runner/daemon.py",
+    "automation/orchestration/planned_runner/commit_tag.py"
+  ],
+  "prompt607_next_action": "commit_tag_gate",
+  "prompt607_skipped_out_of_scope": [
+    "browser_dom_execution",
+    "github_push_pr_merge_remote",
+    "approval_email",
+    "fleet",
+    "legacy_prompt300_400_history_surfaces",
+    "_build_local_bounded_approve_commit_tag_execution_artifacts"
+  ],
+  "prompt607_validation_commands": [
+    "python -m py_compile automation/orchestration/planned_runner/project_browser/codex_bridge.py",
+    "python -m py_compile automation/orchestration/planned_runner/runtime_output_wiring.py",
+    "python -m py_compile automation/orchestration/planned_runner/prompt_surfaces/registry.py",
+    "python -m py_compile automation/orchestration/run_state_summary_contract.py",
+    "python -m py_compile scripts/run_planned_execution.py",
+    "python -m py_compile automation/orchestration/planned_runner/loop_controller.py",
+    "python -m py_compile automation/orchestration/planned_runner/daemon.py",
+    "python -m py_compile automation/orchestration/planned_runner/commit_tag.py",
+    "python scripts/run_planned_execution.py --artifacts-dir /tmp/prompt607_smoke_artifacts --out-dir /tmp/prompt607_smoke_out --transport-mode dry-run --json"
+  ],
+  "prompt607_validation_results": [
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/project_browser/codex_bridge.py",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/runtime_output_wiring.py",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/prompt_surfaces/registry.py",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": "python -m py_compile automation/orchestration/run_state_summary_contract.py",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": "python -m py_compile scripts/run_planned_execution.py",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/loop_controller.py",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/daemon.py",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": "python -m py_compile automation/orchestration/planned_runner/commit_tag.py",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "command": "python scripts/run_planned_execution.py --artifacts-dir /tmp/prompt607_smoke_artifacts --out-dir /tmp/prompt607_smoke_out --transport-mode dry-run --json",
+      "returncode": 2,
+      "status": "skipped_no_valid_planning_artifact_bundle",
+      "stderr": "no pr units found in planning artifacts",
+      "stderr_path": "/tmp/prompt607_smoke_stderr.txt",
+      "stdout_path": "/tmp/prompt607_smoke_stdout.json",
+      "failure_classification": "not_code_failure",
+      "explanation": "The command reached planned-execution artifact intake and failed because no valid planning artifact bundle with pr_plan.prs was available; this does not exercise or fail the Prompt607 modules."
+    }
+  ],
+  "prompt607_status_update_reason": "Prompt608 confirmed py_compile/import/export and bounded/gated contracts for the new modules. The only prior failed smoke was caused by missing/invalid planning artifacts, not Prompt607 code."
+}

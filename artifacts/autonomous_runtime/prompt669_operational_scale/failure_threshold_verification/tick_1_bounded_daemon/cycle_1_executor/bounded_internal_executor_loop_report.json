@@ -1,0 +1,112 @@
+{
+  "approval_gate_verified": true,
+  "artifact_paths": [
+    "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json"
+  ],
+  "bounded_runner_implemented": true,
+  "browser_profile_access_prevented": true,
+  "cookie_access_prevented": true,
+  "credential_storage_prevented": true,
+  "cycle_count": 1,
+  "destructive_actions_blocked": true,
+  "duplicate_prompt_fingerprint_stop_verified": false,
+  "env_value_access_prevented": true,
+  "errors": [
+    "failure threshold reached after cycle 1"
+  ],
+  "failure_threshold": 1,
+  "failure_threshold_stop_verified": true,
+  "finished_at": "2026-06-27T08:38:14.003320Z",
+  "internal_codex_executor_available": true,
+  "internal_codex_executor_entrypoint": "automation.execution.codex_executor_adapter.CodexExecutorAdapter",
+  "internal_codex_executor_used": true,
+  "local_only_evidence_captured": true,
+  "max_cycles": 1,
+  "max_cycles_enforced": true,
+  "max_cycles_hard_cap": 3,
+  "per_cycle": [
+    {
+      "approved_for_execution": true,
+      "artifacts": {
+        "artifacts": [
+          "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+          "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt"
+        ],
+        "stderr_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+        "stdout_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt"
+      },
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json",
+      "internal_executor_entrypoint": "automation.execution.codex_executor_adapter.CodexExecutorAdapter",
+      "normalized_result": {
+        "additions": 0,
+        "changed_files": [],
+        "cost": {
+          "tokens_input": 0,
+          "tokens_output": 0
+        },
+        "deletions": 0,
+        "execution": {
+          "attempt_count": 1,
+          "finished_at": "2026-06-27T08:38:14.003001Z",
+          "started_at": "2026-06-27T08:38:14.002996Z",
+          "status": "failed",
+          "stderr_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+          "stdout_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+          "verify": {
+            "commands": [],
+            "reason": "proof_transport_local_evidence",
+            "status": "failed"
+          }
+        },
+        "failure_message": "execution_status=failed",
+        "failure_type": "execution_failure",
+        "generated_patch_summary": "local proof transport; no prompt text executed",
+        "job_id": "prompt662_bounded_internal_executor_loop",
+        "pr_id": "prompt669_item_01",
+        "raw_execution": {
+          "artifacts": {
+            "artifacts": [
+              "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+              "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt"
+            ],
+            "stderr_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+            "stdout_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt"
+          },
+          "result": {
+            "additions": 0,
+            "attempt_count": 1,
+            "changed_files": [],
+            "cost": {
+              "tokens_input": 0,
+              "tokens_output": 0
+            },
+            "deletions": 0,
+            "finished_at": "2026-06-27T08:38:14.003001Z",
+            "generated_patch_summary": "local proof transport; no prompt text executed",
+            "run_id": "prompt662_bounded_internal_executor_loop:prompt669_item_01:cycle-1",
+            "started_at": "2026-06-27T08:38:14.002996Z",
+            "status": "failed",
+            "stderr_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+            "stdout_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/tick_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+            "verify": {
+              "commands": [],
+              "reason": "proof_transport_local_evidence",
+              "status": "failed"
+            }
+          }
+        }
+      },
+      "passed": false,
+      "prompt_fingerprint": "sha256:5124d9421dbcbc4addf67542a2587cf50cbc06f4918634e8d19efde28973fdae",
+      "prompt_id": "prompt669_item_01",
+      "prompt_path": "artifacts/autonomous_runtime/prompt669_operational_scale/failure_threshold_verification/prompts/prompt669_item_01.md",
+      "run_id": "prompt662_bounded_internal_executor_loop:prompt669_item_01:cycle-1"
+    }
+  ],
+  "remote_actions_blocked": true,
+  "started_at": "2026-06-27T08:38:14.002441Z",
+  "status": "blocked",
+  "stop_reason": "failure_threshold_reached",
+  "unsafe_paths_rejected": true
+}

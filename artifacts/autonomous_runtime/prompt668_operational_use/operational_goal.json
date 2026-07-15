@@ -1,0 +1,13 @@
+{
+  "approved_for_execution": true,
+  "goal_id": "prompt668_operational_readiness_artifact_set",
+  "goal_text": "Create a local-only operational readiness note from existing Prompt667 accepted evidence, write a deterministic operational marker, and produce a machine-readable operational evidence summary.",
+  "local_only": true,
+  "run_id": "prompt668_operational_use",
+  "schema_version": "prompt668_operational_goal_v1",
+  "source_evidence": [
+    "artifacts/autonomous_runtime/prompt667_report.json",
+    "docs/autonomous_runtime/project_level_autonomy_final_audit.md",
+    "artifacts/autonomous_runtime/prompt667_final_project_run/final_project_run_report.json"
+  ]
+}

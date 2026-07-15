@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "item_id": "prompt674_test_item_1",
+      "item_name": "verify_prompt673_baseline",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt674_test_item_2",
+      "item_name": "inspect_responsibility_matrix_behavior",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt674_test_item_3",
+      "item_name": "create_focused_test_artifact",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt674_test_item_4",
+      "item_name": "validate_test_artifact_content",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt674_test_item_5",
+      "item_name": "record_test_validation_plan",
+      "local_only": true,
+      "status": "pending"
+    },
+    {
+      "item_id": "prompt674_test_item_6",
+      "item_name": "write_final_evidence",
+      "local_only": true,
+      "status": "pending"
+    }
+  ],
+  "schema_version": "prompt674_test_addition_task_queue_v1"
+}

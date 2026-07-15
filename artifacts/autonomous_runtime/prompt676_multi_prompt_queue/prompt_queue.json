@@ -1,0 +1,42 @@
+{
+  "items": [
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "verify Prompt673 roadmap and create a local prompt-queue evidence note",
+      "item_id": "prompt_queue_item_docs_followup",
+      "item_type": "documentation_followup",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "verify Prompt674 test artifact and create a local prompt-queue test evidence summary",
+      "item_id": "prompt_queue_item_test_followup",
+      "item_type": "test_followup",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    },
+    {
+      "approved_for_execution": true,
+      "commit_tag_decision": "record_only_no_commit_for_queue_item",
+      "goal": "prepare a safe local-only small-code-change readiness note without applying a broad code change",
+      "item_id": "prompt_queue_item_code_change_preview",
+      "item_type": "small_code_change_preview",
+      "local_only": true,
+      "max_retries": 1,
+      "requires_credentials": false,
+      "schema_version": "prompt676_prompt_queue_item_v1"
+    }
+  ],
+  "max_prompt_cycles": 3,
+  "max_prompt_items": 3,
+  "max_prompt_ticks": 3,
+  "preapproved": true,
+  "schema_version": "prompt676_prompt_queue_v1"
+}

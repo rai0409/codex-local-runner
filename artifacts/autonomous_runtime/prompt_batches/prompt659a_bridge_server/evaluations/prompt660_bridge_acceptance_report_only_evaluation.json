@@ -1,0 +1,27 @@
+{
+  "continue_decision": "continue",
+  "errors": [],
+  "evidence": {
+    "expected_tag": "prompt660_bridge_acceptance_report_only",
+    "report_parseable": true,
+    "report_present": true,
+    "status_field": "prompt660_bridge_acceptance_report_only_status",
+    "status_match": true,
+    "status_value_expected": "success",
+    "summary_present": true,
+    "tag_present": true
+  },
+  "missing_evidence": [],
+  "passed": true,
+  "prompt_id": "prompt660_bridge_acceptance_report_only",
+  "required_tests_declared": [],
+  "required_tests_executed": false,
+  "score": 100,
+  "score_breakdown": {
+    "constraint_compliance": 30,
+    "objective_achievement": 40,
+    "risk_remaining_gaps": 10,
+    "test_evidence_quality": 20
+  },
+  "status": "pass"
+}

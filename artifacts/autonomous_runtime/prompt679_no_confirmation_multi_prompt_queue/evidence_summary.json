@@ -1,0 +1,80 @@
+{
+  "confirmation_avoidance_summary": "workspace-local uv cache commands and non-interactive profile previews eliminate avoidable confirmation prompts",
+  "evidence_paths": [
+    "artifacts/autonomous_runtime/prompt679_no_confirmation_multi_prompt_queue/prompt679_docs_profile_check_evidence.json",
+    "artifacts/autonomous_runtime/prompt679_no_confirmation_multi_prompt_queue/prompt679_tests_profile_check_evidence.json",
+    "artifacts/autonomous_runtime/prompt679_no_confirmation_multi_prompt_queue/prompt679_policy_profile_check_evidence.json"
+  ],
+  "profile_selection_summary": {
+    "all_prompt_items_use_no_confirmation_profile": true,
+    "confirmation_avoidance": "safe_preapproved_items_use_non_interactive_workspace_write_dry_run_command_previews",
+    "profile_name": "no_confirmation_workspace_write",
+    "prompt_item_count": 3,
+    "schema_version": "prompt679_profile_selection_summary_v1",
+    "selected_profiles": {
+      "prompt679_docs_profile_check": "no_confirmation_workspace_write",
+      "prompt679_policy_profile_check": "no_confirmation_workspace_write",
+      "prompt679_tests_profile_check": "no_confirmation_workspace_write"
+    }
+  },
+  "protected_artifacts_preserved": {
+    "prompt667": true,
+    "prompt668": true,
+    "prompt669": true,
+    "prompt670": true,
+    "prompt671": true,
+    "prompt672": true,
+    "prompt673": true,
+    "prompt674": true,
+    "prompt675": "not_present",
+    "prompt676": true,
+    "prompt677": true,
+    "prompt678": true
+  },
+  "run_id": "prompt679_no_confirmation_multi_prompt_queue",
+  "schema_version": "prompt679_evidence_summary_v1",
+  "statuses": [
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt679_no_confirmation_multi_prompt_queue/prompt679_docs_profile_check_evidence.json",
+      "item_id": "prompt679_docs_profile_check",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "tick_index": 1,
+      "validation_result": "dry_run_policy_verified"
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt679_no_confirmation_multi_prompt_queue/prompt679_tests_profile_check_evidence.json",
+      "item_id": "prompt679_tests_profile_check",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "tick_index": 2,
+      "validation_result": "dry_run_policy_verified"
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt679_no_confirmation_multi_prompt_queue/prompt679_policy_profile_check_evidence.json",
+      "item_id": "prompt679_policy_profile_check",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "tick_index": 3,
+      "validation_result": "dry_run_policy_verified"
+    }
+  ],
+  "validation_command_policy": {
+    "avoidable_workspace_external_cache_confirmation_eliminated": true,
+    "input_commands": [
+      "PYTHONPATH=. uv run pytest tests/test_no_confirmation_multi_prompt_queue.py -q",
+      "UV_CACHE_DIR=/tmp/external PYTHONPATH=. uv run pytest tests/test_no_confirmation_multi_prompt_queue.py -q"
+    ],
+    "normalized_commands": [
+      "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_no_confirmation_multi_prompt_queue.py -q",
+      "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_no_confirmation_multi_prompt_queue.py -q"
+    ],
+    "rejected_commands": {},
+    "schema_version": "prompt679_validation_command_policy_v1",
+    "validation_commands_use_workspace_local_uv_cache": true,
+    "workspace_local_uv_cache": "UV_CACHE_DIR=.uv-cache"
+  }
+}

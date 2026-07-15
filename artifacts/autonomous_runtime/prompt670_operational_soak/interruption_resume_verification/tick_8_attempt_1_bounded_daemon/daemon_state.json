@@ -1,0 +1,16 @@
+{
+  "approval_gate_persisted": true,
+  "artifact_paths": [],
+  "completed_cycles": [],
+  "failure_threshold": 1,
+  "lock_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_8_attempt_1_bounded_daemon/daemon.lock",
+  "max_cycles": 1,
+  "pid": 1953396,
+  "queue_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_8_attempt_1_bounded_daemon/daemon_queue.json",
+  "run_id": "prompt670_operational_soak_resumed_tick_8_attempt_1",
+  "schema_version": "bounded_daemon_state_v1",
+  "status": "blocked",
+  "stop_reason": "failure_threshold_reached",
+  "terminal": true,
+  "updated_at": "2026-06-27T08:54:45.422128Z"
+}

@@ -1,0 +1,11 @@
+{
+  "current_capability_boundary": "one_safe_browser_to_codex_cycle_proven_multi_cycle_unattended_loop_not_proven",
+  "instruction": "Recommend the next safe step toward multi-cycle browser-to-Codex autonomy. Keep the recommendation bounded, local-first, evidence-gated, and free of secrets, credentials, cookies, browser profile data, remote pushes, PRs, merges, or arbitrary prompt execution.",
+  "request_id": "prompt660c_next_analysis",
+  "requested_output_schema_versions": [
+    "analysis_artifact_v1",
+    "analysis_artifact_v2"
+  ],
+  "schema_version": "browser_chatgpt_request_envelope_v1",
+  "source": "codex_local_runner"
+}

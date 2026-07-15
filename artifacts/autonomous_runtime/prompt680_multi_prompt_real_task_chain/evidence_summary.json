@@ -1,0 +1,160 @@
+{
+  "evidence_paths": [
+    "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_001_docs_followup_evidence.json",
+    "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_002_test_followup_evidence.json",
+    "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_003_small_code_change_readiness_evidence.json",
+    "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_004_bugfix_readiness_evidence.json",
+    "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_005_multi_responsibility_chain_readiness_evidence.json",
+    "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_006_release_docs_readiness_evidence.json",
+    "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_007_final_summary_evidence.json"
+  ],
+  "final_real_task_chain_summary": "Seven realistic local-only real-task prompt categories completed readiness validation.",
+  "next_prompt_recommendation": "Prompt681: real small code change inside multi-prompt chain acceptance",
+  "profile_selection_summary": {
+    "all_prompt_items_use_no_confirmation_profile": true,
+    "profile_name": "no_confirmation_workspace_write",
+    "schema_version": "prompt680_profile_selection_summary_v1",
+    "selected_profiles": {
+      "real_task_chain_001_docs_followup": "no_confirmation_workspace_write",
+      "real_task_chain_002_test_followup": "no_confirmation_workspace_write",
+      "real_task_chain_003_small_code_change_readiness": "no_confirmation_workspace_write",
+      "real_task_chain_004_bugfix_readiness": "no_confirmation_workspace_write",
+      "real_task_chain_005_multi_responsibility_chain_readiness": "no_confirmation_workspace_write",
+      "real_task_chain_006_release_docs_readiness": "no_confirmation_workspace_write",
+      "real_task_chain_007_final_summary": "no_confirmation_workspace_write"
+    }
+  },
+  "protected_artifacts_preserved": {
+    "prompt667": true,
+    "prompt668": true,
+    "prompt669": true,
+    "prompt670": true,
+    "prompt671": true,
+    "prompt672": true,
+    "prompt673": true,
+    "prompt674": true,
+    "prompt675": "not_present",
+    "prompt676": true,
+    "prompt677": true,
+    "prompt678": true,
+    "prompt679": true
+  },
+  "retry_skip_stop_summary": {
+    "controlled_failure_injection_verified": true,
+    "failure_injections": 1,
+    "max_retries_per_prompt": 1,
+    "retry_policy_verified": true,
+    "schema_version": "prompt680_retry_skip_stop_summary_v1",
+    "skip_policy_verified": true,
+    "stop_policy_verified": true,
+    "stop_reason": "real_task_chain_complete"
+  },
+  "run_id": "prompt680_multi_prompt_real_task_chain",
+  "schema_version": "prompt680_evidence_summary_v1",
+  "statuses": [
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_001_docs_followup_evidence.json",
+      "item_id": "real_task_chain_001_docs_followup",
+      "item_type": "documentation_followup",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 1,
+      "validation_marker": "documentation_followup_readiness_verified",
+      "validation_result": "real_task_readiness_verified"
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_002_test_followup_evidence.json",
+      "item_id": "real_task_chain_002_test_followup",
+      "item_type": "test_followup",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 2,
+      "validation_marker": "test_followup_readiness_verified",
+      "validation_result": "real_task_readiness_verified"
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_003_small_code_change_readiness_evidence.json",
+      "item_id": "real_task_chain_003_small_code_change_readiness",
+      "item_type": "small_code_change_readiness",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 3,
+      "validation_marker": "small_code_change_readiness_readiness_verified",
+      "validation_result": "real_task_readiness_verified"
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_004_bugfix_readiness_evidence.json",
+      "item_id": "real_task_chain_004_bugfix_readiness",
+      "item_type": "bugfix_readiness",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 4,
+      "validation_marker": "bugfix_readiness_readiness_verified",
+      "validation_result": "real_task_readiness_verified"
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_005_multi_responsibility_chain_readiness_evidence.json",
+      "item_id": "real_task_chain_005_multi_responsibility_chain_readiness",
+      "item_type": "multi_responsibility_chain_readiness",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 5,
+      "validation_marker": "multi_responsibility_chain_readiness_readiness_verified",
+      "validation_result": "real_task_readiness_verified"
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_006_release_docs_readiness_evidence.json",
+      "item_id": "real_task_chain_006_release_docs_readiness",
+      "item_type": "release_docs_readiness",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 6,
+      "validation_marker": "release_docs_readiness_readiness_verified",
+      "validation_result": "real_task_readiness_verified"
+    },
+    {
+      "evidence_path": "artifacts/autonomous_runtime/prompt680_multi_prompt_real_task_chain/real_task_chain_007_final_summary_evidence.json",
+      "item_id": "real_task_chain_007_final_summary",
+      "item_type": "final_chain_summary",
+      "selected_execution_profile": "no_confirmation_workspace_write",
+      "status": "success",
+      "stop_reason": "prompt_item_completed",
+      "terminal": true,
+      "terminal_state": "completed",
+      "tick_index": 7,
+      "validation_marker": "final_chain_summary_readiness_verified",
+      "validation_result": "real_task_readiness_verified"
+    }
+  ],
+  "validation_command_policy": {
+    "avoidable_workspace_external_cache_confirmation_eliminated": true,
+    "input_commands": [
+      "PYTHONPATH=. uv run pytest tests/test_multi_prompt_real_task_chain.py -q"
+    ],
+    "normalized_commands": [
+      "UV_CACHE_DIR=.uv-cache PYTHONPATH=. uv run pytest tests/test_multi_prompt_real_task_chain.py -q"
+    ],
+    "rejected_commands": {},
+    "schema_version": "prompt679_validation_command_policy_v1",
+    "validation_commands_use_workspace_local_uv_cache": true,
+    "workspace_local_uv_cache": "UV_CACHE_DIR=.uv-cache"
+  }
+}

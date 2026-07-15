@@ -1,0 +1,431 @@
+{
+  "baselines": {
+    "prompt675_verified": "not_present",
+    "prompt677_verified": true,
+    "prompt678_verified": true,
+    "prompt679_verified": true,
+    "prompt680_verified": true
+  },
+  "blocking_gaps": [
+    {
+      "evidence_commit": "none",
+      "evidence_field": "prompt675_verified=not_present",
+      "evidence_prompt": "prompt675",
+      "evidence_tag": "none",
+      "id": 4,
+      "missing_proof": "Prompt675 absent; no later report proves actual code change.",
+      "name": "Actual code change performed",
+      "pass_criteria": "A bounded code change is made, tested, evidenced, committed, and tagged.",
+      "required_prompt": "Prompt682 or Prompt681B",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "28bf7af3ce7563b0301384ec296f0f3733914d4a",
+      "evidence_field": "current_real_development_responsibility_score_after=52",
+      "evidence_prompt": "prompt674",
+      "evidence_tag": "none",
+      "id": 5,
+      "missing_proof": "Test addition proven separately, not tied to a real code change chain.",
+      "name": "Tests added or updated for code change",
+      "pass_criteria": "Tests are added for the actual chain code change.",
+      "required_prompt": "Prompt682 or Prompt681B",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "partially_proven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "bugfix_readiness only",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 6,
+      "missing_proof": "Readiness plan exists; no failing-test bugfix acceptance proves implementation.",
+      "name": "Failing test to bounded bugfix to tests pass",
+      "pass_criteria": "A failing test is observed, a bounded bugfix is applied, and tests pass.",
+      "required_prompt": "Prompt683",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "a3c33057a4fd4d5e6b0c93a6816b126fc5c56066",
+      "evidence_field": "bounded 50 tick soak",
+      "evidence_prompt": "prompt671",
+      "evidence_tag": "none",
+      "id": 14,
+      "missing_proof": "Bounded acceptance exists; production repeated new-goal daemon not proven.",
+      "name": "Repeated new safe project goals over time",
+      "pass_criteria": "Daemon accepts a new safe project goal and completes bounded real operation.",
+      "required_prompt": "Prompt684",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "partially_proven"
+    },
+    {
+      "evidence_commit": "4551010e8306eceadda880ec1ee5f6537d9f27bc",
+      "evidence_field": "codex_exec_command_supported=dry_run_only; live_codex_smoke_test=skipped",
+      "evidence_prompt": "prompt678",
+      "evidence_tag": "prompt678-codex-no-confirmation-execution-profile",
+      "id": 16,
+      "missing_proof": "Prompt678 is dry_run_only and live smoke test skipped.",
+      "name": "Live Codex execution if required",
+      "pass_criteria": "Live Codex smoke test passes or operation is explicitly scoped dry-run-only.",
+      "required_prompt": "Prompt685",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "release_docs_readiness only",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 17,
+      "missing_proof": "Readiness exists; final release docs/demo pack not proven.",
+      "name": "Release documentation/demo pack",
+      "pass_criteria": "Release docs and demo pack are generated and validated.",
+      "required_prompt": "Prompt686",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    }
+  ],
+  "complete_as_real_no_human_autonomous_development": false,
+  "criteria": [
+    {
+      "evidence_commit": "76b351780ef9b35f9ff04e89d225923d0c400c4b",
+      "evidence_field": "project_level_autonomy_complete=true",
+      "evidence_prompt": "prompt667",
+      "evidence_tag": "none",
+      "id": 1,
+      "missing_proof": "",
+      "name": "Safe project goal accepted without interactive clarification",
+      "pass_criteria": "Safe goal intake remains gated and accepted.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "17842f08d7189dfe2f62fea98aa405aa6aeeb0ba",
+      "evidence_field": "prompt_item_count=7",
+      "evidence_prompt": "prompt677",
+      "evidence_tag": "prompt677-increase-multi-prompt-queue-length",
+      "id": 2,
+      "missing_proof": "",
+      "name": "Goal decomposed into multi-prompt queue",
+      "pass_criteria": "Queue has prompt-level items and bounded ticks.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "106f6503816c24febcbd5c3f67167de9e09d7a5f",
+      "evidence_field": "avoidable_workspace_external_cache_confirmation_eliminated=true",
+      "evidence_prompt": "prompt679",
+      "evidence_tag": "prompt679-wire-no-confirmation-profile-into-multi-prompt-queue",
+      "id": 3,
+      "missing_proof": "",
+      "name": "Safe prompt-level items run without confirmation",
+      "pass_criteria": "Safe local commands use no-confirmation profile and workspace cache.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "none",
+      "evidence_field": "prompt675_verified=not_present",
+      "evidence_prompt": "prompt675",
+      "evidence_tag": "none",
+      "id": 4,
+      "missing_proof": "Prompt675 absent; no later report proves actual code change.",
+      "name": "Actual code change performed",
+      "pass_criteria": "A bounded code change is made, tested, evidenced, committed, and tagged.",
+      "required_prompt": "Prompt682 or Prompt681B",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "28bf7af3ce7563b0301384ec296f0f3733914d4a",
+      "evidence_field": "current_real_development_responsibility_score_after=52",
+      "evidence_prompt": "prompt674",
+      "evidence_tag": "none",
+      "id": 5,
+      "missing_proof": "Test addition proven separately, not tied to a real code change chain.",
+      "name": "Tests added or updated for code change",
+      "pass_criteria": "Tests are added for the actual chain code change.",
+      "required_prompt": "Prompt682 or Prompt681B",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "partially_proven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "bugfix_readiness only",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 6,
+      "missing_proof": "Readiness plan exists; no failing-test bugfix acceptance proves implementation.",
+      "name": "Failing test to bounded bugfix to tests pass",
+      "pass_criteria": "A failing test is observed, a bounded bugfix is applied, and tests pass.",
+      "required_prompt": "Prompt683",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "test_command_used starts with UV_CACHE_DIR=.uv-cache",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 7,
+      "missing_proof": "",
+      "name": "Targeted and regression tests use workspace-local uv cache",
+      "pass_criteria": "All uv validation commands use UV_CACHE_DIR=.uv-cache.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "all_7_real_task_items_have_evidence=true",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 8,
+      "missing_proof": "",
+      "name": "Per-prompt evidence for every chain item",
+      "pass_criteria": "Every prompt item has evidence path and status.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "commit/tag present after tests_passed=true",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 9,
+      "missing_proof": "",
+      "name": "Commit/tag only intended files on full PASS",
+      "pass_criteria": "Commit and tag are created only after full validation.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "remote_actions_blocked=true",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 10,
+      "missing_proof": "",
+      "name": "Unsafe/unapproved/destructive/remote/secret actions stop safely",
+      "pass_criteria": "Unsafe prompt items are rejected by safety gates.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "a3c33057a4fd4d5e6b0c93a6816b126fc5c56066",
+      "evidence_field": "resume_after_interruption_verified=true",
+      "evidence_prompt": "prompt671",
+      "evidence_tag": "none",
+      "id": 11,
+      "missing_proof": "",
+      "name": "Resume after interruption",
+      "pass_criteria": "Interruption/resume evidence remains durable.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "retry_policy_verified=true; skip_policy_verified=true; stop_policy_verified=true",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 12,
+      "missing_proof": "",
+      "name": "Retry/skip/stop policies",
+      "pass_criteria": "Retry/skip/stop policy recorded for chain.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "next_chatgpt_analysis_request_prepared=true",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 13,
+      "missing_proof": "",
+      "name": "Final reports and next prompts",
+      "pass_criteria": "Reports and next prompt request are written.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "a3c33057a4fd4d5e6b0c93a6816b126fc5c56066",
+      "evidence_field": "bounded 50 tick soak",
+      "evidence_prompt": "prompt671",
+      "evidence_tag": "none",
+      "id": 14,
+      "missing_proof": "Bounded acceptance exists; production repeated new-goal daemon not proven.",
+      "name": "Repeated new safe project goals over time",
+      "pass_criteria": "Daemon accepts a new safe project goal and completes bounded real operation.",
+      "required_prompt": "Prompt684",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "partially_proven"
+    },
+    {
+      "evidence_commit": "106f6503816c24febcbd5c3f67167de9e09d7a5f",
+      "evidence_field": "avoidable_workspace_external_cache_confirmation_eliminated=true",
+      "evidence_prompt": "prompt679",
+      "evidence_tag": "prompt679-wire-no-confirmation-profile-into-multi-prompt-queue",
+      "id": 15,
+      "missing_proof": "",
+      "name": "No manual UI confirmation for allowed safe local validations",
+      "pass_criteria": "Workspace-local cache and no-confirmation profile avoid confirmation triggers.",
+      "required_prompt": "none",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "proven"
+    },
+    {
+      "evidence_commit": "4551010e8306eceadda880ec1ee5f6537d9f27bc",
+      "evidence_field": "codex_exec_command_supported=dry_run_only; live_codex_smoke_test=skipped",
+      "evidence_prompt": "prompt678",
+      "evidence_tag": "prompt678-codex-no-confirmation-execution-profile",
+      "id": 16,
+      "missing_proof": "Prompt678 is dry_run_only and live smoke test skipped.",
+      "name": "Live Codex execution if required",
+      "pass_criteria": "Live Codex smoke test passes or operation is explicitly scoped dry-run-only.",
+      "required_prompt": "Prompt685",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    },
+    {
+      "evidence_commit": "e067e468ee3ac023ada566ceb9afabd0564d267f",
+      "evidence_field": "release_docs_readiness only",
+      "evidence_prompt": "prompt680",
+      "evidence_tag": "prompt680-multi-prompt-real-task-chain-acceptance",
+      "id": 17,
+      "missing_proof": "Readiness exists; final release docs/demo pack not proven.",
+      "name": "Release documentation/demo pack",
+      "pass_criteria": "Release docs and demo pack are generated and validated.",
+      "required_prompt": "Prompt686",
+      "safety_notes": "local-only, bounded, pre-approved, non-secret, non-remote, non-destructive",
+      "status": "unproven"
+    }
+  ],
+  "current_capability_boundary": "multi_prompt_real_task_chain_acceptance_proven",
+  "evidence_sources": [
+    {
+      "path": "artifacts/autonomous_runtime/prompt667_report.json",
+      "prompt": "prompt667",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt668_report.json",
+      "prompt": "prompt668",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt669_report.json",
+      "prompt": "prompt669",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt670_report.json",
+      "prompt": "prompt670",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt671_report.json",
+      "prompt": "prompt671",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt672_report.json",
+      "prompt": "prompt672",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt673_report.json",
+      "prompt": "prompt673",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt674_report.json",
+      "prompt": "prompt674",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt675_report.json",
+      "prompt": "prompt675",
+      "verified": "not_present"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt676_report.json",
+      "prompt": "prompt676",
+      "verified": "not_checked"
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt677_report.json",
+      "prompt": "prompt677",
+      "verified": true
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt678_report.json",
+      "prompt": "prompt678",
+      "verified": true
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt679_report.json",
+      "prompt": "prompt679",
+      "verified": true
+    },
+    {
+      "path": "artifacts/autonomous_runtime/prompt680_report.json",
+      "prompt": "prompt680",
+      "verified": true
+    }
+  ],
+  "minimum_operational_definition": "All 17 criteria must be proven with local evidence before complete=true.",
+  "next_prompt_sequence": [
+    {
+      "closes_criteria": [
+        4,
+        5
+      ],
+      "prompt_id": "Prompt682",
+      "title": "real_code_change_inside_multi_prompt_chain_acceptance"
+    },
+    {
+      "closes_criteria": [
+        6
+      ],
+      "prompt_id": "Prompt683",
+      "title": "failing_test_bugfix_inside_multi_prompt_chain_acceptance"
+    },
+    {
+      "closes_criteria": [
+        14
+      ],
+      "prompt_id": "Prompt684",
+      "title": "new_safe_goal_operational_daemon_acceptance"
+    },
+    {
+      "closes_criteria": [
+        16
+      ],
+      "prompt_id": "Prompt685",
+      "title": "live_codex_execution_or_dry_run_limitation_resolution"
+    },
+    {
+      "closes_criteria": [
+        17
+      ],
+      "prompt_id": "Prompt686",
+      "title": "release_documentation_and_demo_pack_acceptance"
+    }
+  ],
+  "next_recommended_action": "continue_to_real_code_change_inside_multi_prompt_chain_acceptance",
+  "out_of_scope_criteria_count": 0,
+  "partially_proven_criteria_count": 2,
+  "proven_criteria_count": 11,
+  "total_criteria_count": 17,
+  "unproven_criteria_count": 4
+}

@@ -1,0 +1,29 @@
+{
+  "bounded_summary": {
+    "max_cycles": 10,
+    "max_items": 50,
+    "max_ticks": 50,
+    "queue_item_count": 50,
+    "tick_count": 50
+  },
+  "evidence_path_count": 50,
+  "extended_soak_goal_path": "artifacts/autonomous_runtime/prompt671_extended_soak_50/extended_soak_goal.json",
+  "failure_policy_summary_path": "artifacts/autonomous_runtime/prompt671_extended_soak_50/failure_policy_summary.json",
+  "recovery_summary_path": "artifacts/autonomous_runtime/prompt671_extended_soak_50/recovery_summary.json",
+  "run_id": "prompt671_extended_soak_50",
+  "run_state_path": "artifacts/autonomous_runtime/prompt671_extended_soak_50/run_state.json",
+  "sample_evidence_paths": [
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_1_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_2_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_3_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_4_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_5_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_6_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_7_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_8_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_9_evidence.json",
+    "artifacts/autonomous_runtime/prompt671_extended_soak_50/tick_10_evidence.json"
+  ],
+  "schema_version": "prompt671_extended_soak_evidence_summary_v1",
+  "task_queue_path": "artifacts/autonomous_runtime/prompt671_extended_soak_50/task_queue.json"
+}

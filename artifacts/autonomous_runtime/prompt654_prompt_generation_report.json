@@ -1,0 +1,15 @@
+{
+  "prompt654_generator_status": "success",
+  "prompt654_generator_base_commit": "7d4cff1",
+  "prompt654_generator_tags_at_head": ["prompt653-live-auto-execution-bridge"],
+  "prompt654_generator_latest_confirmed_implementation": "prompt653",
+  "prompt654_generator_next_target_selected": "project_level_live_e2e_acceptance",
+  "prompt654_generator_next_target_rationale": "Prompt653 live bridge is fake-adapter tested only; the remaining gap is a real bounded /tmp live E2E that runs the daemon and ingests a real run_report into the completion gate. Verified prompt654 harness/test/script/report/tag are all ABSENT.",
+  "prompt654_generator_prompt_path": "prompts/generated/prompt654_project_level_live_e2e_acceptance.md",
+  "prompt654_generator_prompt_created": true,
+  "prompt654_generator_scope": "Operator-triggered, dry-run-default, token-gated, bounded /tmp live E2E harness wrapping the Prompt653 bridge; testable core (injectable bridge_runner + cloner); non-live unit tests + one bounded live acceptance.",
+  "prompt654_generator_excluded_scope": ["task-kind expansion", "long-running soak", "modifying protected modules", "live/default queue mutation", "uncontrolled daemon loops"],
+  "prompt654_generator_safety_constraints_included": true,
+  "prompt654_generator_final_decision": "Generated the Prompt654 implementation prompt; proceeding to implement + unit-test + run one bounded live acceptance in the same run.",
+  "prompt654_generator_next_action": "execute_prompt654_project_level_live_e2e_acceptance"
+}

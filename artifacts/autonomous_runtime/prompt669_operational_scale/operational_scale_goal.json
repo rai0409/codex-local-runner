@@ -1,0 +1,14 @@
+{
+  "approved_for_execution": true,
+  "goal_id": "prompt669_bounded_operational_scale_up",
+  "goal_text": "Create and validate a deterministic local-only Prompt669 operational scale-up evidence set under artifacts/autonomous_runtime/prompt669_operational_scale with exactly ten bounded queue items.",
+  "local_only": true,
+  "max_cycles": 5,
+  "max_items": 10,
+  "max_ticks": 10,
+  "requires_browser": false,
+  "requires_credentials": false,
+  "requires_network": false,
+  "run_id": "prompt669_operational_scale",
+  "schema_version": "prompt669_scaled_operational_goal_v1"
+}

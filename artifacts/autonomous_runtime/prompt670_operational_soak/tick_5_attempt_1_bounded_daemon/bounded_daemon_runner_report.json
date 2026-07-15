@@ -1,0 +1,51 @@
+{
+  "approval_gate_persistence_verified": true,
+  "artifact_paths": [
+    "artifacts/autonomous_runtime/prompt670_operational_soak/tick_5_attempt_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json"
+  ],
+  "bounded_runner_daemon_wrapped": true,
+  "browser_profile_access_prevented": true,
+  "completed_cycles": [
+    {
+      "bounded_executor_report_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_5_attempt_1_bounded_daemon/cycle_1_executor/bounded_internal_executor_loop_report.json",
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_5_attempt_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json",
+      "prompt_fingerprint": "sha256:31738fba83d811bbfcd90e5897ef65b1cf988781b00fe7370b9b489614508188",
+      "prompt_id": "prompt670_item_05"
+    }
+  ],
+  "cookie_access_prevented": true,
+  "credential_storage_prevented": true,
+  "cycle_count": 1,
+  "destructive_actions_blocked": true,
+  "duplicate_prompt_fingerprint_stop_verified": true,
+  "durable_queue_supported": true,
+  "durable_state_supported": true,
+  "env_value_access_prevented": true,
+  "errors": [],
+  "failure_threshold": 1,
+  "failure_threshold_stop_verified": true,
+  "finished_at": "2026-06-27T08:54:45.287890Z",
+  "internal_codex_executor_available": true,
+  "internal_codex_executor_entrypoint": "automation.execution.codex_executor_adapter.CodexExecutorAdapter",
+  "internal_codex_executor_used": true,
+  "local_only_evidence_captured": true,
+  "lock_file_supported": true,
+  "lock_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_5_attempt_1_bounded_daemon/daemon.lock",
+  "max_cycles": 1,
+  "max_cycles_enforced": true,
+  "queue_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_5_attempt_1_bounded_daemon/daemon_queue.json",
+  "remote_actions_blocked": true,
+  "resume_after_interruption_verified": false,
+  "run_id": "prompt670_operational_soak_tick_5_attempt_1",
+  "run_id_supported": true,
+  "schema_version": "bounded_daemon_runner_report_v1",
+  "stale_lock_recovered": false,
+  "started_at": "2026-06-27T08:54:45.284931Z",
+  "state_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_5_attempt_1_bounded_daemon/daemon_state.json",
+  "status": "success",
+  "stop_reason": "max_cycles_reached",
+  "summary_path": "artifacts/autonomous_runtime/prompt670_operational_soak/tick_5_attempt_1_bounded_daemon/daemon_status_summary.md",
+  "terminal_state_recorded": true,
+  "unsafe_paths_rejected": true
+}

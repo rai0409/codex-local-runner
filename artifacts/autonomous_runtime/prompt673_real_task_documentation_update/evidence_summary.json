@@ -1,0 +1,27 @@
+{
+  "evidence_paths": [
+    "artifacts/autonomous_runtime/prompt673_real_task_documentation_update/step_1_evidence.json",
+    "artifacts/autonomous_runtime/prompt673_real_task_documentation_update/step_2_evidence.json",
+    "artifacts/autonomous_runtime/prompt673_real_task_documentation_update/step_3_evidence.json",
+    "artifacts/autonomous_runtime/prompt673_real_task_documentation_update/step_4_evidence.json",
+    "artifacts/autonomous_runtime/prompt673_real_task_documentation_update/step_5_evidence.json",
+    "artifacts/autonomous_runtime/prompt673_real_task_documentation_update/step_6_evidence.json"
+  ],
+  "protected_artifacts_preserved": {
+    "prompt667": true,
+    "prompt668": true,
+    "prompt669": true,
+    "prompt670": true,
+    "prompt671": true,
+    "prompt672": true
+  },
+  "run_id": "prompt673_real_task_documentation_update",
+  "schema_version": "prompt673_evidence_summary_v1",
+  "validation": {
+    "next_real_task_validation_sequence_included": true,
+    "out_of_scope_safety_statement_included": true,
+    "prompt667_to_prompt672_evidence_summary_included": true,
+    "prompt672_responsibility_scores_included": true,
+    "required_roadmap_sections_verified": true
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "attempts": 1,
+  "bounded_daemon_report_path": "artifacts/autonomous_runtime/prompt671_extended_soak_50/interruption_resume_1/bounded_daemon_invocations/20260627T092437745425Z/tick_28_attempt_1_bounded_daemon/bounded_daemon_runner_report.json",
+  "internal_codex_executor_used": true,
+  "local_only_evidence_captured": true,
+  "policy": "normal",
+  "run_id": "prompt671_extended_soak_50_resumed_1",
+  "schema_version": "prompt671_tick_evidence_v1",
+  "status": "success",
+  "tick_id": "prompt671_item_28",
+  "tick_index": 28
+}

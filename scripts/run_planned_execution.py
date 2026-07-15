@@ -17,6 +17,10 @@ from automation.execution.codex_executor_adapter import select_execution_transpo
 from automation.execution.codex_live_transport import CodexLiveExecutionTransport  # noqa: E402
 from automation.orchestration.planned_execution_runner import DryRunCodexExecutionTransport  # noqa: E402
 from automation.orchestration.planned_execution_runner import PlannedExecutionRunner  # noqa: E402
+from automation.orchestration.planned_runner.autonomous_runtime import run_autonomous_cycle_metadata_from_runtime  # noqa: E402
+from automation.orchestration.planned_runner.autonomous_runtime import run_autonomous_runtime  # noqa: E402
+from automation.orchestration.planned_runner.autonomous_live_loop import run_autonomous_live_loop  # noqa: E402
+from automation.orchestration.planned_runner.live_codex_gate import run_live_codex_gate  # noqa: E402
 
 
 _REQUIRED_ARTIFACT_FILES = (
@@ -611,7 +615,7 @@ def _read_json_file_if_present(path_value: str | None) -> dict[str, object] | No
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run planned PR-slice execution with explicit transport mode")
-    parser.add_argument("--artifacts-dir", required=True, help="Directory containing planning artifacts")
+    parser.add_argument("--artifacts-dir", default=None, help="Directory containing planning artifacts")
     parser.add_argument("--out-dir", required=True, help="Output root for execution artifacts")
     parser.add_argument("--job-id", default=None, help="Optional override for execution job_id")
     parser.add_argument("--retry-context", default=None, help="Optional retry context JSON path")
@@ -626,8 +630,313 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--enable-live-transport", action="store_true", help="Explicitly allow live transport mode")
     parser.add_argument("--repo-path", default=None, help="Repository path required for live transport mode")
     parser.add_argument("--live-timeout-seconds", type=int, default=600, help="Timeout for live Codex execution")
+    parser.add_argument(
+        "--prompt373-live-execution-requested",
+        action="store_true",
+        help="Explicitly request Prompt373 live Codex execution",
+    )
+    parser.add_argument(
+        "--prompt373-live-execution-confirmed",
+        action="store_true",
+        help="Explicitly confirm Prompt373 live Codex execution",
+    )
+    parser.add_argument(
+        "--prompt378-generated-prompt-path",
+        default=None,
+        help="Optional file path for the ChatGPT-generated Prompt consumed by Prompt378 intake",
+    )
+    parser.add_argument(
+        "--prompt379-codex-execution-requested",
+        action="store_true",
+        help=(
+            "Explicitly request local-only Prompt379 generated-prompt Codex execution. "
+            "Prompt379 stays in ready_for_explicit_execution unless both Prompt379 flags are set."
+        ),
+    )
+    parser.add_argument(
+        "--prompt379-codex-execution-confirmed",
+        action="store_true",
+        help=(
+            "Explicitly confirm local-only Prompt379 generated-prompt Codex execution. "
+            "Without both Prompt379 flags, Codex is not executed."
+        ),
+    )
+    parser.add_argument(
+        "--prompt383-approve-commit-tag-requested",
+        action="store_true",
+        help=(
+            "Explicitly request local-only Prompt383 approve commit/tag execution. "
+            "Without both Prompt383 flags, Prompt383 stays in ready_for_explicit_execution."
+        ),
+    )
+    parser.add_argument(
+        "--prompt383-approve-commit-tag-confirmed",
+        action="store_true",
+        help=(
+            "Explicitly confirm local-only Prompt383 approve commit/tag execution. "
+            "Without both Prompt383 flags, no local git mutation is attempted."
+        ),
+    )
+    parser.add_argument(
+        "--enable-prompt387-success-path-dispatch",
+        action="store_true",
+        help=(
+            "Surface Prompt387 success-path dispatch permission in metadata only. "
+            "Prompt387 remains dry-run plan-only and does not execute Codex, ChatGPT, or git."
+        ),
+    )
+    parser.add_argument(
+        "--enable-prompt389-bounded-repeated-success-path-loop",
+        action="store_true",
+        help=(
+            "Explicitly allow Prompt389 to attempt bounded repeated success-path loop execution. "
+            "Without this flag Prompt389 remains blocked-by-default and non-mutating."
+        ),
+    )
+    parser.add_argument(
+        "--prompt389-max-cycles",
+        type=int,
+        default=None,
+        help=(
+            "Optional Prompt389 bounded repeated-loop max cycle count. "
+            "Defaults to 2 and is capped at 5 by Prompt389."
+        ),
+    )
+    parser.add_argument(
+        "--request-runtime-execution",
+        action="store_true",
+        default=False,
+        help="Request Prompt430 bounded runtime execution activation",
+    )
+    parser.add_argument(
+        "--allow-runtime-execution",
+        action="store_true",
+        default=False,
+        help="Allow Prompt430 bounded runtime execution after explicit request",
+    )
+    parser.add_argument(
+        "--runtime-command-artifact",
+        type=str,
+        default="",
+        help="path to JSON artifact containing bounded runtime command request",
+    )
+    parser.add_argument(
+        "--runtime-command-json",
+        type=str,
+        default="",
+        help="inline JSON object for bounded runtime command request",
+    )
+    parser.add_argument(
+        "--allow-runtime-command-artifact",
+        action="store_true",
+        default=False,
+        help="explicit permission to read/use runtime command artifact or inline JSON",
+    )
+    parser.add_argument(
+        "--request-runtime-result-review",
+        action="store_true",
+        default=False,
+        help="Request Prompt431 runtime execution result review activation",
+    )
+    parser.add_argument(
+        "--request-route-handoff",
+        action="store_true",
+        default=False,
+        help="Request Prompt432 route decision handoff activation",
+    )
+    parser.add_argument(
+        "--request-handoff-execution",
+        action="store_true",
+        default=False,
+        help="Request Prompt433 bounded handoff execution activation",
+    )
+    parser.add_argument(
+        "--allow-handoff-execution",
+        action="store_true",
+        default=False,
+        help="Allow Prompt433 bounded handoff execution after explicit request",
+    )
+    parser.add_argument(
+        "--request-autonomous-closure",
+        action="store_true",
+        default=False,
+        help="Request Prompt434 bounded autonomous self-run closure activation",
+    )
+    parser.add_argument(
+        "--allow-autonomous-closure",
+        action="store_true",
+        default=False,
+        help="Allow Prompt434 autonomous closure after explicit request",
+    )
+    parser.add_argument(
+        "--allow-next-cycle",
+        action="store_true",
+        default=False,
+        help="Allow Prompt434 to consider a bounded next-cycle candidate",
+    )
+    parser.add_argument(
+        "--autonomous-current-cycle",
+        type=int,
+        default=None,
+        help="Current bounded autonomous cycle number for Prompt434",
+    )
+    parser.add_argument(
+        "--autonomous-max-cycles",
+        type=int,
+        default=2,
+        help="Maximum bounded autonomous cycle count for Prompt434",
+    )
+    parser.add_argument(
+        "--enable-bounded-cycle-runner",
+        action="store_true",
+        default=False,
+        help="Connect Prompt435 metadata-only bounded cycle runner to Prompt434",
+    )
     parser.add_argument("--stop-on-failure", action="store_true", default=True, help="Stop when a unit fails")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue processing units after failures")
+    parser.add_argument(
+        "--autonomous-loop",
+        action="store_true",
+        default=False,
+        help="Run local-only bounded autonomous runtime metadata mode",
+    )
+    parser.add_argument(
+        "--daemon-lite",
+        action="store_true",
+        default=False,
+        help="Run local-only daemon-lite observed metadata mode",
+    )
+    parser.add_argument("--max-cycles", type=int, default=None, help="Required positive autonomous runtime cycle bound")
+    parser.add_argument("--max-seconds", type=float, default=None, help="Required positive autonomous runtime time bound")
+    parser.add_argument(
+        "--autonomous-enable-token",
+        default="",
+        help="Explicit token required to enable autonomous runtime metadata cycles",
+    )
+    parser.add_argument(
+        "--commit-tag-on-success",
+        action="store_true",
+        default=False,
+        help="Request local commit/tag gate after autonomous runtime success",
+    )
+    parser.add_argument(
+        "--commit-tag-enable-token",
+        default="",
+        help="Explicit token required before local commit/tag execution can run",
+    )
+    parser.add_argument(
+        "--autonomous-runtime-out-dir",
+        default=None,
+        help="Optional output directory for autonomous runtime artifacts; defaults to --out-dir",
+    )
+    parser.add_argument(
+        "--autonomous-cycle-metadata",
+        action="store_true",
+        default=False,
+        help="Write local-only autonomous cycle metadata without invoking Codex",
+    )
+    parser.add_argument(
+        "--generated-prompt-path",
+        default=None,
+        help="Optional generated prompt path for autonomous cycle metadata",
+    )
+    parser.add_argument(
+        "--codex-result-path",
+        default=None,
+        help="Optional Codex result JSON path for autonomous cycle metadata assimilation",
+    )
+    parser.add_argument(
+        "--live-codex-gate",
+        action="store_true",
+        default=False,
+        help="Run one bounded local-only live Codex gate attempt when explicitly enabled",
+    )
+    parser.add_argument(
+        "--live-codex-enable-token",
+        default="",
+        help="Explicit token required before the live Codex gate can invoke Codex",
+    )
+    parser.add_argument(
+        "--live-codex-timeout-seconds",
+        type=int,
+        default=60,
+        help="Timeout for the one-shot live Codex gate attempt",
+    )
+    parser.add_argument(
+        "--live-codex-result-path",
+        default=None,
+        help="Optional output path for the live Codex gate result JSON",
+    )
+    parser.add_argument(
+        "--live-codex-sandbox-mode",
+        choices=["default", "read-only", "workspace-write"],
+        default="default",
+        help=(
+            "Codex exec sandbox policy. default preserves the current command; "
+            "read-only/workspace-write pass --sandbox <mode> to codex exec"
+        ),
+    )
+    parser.add_argument(
+        "--live-codex-effect-spec-path",
+        default=None,
+        help=(
+            "Optional JSON effect spec; when set, gate success additionally requires "
+            "verified file effects instead of trusting returncode/stdout"
+        ),
+    )
+    parser.add_argument(
+        "--autonomous-live-loop",
+        action="store_true",
+        default=False,
+        help="Run bounded local-only autonomous live loop when explicitly enabled",
+    )
+    parser.add_argument(
+        "--live-loop-generated-prompt-path",
+        default=None,
+        help="Generated prompt path for bounded autonomous live loop cycles",
+    )
+    parser.add_argument(
+        "--live-loop-timeout-seconds",
+        type=int,
+        default=60,
+        help="Per-cycle live Codex timeout for bounded autonomous live loop",
+    )
+    parser.add_argument(
+        "--live-loop-verification-continue",
+        action="store_true",
+        default=False,
+        help=(
+            "Verification-only: continue past commit_tag_gate until max cycles to prove "
+            "multi-cycle live execution. Never commits or tags."
+        ),
+    )
+    parser.add_argument(
+        "--live-loop-sandbox-mode",
+        choices=["default", "read-only", "workspace-write"],
+        default="default",
+        help="Codex exec sandbox policy applied to every live loop cycle",
+    )
+    parser.add_argument(
+        "--live-loop-effect-spec-path",
+        default=None,
+        help=(
+            "Optional JSON effect spec applied to every live loop cycle "
+            "(per-cycle manifest entries take precedence)"
+        ),
+    )
+    parser.add_argument(
+        "--live-loop-generated-prompt-manifest-path",
+        default=None,
+        help=(
+            "Optional JSON manifest with per-cycle generated prompt/effect spec entries; "
+            "cycles stay bounded by max-cycles and the manifest length"
+        ),
+    )
+    parser.add_argument(
+        "--previous-cycle-state-path",
+        default=None,
+        help="Optional previous autonomous cycle state JSON path",
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
@@ -647,10 +956,102 @@ def _validate_inputs(artifacts_dir: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
-    artifacts_dir = Path(args.artifacts_dir)
     out_dir = Path(args.out_dir)
 
     try:
+        if args.live_codex_gate:
+            manifest = run_live_codex_gate(
+                generated_prompt_path=args.generated_prompt_path,
+                out_dir=out_dir,
+                live_codex_enable_token=args.live_codex_enable_token,
+                timeout_seconds=args.live_codex_timeout_seconds,
+                live_codex_result_path=args.live_codex_result_path,
+                legacy_source_used=True,
+                sandbox_mode=args.live_codex_sandbox_mode,
+                effect_spec_path=args.live_codex_effect_spec_path,
+            )
+            if args.as_json:
+                print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+            else:
+                print(f"live_codex_gate_status={manifest.get('status', '')}")
+                print(f"stop_reason={manifest.get('stop_reason', '')}")
+                print(f"next_action={manifest.get('next_action', '')}")
+            return 0
+
+        if args.autonomous_cycle_metadata:
+            manifest = run_autonomous_cycle_metadata_from_runtime(
+                generated_prompt_path=args.generated_prompt_path,
+                codex_result_path=args.codex_result_path,
+                previous_cycle_state_path=args.previous_cycle_state_path,
+                output_dir=out_dir,
+                cycle_index=args.autonomous_current_cycle or 1,
+                max_cycles=args.max_cycles,
+                max_seconds=args.max_seconds,
+                autonomous_enable_token=args.autonomous_enable_token,
+                legacy_source_used=True,
+            )
+            if args.as_json:
+                print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+            else:
+                print(f"autonomous_cycle_status={manifest.get('status', '')}")
+                print(f"stop_reason={manifest.get('stop_reason', '')}")
+                print(f"next_action={manifest.get('next_action', '')}")
+            return 0
+
+        if args.autonomous_loop or args.daemon_lite:
+            manifest = run_autonomous_runtime(
+                repo_path=Path(args.repo_path).resolve() if args.repo_path else REPO_ROOT,
+                out_dir=out_dir,
+                autonomous_loop=bool(args.autonomous_loop),
+                daemon_lite=bool(args.daemon_lite),
+                max_cycles=args.max_cycles,
+                max_seconds=args.max_seconds,
+                autonomous_enable_token=args.autonomous_enable_token,
+                commit_tag_on_success=bool(args.commit_tag_on_success),
+                commit_tag_enable_token=args.commit_tag_enable_token,
+                autonomous_runtime_out_dir=args.autonomous_runtime_out_dir,
+                legacy_source_used=True,
+                migrated_legacy_functions=[
+                    "_build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state",
+                    "_build_prompt420_success_only_next_cycle_loop_state",
+                    "_build_local_daemon_lite_wrapper_artifacts",
+                ],
+            )
+            if args.as_json:
+                print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+            else:
+                print(f"autonomous_runtime_status={manifest.get('status', '')}")
+                print(f"final_status={manifest.get('final_status', '')}")
+                print(f"next_action={manifest.get('next_action', '')}")
+            return 0
+
+        if args.autonomous_live_loop:
+            manifest = run_autonomous_live_loop(
+                repo_path=Path(args.repo_path).resolve() if args.repo_path else REPO_ROOT,
+                out_dir=out_dir,
+                generated_prompt_path=args.live_loop_generated_prompt_path,
+                max_cycles=args.max_cycles,
+                max_seconds=args.max_seconds,
+                autonomous_enable_token=args.autonomous_enable_token,
+                live_codex_enable_token=args.live_codex_enable_token,
+                live_loop_timeout_seconds=args.live_loop_timeout_seconds,
+                legacy_source_used=True,
+                verification_continue=bool(args.live_loop_verification_continue),
+                sandbox_mode=args.live_loop_sandbox_mode,
+                effect_spec_path=args.live_loop_effect_spec_path,
+                generated_prompt_manifest_path=args.live_loop_generated_prompt_manifest_path,
+            )
+            if args.as_json:
+                print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+            else:
+                print(f"autonomous_live_loop_status={manifest.get('status', '')}")
+                print(f"stop_reason={manifest.get('stop_reason', '')}")
+                print(f"next_action={manifest.get('next_action', '')}")
+            return 0
+
+        if not args.artifacts_dir:
+            raise ValueError("planned execution requires --artifacts-dir")
+        artifacts_dir = Path(args.artifacts_dir)
         _validate_inputs(artifacts_dir)
 
         retry_context = _read_json_file_if_present(args.retry_context)
@@ -698,6 +1099,66 @@ def main(argv: list[str] | None = None) -> int:
             policy_snapshot=policy_snapshot,
             github_read_evidence=github_read_evidence,
             execution_repo_path=str(Path(args.repo_path).resolve()) if args.repo_path else None,
+            prompt373_live_execution_requested=bool(args.prompt373_live_execution_requested),
+            prompt373_live_execution_confirmed=bool(args.prompt373_live_execution_confirmed),
+            prompt378_generated_prompt_path=args.prompt378_generated_prompt_path,
+            prompt379_codex_execution_requested=bool(
+                args.prompt379_codex_execution_requested
+            ),
+            prompt379_codex_execution_confirmed=bool(
+                args.prompt379_codex_execution_confirmed
+            ),
+            prompt383_approve_commit_tag_requested=bool(
+                args.prompt383_approve_commit_tag_requested
+            ),
+            prompt383_approve_commit_tag_confirmed=bool(
+                args.prompt383_approve_commit_tag_confirmed
+            ),
+            prompt387_success_path_dispatch_enabled=bool(
+                args.enable_prompt387_success_path_dispatch
+            ),
+            prompt389_bounded_repeated_success_path_loop_enabled=bool(
+                args.enable_prompt389_bounded_repeated_success_path_loop
+            ),
+            prompt389_max_cycles=args.prompt389_max_cycles,
+            prompt436_request_runtime_execution=bool(
+                args.request_runtime_execution
+            ),
+            prompt436_allow_runtime_execution=bool(
+                args.allow_runtime_execution
+            ),
+            prompt437_runtime_command_artifact_path=(
+                args.runtime_command_artifact
+            ),
+            prompt437_runtime_command_json=args.runtime_command_json,
+            prompt437_allow_runtime_command_artifact=bool(
+                args.allow_runtime_command_artifact
+            ),
+            prompt436_request_runtime_result_review=bool(
+                args.request_runtime_result_review
+            ),
+            prompt436_request_route_handoff=bool(
+                args.request_route_handoff
+            ),
+            prompt436_request_handoff_execution=bool(
+                args.request_handoff_execution
+            ),
+            prompt436_allow_handoff_execution=bool(
+                args.allow_handoff_execution
+            ),
+            prompt435_request_autonomous_closure=bool(
+                args.request_autonomous_closure
+            ),
+            prompt435_allow_autonomous_closure=bool(
+                args.allow_autonomous_closure
+            ),
+            prompt435_allow_next_cycle=bool(args.allow_next_cycle),
+            prompt435_autonomous_current_cycle=args.autonomous_current_cycle,
+            prompt435_autonomous_max_cycles=args.autonomous_max_cycles,
+            prompt435_enable_bounded_cycle_runner=bool(
+                args.enable_bounded_cycle_runner
+            ),
+            live_transport_enabled=bool(args.enable_live_transport),
         )
         manifest = _refresh_result_accounting_surfaces(
             manifest=manifest,

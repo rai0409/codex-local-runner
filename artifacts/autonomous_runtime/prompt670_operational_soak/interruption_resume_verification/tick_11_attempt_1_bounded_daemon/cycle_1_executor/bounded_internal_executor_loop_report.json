@@ -1,0 +1,110 @@
+{
+  "approval_gate_verified": true,
+  "artifact_paths": [
+    "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json"
+  ],
+  "bounded_runner_implemented": true,
+  "browser_profile_access_prevented": true,
+  "cookie_access_prevented": true,
+  "credential_storage_prevented": true,
+  "cycle_count": 1,
+  "destructive_actions_blocked": true,
+  "duplicate_prompt_fingerprint_stop_verified": false,
+  "env_value_access_prevented": true,
+  "errors": [],
+  "failure_threshold": 1,
+  "failure_threshold_stop_verified": true,
+  "finished_at": "2026-06-27T08:54:45.433855Z",
+  "internal_codex_executor_available": true,
+  "internal_codex_executor_entrypoint": "automation.execution.codex_executor_adapter.CodexExecutorAdapter",
+  "internal_codex_executor_used": true,
+  "local_only_evidence_captured": true,
+  "max_cycles": 1,
+  "max_cycles_enforced": true,
+  "max_cycles_hard_cap": 3,
+  "per_cycle": [
+    {
+      "approved_for_execution": true,
+      "artifacts": {
+        "artifacts": [
+          "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+          "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt"
+        ],
+        "stderr_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+        "stdout_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt"
+      },
+      "cycle_index": 1,
+      "evidence_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/cycle_1_evidence.json",
+      "internal_executor_entrypoint": "automation.execution.codex_executor_adapter.CodexExecutorAdapter",
+      "normalized_result": {
+        "additions": 0,
+        "changed_files": [],
+        "cost": {
+          "tokens_input": 0,
+          "tokens_output": 0
+        },
+        "deletions": 0,
+        "execution": {
+          "attempt_count": 1,
+          "finished_at": "2026-06-27T08:54:45.433507Z",
+          "started_at": "2026-06-27T08:54:45.433501Z",
+          "status": "completed",
+          "stderr_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+          "stdout_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+          "verify": {
+            "commands": [],
+            "reason": "proof_transport_local_evidence",
+            "status": "passed"
+          }
+        },
+        "failure_message": null,
+        "failure_type": null,
+        "generated_patch_summary": "local proof transport; no prompt text executed",
+        "job_id": "prompt662_bounded_internal_executor_loop",
+        "pr_id": "prompt670_item_11",
+        "raw_execution": {
+          "artifacts": {
+            "artifacts": [
+              "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+              "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt"
+            ],
+            "stderr_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+            "stdout_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt"
+          },
+          "result": {
+            "additions": 0,
+            "attempt_count": 1,
+            "changed_files": [],
+            "cost": {
+              "tokens_input": 0,
+              "tokens_output": 0
+            },
+            "deletions": 0,
+            "finished_at": "2026-06-27T08:54:45.433507Z",
+            "generated_patch_summary": "local proof transport; no prompt text executed",
+            "run_id": "prompt662_bounded_internal_executor_loop:prompt670_item_11:cycle-1",
+            "started_at": "2026-06-27T08:54:45.433501Z",
+            "status": "completed",
+            "stderr_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stderr.txt",
+            "stdout_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/tick_11_attempt_1_bounded_daemon/cycle_1_executor/executor_runs/cycle_1/stdout.txt",
+            "verify": {
+              "commands": [],
+              "reason": "proof_transport_local_evidence",
+              "status": "passed"
+            }
+          }
+        }
+      },
+      "passed": true,
+      "prompt_fingerprint": "sha256:2b1a6a002de54d06e51e67bdf7ac52f34b52d4fb7252ed2c95baf7c3e6801a85",
+      "prompt_id": "prompt670_item_11",
+      "prompt_path": "artifacts/autonomous_runtime/prompt670_operational_soak/interruption_resume_verification/prompts/prompt670_item_11.md",
+      "run_id": "prompt662_bounded_internal_executor_loop:prompt670_item_11:cycle-1"
+    }
+  ],
+  "remote_actions_blocked": true,
+  "started_at": "2026-06-27T08:54:45.432853Z",
+  "status": "success",
+  "stop_reason": "max_cycles_reached",
+  "unsafe_paths_rejected": true
+}
