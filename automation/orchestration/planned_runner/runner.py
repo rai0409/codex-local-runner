@@ -14,7 +14,7 @@ from automation.orchestration.objective_contract import build_objective_contract
 from automation.orchestration.objective_contract import build_objective_run_state_summary_surface
 from automation.orchestration.planned_runner.runtime_output_wiring import reconnect_runtime_output_generation
 from automation.orchestration.planned_runner.transports import DryRunCodexExecutionTransport
-from automation.orchestration.planned_runner.utils import _as_non_negative_int, _iso_now
+from automation.orchestration.planned_runner.utils import _as_non_negative_int, _as_optional_int, _iso_now
 from automation.orchestration.planned_runner.utils import _normalize_string_list, _normalize_text
 from automation.orchestration.planned_runner.utils import _read_json_object_if_exists, _write_json
 from automation.planning.prompt_compiler import compile_prompt_units
@@ -251,6 +251,7 @@ def _build_simple_decision(
     unit_id: str,
     decision_payload: Mapping[str, Any],
     signals: Mapping[str, bool],
+    run_state_payload: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if kind == "checkpoint":
         from automation.orchestration.planned_runner.state.checkpoint import (
@@ -296,7 +297,7 @@ def _build_simple_decision(
         decision_kind=kind,
         decision_payload=payload,
         signals=signals,
-        run_state_payload=None,
+        run_state_payload=run_state_payload,
         commit_readiness_status=("ready" if kind == "merge" and signals.get("commit_allowed") else None),
     )
 
@@ -372,7 +373,15 @@ def _build_run_state_payload(
         "manual_intervention_required": manual_required,
         "rollback_evaluation_pending": next_action == "rollback_required",
         "global_stop_recommended": global_stop,
-        "next_run_action": "continue_run" if continue_allowed else "pause_run",
+        "next_run_action": (
+            "evaluate_rollback"
+            if next_action == "rollback_required"
+            else "hold_for_global_stop"
+            if global_stop
+            else "continue_run"
+            if continue_allowed
+            else "pause_run"
+        ),
         "unit_blocked": False,
         "latest_unit_id": _normalize_text(manifest_units[-1].get("pr_id")) if manifest_units else "",
         "allowed_transitions": [],
@@ -784,6 +793,7 @@ class PlannedExecutionRunner:
         **kwargs: Any,
     ) -> dict[str, Any]:
         _apply_legacy_facade_overrides()
+        facade = sys.modules["automation.orchestration.planned_execution_runner"]
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
         execution_repo = _normalize_text(execution_repo_path, default="")
@@ -899,6 +909,7 @@ class PlannedExecutionRunner:
         manifest["objective_contract_summary"] = build_objective_run_state_summary_surface(
             objective_contract_payload
         )
+        run_state_objective_summary = manifest["objective_contract_summary"]
         manifest["objective_contract_path"] = str(objective_contract_path)
 
         manifest_path = run_root / "manifest.json"
@@ -953,6 +964,10 @@ class PlannedExecutionRunner:
                 unit_id=pr_id,
                 decision_payload=decision_payload,
                 signals=lifecycle_signals,
+                run_state_payload={
+                    "global_stop": lifecycle_signals["global_stop_required"],
+                    "global_stop_recommended": lifecycle_signals["global_stop_required"],
+                },
             )
             lifecycle_signals["rollback_required"] = (
                 rollback_decision.get("decision") == "required"
@@ -989,6 +1004,30 @@ class PlannedExecutionRunner:
             progression = dict(progressions.get(pr_id) or {})
             progression_path = Path(_normalize_text(entry.get("unit_progression_path")))
             if progression and progression_path:
+                _append_progression_checkpoint(
+                    progression,
+                    state="checkpoint_evaluated",
+                    now=self.now,
+                    reason="checkpoint_decision_persisted",
+                )
+                _append_progression_checkpoint(
+                    progression,
+                    state="commit_evaluated",
+                    now=self.now,
+                    reason="commit_decision_persisted",
+                )
+                _append_progression_checkpoint(
+                    progression,
+                    state="merge_evaluated",
+                    now=self.now,
+                    reason="merge_decision_persisted",
+                )
+                _append_progression_checkpoint(
+                    progression,
+                    state="rollback_evaluated",
+                    now=self.now,
+                    reason="rollback_decision_persisted",
+                )
                 _append_progression_checkpoint(
                     progression,
                     state=_UNIT_STATE_REVIEWED,
@@ -1087,6 +1126,7 @@ class PlannedExecutionRunner:
             run_state_payload=run_state_payload,
             manifest_units=manifest_units,
         )
+        run_state_payload.update(run_state_objective_summary)
         from automation.orchestration.planned_runner.git_ops.commit_tag import (
             _execute_bounded_commit,
         )
@@ -1128,6 +1168,9 @@ class PlannedExecutionRunner:
             entry["commit_execution_summary"] = dict(commit_execution)
             decision_summary["commit_execution_status"] = _normalize_text(
                 commit_execution.get("status"), default="blocked"
+            )
+            decision_summary["commit_execution_manual_intervention_required"] = bool(
+                commit_execution.get("manual_intervention_required", False)
             )
             entry["decision_summary"] = decision_summary
 
@@ -1185,6 +1228,32 @@ class PlannedExecutionRunner:
                 write_backend=self.github_write_backend,
                 now=self.now,
             )
+            push_execution = _with_execution_gate_surface(push_execution)
+            pr_execution = _with_execution_gate_surface(pr_execution)
+            if (
+                _normalize_text(commit_execution.get("status"), default="") == "succeeded"
+                and _normalize_text(push_execution.get("status"), default="") == "succeeded"
+                and _normalize_text(pr_execution.get("status"), default="") == "succeeded"
+                and _as_optional_int(pr_execution.get("pr_number"))
+            ):
+                merge_decision = {
+                    **merge_decision,
+                    "decision": "allowed",
+                    "rule_id": "merge_allowed_after_pr_creation",
+                    "summary": "merge readiness satisfied by persisted commit, push, and PR receipts",
+                    "blocking_reasons": [],
+                    "recommended_next_action": "proceed_to_merge",
+                    "readiness_status": "ready",
+                    "readiness_next_action": "prepare_merge",
+                    "automation_eligible": True,
+                    "manual_intervention_required": False,
+                    "unresolved_blockers": [],
+                    "prerequisites_satisfied": True,
+                }
+                _write_json(
+                    Path(_normalize_text(entry.get("merge_decision_path"), default="")),
+                    merge_decision,
+                )
             merge_execution = _execute_bounded_merge(
                 unit_id=_normalize_text(entry.get("pr_id"), default=""),
                 repository=repository,
@@ -1197,39 +1266,48 @@ class PlannedExecutionRunner:
                 write_backend=self.github_write_backend,
                 now=self.now,
             )
-            # `_execute_bounded_rollback` remains facade-patchable for legacy
-            # callers.  This artifact-only dry-run path must not call through
-            # that wrapper because the legacy override can intentionally point
-            # back at the facade.  Emit the same blocked receipt directly.
-            rollback_execution = _build_rollback_execution_blocked_payload(
-                unit_id=_normalize_text(entry.get("pr_id"), default=""),
-                rollback_mode="unknown",
-                summary=(
-                    "rollback execution blocked; receipt persisted without "
-                    "executing a rollback"
-                ),
-                failure_reason="rollback_execution_blocked_by_preconditions",
-                blocking_reasons=["artifact_wiring_only", "dry_run_mode"],
-                trigger_reason=_normalize_text(
-                    rollback_decision.get("decision"), default="unknown"
-                ),
-                source_execution_state_summary={
-                    "commit_execution_status": _normalize_text(
-                        commit_execution.get("status"), default=""
+            merge_execution = _with_execution_gate_surface(merge_execution)
+            rollback_executor = facade._execute_bounded_rollback
+            if (
+                getattr(rollback_executor, "__module__", "")
+                == "automation.orchestration.planned_execution_runner"
+                and getattr(rollback_executor, "__name__", "")
+                == "_execute_bounded_rollback"
+            ):
+                rollback_execution = _build_rollback_execution_blocked_payload(
+                    unit_id=_normalize_text(entry.get("pr_id"), default=""),
+                    rollback_mode="unknown",
+                    summary=(
+                        "rollback execution blocked; receipt persisted without "
+                        "executing a rollback"
                     ),
-                    "push_execution_status": _normalize_text(
-                        push_execution.get("status"), default=""
+                    failure_reason="rollback_execution_blocked_by_preconditions",
+                    blocking_reasons=["artifact_wiring_only", "dry_run_mode"],
+                    trigger_reason=_normalize_text(
+                        rollback_decision.get("decision"), default="unknown"
                     ),
-                    "pr_execution_status": _normalize_text(
-                        pr_execution.get("status"), default=""
-                    ),
-                    "merge_execution_status": _normalize_text(
-                        merge_execution.get("status"), default=""
-                    ),
-                },
-                manual_intervention_required=True,
-                now=self.now,
-            )
+                    source_execution_state_summary={
+                        "commit_execution_status": _normalize_text(commit_execution.get("status"), default=""),
+                        "push_execution_status": _normalize_text(push_execution.get("status"), default=""),
+                        "pr_execution_status": _normalize_text(pr_execution.get("status"), default=""),
+                        "merge_execution_status": _normalize_text(merge_execution.get("status"), default=""),
+                    },
+                    manual_intervention_required=True,
+                    now=self.now,
+                )
+            else:
+                rollback_execution = rollback_executor(
+                    unit_id=_normalize_text(entry.get("pr_id"), default=""),
+                    repo_path=execution_repo,
+                    run_state_payload=run_state_payload,
+                    rollback_decision_payload=rollback_decision,
+                    commit_execution_payload=commit_execution,
+                    push_execution_payload=push_execution,
+                    pr_execution_payload=pr_execution,
+                    merge_execution_payload=merge_execution,
+                    dry_run=dry_run,
+                    now=self.now,
+                )
             for execution_name, execution_payload in (
                 ("push", push_execution),
                 ("pr", pr_execution),
@@ -1275,15 +1353,93 @@ class PlannedExecutionRunner:
                     reason="bounded_commit_execution_completed",
                 )
                 _write_json(progression_path, progression)
+            for execution_name, execution_payload, started_state, completed_state in (
+                ("push", push_execution, "push_execution_started", "push_executed"),
+                ("pr", pr_execution, "pr_creation_started", "pr_created"),
+                ("merge", merge_execution, "merge_execution_started", "merge_executed"),
+            ):
+                if not bool(execution_payload.get("attempted", False)):
+                    continue
+                _append_progression_checkpoint(
+                    progression,
+                    state=started_state,
+                    now=self.now,
+                    reason=f"bounded_{execution_name}_execution_attempted",
+                )
+                _append_progression_checkpoint(
+                    progression,
+                    state=(
+                        completed_state
+                        if execution_payload.get("status") == "succeeded"
+                        else f"{execution_name}_execution_failed"
+                    ),
+                    now=self.now,
+                    reason=f"bounded_{execution_name}_execution_completed",
+                )
+                _write_json(progression_path, progression)
+            if bool(rollback_execution.get("attempted", False)):
+                _append_progression_checkpoint(
+                    progression,
+                    state="rollback_execution_started",
+                    now=self.now,
+                    reason="bounded_rollback_execution_attempted",
+                )
+                _append_progression_checkpoint(
+                    progression,
+                    state=(
+                        "rollback_executed"
+                        if rollback_execution.get("status") == "succeeded"
+                        else "rollback_execution_failed"
+                    ),
+                    now=self.now,
+                    reason="bounded_rollback_execution_completed",
+                )
+                _write_json(progression_path, progression)
+
+        from automation.orchestration.planned_runner.state.run_state import (
+            _augment_run_state_with_authority_validation,
+            _augment_run_state_with_closed_loop,
+            _augment_run_state_with_delivery_execution,
+            _augment_run_state_with_remote_github,
+            _augment_run_state_with_rollback_aftermath,
+            _augment_run_state_with_rollback_execution,
+        )
 
         run_state_payload = _augment_run_state_with_commit_execution(
             run_state_payload=run_state_payload,
             manifest_units=manifest_units,
         )
-        run_state_payload["github_read_evidence_present"] = isinstance(github_read_evidence, Mapping)
-        run_state_payload, manifest = reconnect_runtime_output_generation(
-            run_root=run_root,
+        run_state_payload = _augment_run_state_with_delivery_execution(
             run_state_payload=run_state_payload,
+            manifest_units=manifest_units,
+        )
+        run_state_payload = _augment_run_state_with_rollback_execution(
+            run_state_payload=run_state_payload,
+            manifest_units=manifest_units,
+        )
+        run_state_payload = _augment_run_state_with_rollback_aftermath(
+            run_state_payload=run_state_payload,
+            manifest_units=manifest_units,
+        )
+        run_state_payload = _augment_run_state_with_authority_validation(
+            run_state_payload=run_state_payload,
+            manifest_units=manifest_units,
+        )
+        run_state_payload = _augment_run_state_with_closed_loop(
+            run_state_payload=run_state_payload,
+            manifest_units=manifest_units,
+            run_status=run_status,
+        )
+        runtime_run_state_payload = {
+            **run_state_payload,
+            "github_read_evidence_present": isinstance(github_read_evidence, Mapping),
+        }
+        # Runtime wiring owns its detailed prompt surfaces and artifacts.  The
+        # persisted run-state remains the orchestration contract, so do not
+        # promote those implementation-detail fields into its public schema.
+        _, manifest = reconnect_runtime_output_generation(
+            run_root=run_root,
+            run_state_payload=runtime_run_state_payload,
             manifest_payload=manifest,
             execution_repo_path=execution_repo,
             job_id=resolved_job_id,
@@ -1334,6 +1490,29 @@ class PlannedExecutionRunner:
             prompt547_internal_codex_allowed_files=kwargs.get(
                 "prompt547_internal_codex_allowed_files"
             ),
+        )
+        run_state_payload = _augment_run_state_with_remote_github(
+            run_state_payload=run_state_payload,
+            manifest_units=manifest_units,
+        )
+        from automation.orchestration.planned_runner.state.lifecycle import (
+            _augment_run_state_with_lifecycle_terminal_contract,
+        )
+        from automation.orchestration.planned_runner.state.operator_explainability import (
+            _augment_run_state_with_operator_explainability,
+        )
+        from automation.orchestration.planned_runner.state.policy_overlay import (
+            _augment_run_state_with_policy_overlay,
+        )
+
+        run_state_payload = _augment_run_state_with_policy_overlay(
+            run_state_payload=run_state_payload
+        )
+        run_state_payload = _augment_run_state_with_lifecycle_terminal_contract(
+            run_state_payload=run_state_payload
+        )
+        run_state_payload = _augment_run_state_with_operator_explainability(
+            run_state_payload=run_state_payload
         )
 
         # The completion contract is a run-level artifact.  Keep its creation
@@ -1431,6 +1610,41 @@ class PlannedExecutionRunner:
         from automation.orchestration.retry_reentry_loop_contract import (
             build_retry_reentry_loop_contract_surface,
             build_retry_reentry_loop_run_state_summary_surface,
+        )
+        from automation.orchestration.endgame_closure_contract import (
+            build_endgame_closure_contract_surface,
+            build_endgame_closure_run_state_summary_surface,
+        )
+        from automation.orchestration.loop_hardening_contract import (
+            build_loop_hardening_run_state_summary_surface,
+        )
+        from automation.orchestration.lane_stabilization_contract import (
+            build_lane_stabilization_contract_surface,
+            build_lane_stabilization_run_state_summary_surface,
+        )
+        from automation.orchestration.observability_rollup import (
+            build_failure_bucket_rollup_summary_surface,
+            build_failure_bucket_rollup_surface,
+            build_fleet_run_rollup_summary_surface,
+            build_fleet_run_rollup_surface,
+            build_observability_rollup_contract_summary_surface,
+            build_observability_rollup_contract_surface,
+            build_observability_rollup_run_state_summary_surface,
+        )
+        from automation.orchestration.failure_bucketing_hardening import (
+            build_failure_bucketing_hardening_run_state_summary_surface,
+            build_failure_bucketing_hardening_summary_surface,
+        )
+        from automation.orchestration.artifact_retention import (
+            build_artifact_retention_contract_surface,
+            build_artifact_retention_run_state_summary_surface,
+            build_artifact_retention_summary_surface,
+            build_retention_manifest_summary_surface,
+            build_retention_manifest_surface,
+        )
+        from automation.orchestration.fleet_safety_control import (
+            build_fleet_safety_control_run_state_summary_surface,
+            build_fleet_safety_control_summary_surface,
         )
         from automation.orchestration.planned_runner.summaries.artifact_payload import (
             _collect_execution_result_contract_records,
@@ -1672,6 +1886,31 @@ class PlannedExecutionRunner:
         manifest["retry_reentry_loop_contract_summary"] = retry_reentry_loop_contract_summary
         manifest["retry_reentry_loop_contract_path"] = str(retry_reentry_loop_contract_path)
 
+        endgame_closure_contract_payload = build_endgame_closure_contract_surface(
+            run_id=resolved_job_id,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                name: (run_root / name).exists()
+                for name in manifest["artifact_ownership"].values()
+            },
+        )
+        endgame_closure_contract_path = run_root / "endgame_closure_contract.json"
+        _write_json(endgame_closure_contract_path, endgame_closure_contract_payload)
+        endgame_closure_contract_summary = build_endgame_closure_run_state_summary_surface(
+            endgame_closure_contract_payload
+        )
+        run_state_payload.update(endgame_closure_contract_summary)
+        manifest["endgame_closure_contract_summary"] = endgame_closure_contract_summary
+        manifest["endgame_closure_contract_path"] = str(endgame_closure_contract_path)
+
         facade = sys.modules["automation.orchestration.planned_execution_runner"]
         contract_context: dict[str, Any] = {
             "run_id": resolved_job_id,
@@ -1684,7 +1923,7 @@ class PlannedExecutionRunner:
             "execution_repo_path": execution_repo,
             "contract_artifact_index_payload": {},
             "lane_stabilization_contract_payload": {},
-            "endgame_closure_contract_payload": {},
+            "endgame_closure_contract_payload": endgame_closure_contract_payload,
             "retry_reentry_loop_contract_payload": {},
             "artifact_retention_contract_payload": {},
             "retention_manifest_payload": {},
@@ -1693,6 +1932,11 @@ class PlannedExecutionRunner:
         failure_bucketing_payload = _call_contract_builder(
             facade.build_failure_bucketing_hardening_contract_surface,
             **contract_context,
+        )
+        run_state_payload.update(
+            build_failure_bucketing_hardening_run_state_summary_surface(
+                failure_bucketing_payload
+            )
         )
         loop_hardening_payload = _call_contract_builder(
             facade.build_loop_hardening_contract_surface,
@@ -1826,6 +2070,7 @@ class PlannedExecutionRunner:
             "execution_result_contract": str(execution_result_contract_path),
             "verification_closure_contract": str(verification_closure_contract_path),
             "retry_reentry_loop_contract": str(retry_reentry_loop_contract_path),
+            "endgame_closure_contract": str(endgame_closure_contract_path),
         }
         approval_summaries_by_role = {
             "objective_contract": manifest["objective_contract_summary"],
@@ -1840,6 +2085,7 @@ class PlannedExecutionRunner:
             "execution_result_contract": execution_result_contract_summary,
             "verification_closure_contract": verification_closure_contract_summary,
             "retry_reentry_loop_contract": retry_reentry_loop_contract_summary,
+            "endgame_closure_contract": endgame_closure_contract_summary,
         }
         for role, artifact_name, payload, summary_builder in approval_artifacts:
             artifact_path = run_root / artifact_name
@@ -1853,6 +2099,105 @@ class PlannedExecutionRunner:
             paths_by_role=approval_paths_by_role,
             summaries_by_role=approval_summaries_by_role,
         )
+        contract_context_with_index = {
+            **contract_context,
+            "contract_artifact_index_payload": manifest["contract_artifact_index"],
+            "loop_hardening_contract_payload": loop_hardening_payload,
+        }
+        lane_stabilization_payload = _call_contract_builder(
+            build_lane_stabilization_contract_surface,
+            **contract_context_with_index,
+        )
+        observability_rollup_payload = _call_contract_builder(
+            build_observability_rollup_contract_surface,
+            **{
+                **contract_context_with_index,
+                "lane_stabilization_contract_payload": lane_stabilization_payload,
+            },
+        )
+        failure_bucket_rollup_payload = _call_contract_builder(
+            build_failure_bucket_rollup_surface,
+            **{
+                **contract_context_with_index,
+                "observability_rollup_payload": observability_rollup_payload,
+            },
+        )
+        fleet_run_rollup_payload = _call_contract_builder(
+            build_fleet_run_rollup_surface,
+            **{
+                **contract_context_with_index,
+                "observability_rollup_payload": observability_rollup_payload,
+            },
+        )
+        contract_artifacts = (
+            ("loop_hardening_contract", "loop_hardening_contract.json", loop_hardening_payload, build_loop_hardening_run_state_summary_surface),
+            ("lane_stabilization_contract", "lane_stabilization_contract.json", lane_stabilization_payload, build_lane_stabilization_run_state_summary_surface),
+            ("observability_rollup_contract", "observability_rollup_contract.json", observability_rollup_payload, build_observability_rollup_contract_summary_surface),
+            ("failure_bucket_rollup", "failure_bucket_rollup.json", failure_bucket_rollup_payload, build_failure_bucket_rollup_summary_surface),
+            ("fleet_run_rollup", "fleet_run_rollup.json", fleet_run_rollup_payload, build_fleet_run_rollup_summary_surface),
+            ("failure_bucketing_hardening_contract", "failure_bucketing_hardening_contract.json", failure_bucketing_payload, build_failure_bucketing_hardening_summary_surface),
+            ("fleet_safety_control_contract", "fleet_safety_control_contract.json", fleet_safety_payload, build_fleet_safety_control_summary_surface),
+        )
+        for role, artifact_name, payload, summary_builder in contract_artifacts:
+            artifact_path = run_root / artifact_name
+            _write_json(artifact_path, payload)
+            summary = summary_builder(payload)
+            manifest[f"{role}_summary"] = summary
+            manifest[f"{role}_path"] = str(artifact_path)
+            approval_paths_by_role[role] = str(artifact_path)
+            approval_summaries_by_role[role] = summary
+            if role in {
+                "loop_hardening_contract",
+                "lane_stabilization_contract",
+            }:
+                run_state_payload.update(summary)
+
+        retention_manifest_payload = build_retention_manifest_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            paths_by_role=approval_paths_by_role,
+            summaries_by_role=approval_summaries_by_role,
+            contract_artifact_index_payload=manifest["contract_artifact_index"],
+            manifest_payload=manifest,
+        )
+        retention_manifest_path = run_root / "retention_manifest.json"
+        _write_json(retention_manifest_path, retention_manifest_payload)
+        retention_manifest_summary = build_retention_manifest_summary_surface(
+            retention_manifest_payload
+        )
+        manifest["retention_manifest_summary"] = retention_manifest_summary
+        manifest["retention_manifest_path"] = str(retention_manifest_path)
+        artifact_retention_payload = build_artifact_retention_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            retention_manifest_payload=retention_manifest_payload,
+            contract_artifact_index_payload=manifest["contract_artifact_index"],
+            observability_rollup_payload=observability_rollup_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+        )
+        artifact_retention_path = run_root / "artifact_retention_contract.json"
+        _write_json(artifact_retention_path, artifact_retention_payload)
+        artifact_retention_summary = build_artifact_retention_summary_surface(
+            artifact_retention_payload
+        )
+        manifest["artifact_retention_contract_summary"] = artifact_retention_summary
+        manifest["artifact_retention_contract_path"] = str(artifact_retention_path)
+        run_state_payload.update(build_observability_rollup_run_state_summary_surface(observability_rollup_payload))
+        run_state_payload.update(build_artifact_retention_run_state_summary_surface(artifact_retention_payload))
+        run_state_payload.update(build_fleet_safety_control_run_state_summary_surface(fleet_safety_payload))
+        manifest["contract_artifact_index"] = build_contract_artifact_index(
+            paths_by_role={
+                **approval_paths_by_role,
+                "retention_manifest": str(retention_manifest_path),
+                "artifact_retention_contract": str(artifact_retention_path),
+            },
+            summaries_by_role={
+                **approval_summaries_by_role,
+                "retention_manifest": retention_manifest_summary,
+                "artifact_retention_contract": artifact_retention_summary,
+            },
+        )
         from automation.orchestration.planned_runner.summaries.approved_restart_payload import (
             _build_approved_restart_execution_contract_surface,
         )
@@ -1860,6 +2205,12 @@ class PlannedExecutionRunner:
             _build_approved_restart_execution_summary_surface,
         )
 
+        approved_restart_execution_path = (
+            run_root / "approved_restart_execution_contract.json"
+        )
+        prior_approved_restart_execution_payload = _read_json_object_if_exists(
+            approved_restart_execution_path
+        )
         try:
             approved_restart_execution_payload = (
                 _build_approved_restart_execution_contract_surface(
@@ -1868,13 +2219,15 @@ class PlannedExecutionRunner:
                 objective_contract_payload=objective_contract_payload,
                 approval_email_delivery_payload=approval_email_payload,
                 fleet_safety_control_payload=fleet_safety_payload,
-                approval_runtime_rules_payload={},
+                approval_runtime_rules_payload=approval_runtime_rules_payload,
                 failure_bucketing_hardening_payload=failure_bucketing_payload,
                 loop_hardening_contract_payload=loop_hardening_payload,
                 approved_restart_payload=approved_restart_payload,
                 approval_response_payload=approval_response_payload,
                 approval_safety_payload=approval_safety_payload,
-                prior_approved_restart_execution_payload=None,
+                prior_approved_restart_execution_payload=(
+                    prior_approved_restart_execution_payload
+                ),
                 manifest_units=manifest_units,
                 adapter=self.adapter,
                 dry_run=dry_run,
@@ -1902,9 +2255,6 @@ class PlannedExecutionRunner:
                 "approval_skip_human_gate_preserved": True,
                 "approval_skip_reason": "skip_invalid_or_insufficient_truth",
             }
-        approved_restart_execution_path = (
-            run_root / "approved_restart_execution_contract.json"
-        )
         _write_json(
             approved_restart_execution_path,
             approved_restart_execution_payload,
