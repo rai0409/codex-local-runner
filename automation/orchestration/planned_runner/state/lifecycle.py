@@ -1635,9 +1635,8 @@ def _build_project_merge_branch_lifecycle_state(
         or bool(project_quality_gate_high_risk)
         or continuation_failure_bucket_denied
         or continuation_no_progress_stop_required
-        or completion_posture == "objective_blocked"
         or priority_posture == "deferred"
-        or long_running_status in {"paused", "escalated", "safe_stop"}
+        or long_running_status in {"paused", "escalated"}
         or repair_status
         in {
             "executed_verification_failed",
@@ -1670,13 +1669,15 @@ def _build_project_merge_branch_lifecycle_state(
         )
     )
     local_main_sync_required = bool(
-        queue_status in {"empty", "blocked"}
-        and (
-            merge_ready
-            or cleanup_candidate
-            or quarantine_candidate
-            or priority_posture in {"deferred", "lower_priority"}
-            or processed_count > 0
+        quarantine_candidate
+        or (
+            queue_status in {"empty", "blocked"}
+            and (
+                merge_ready
+                or cleanup_candidate
+                or priority_posture in {"deferred", "lower_priority"}
+                or processed_count > 0
+            )
         )
     )
 

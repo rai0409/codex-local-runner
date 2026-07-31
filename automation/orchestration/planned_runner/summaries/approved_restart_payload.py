@@ -1028,13 +1028,13 @@ def _build_review_assimilation_state(
         assimilation_reason = "assimilation_queue_blocked"
     else:
         reviewable = True
-        if normalized_result_status in {"", "unknown", "not_attempted", "not_started", "running"}:
-            assimilation_status = "insufficient_truth"
-            assimilation_reason = "assimilation_result_insufficient_truth"
-        elif final_human_review_required:
+        if final_human_review_required:
             assimilation_status = "assimilated"
             assimilation_action = "escalate"
             assimilation_reason = "assimilation_escalate_manual_followup"
+        elif normalized_result_status in {"", "unknown", "not_attempted", "not_started", "running"}:
+            assimilation_status = "insufficient_truth"
+            assimilation_reason = "assimilation_result_insufficient_truth"
         elif normalized_result_status == "completed":
             assimilation_status = "assimilated"
             assimilation_action = "accept"
@@ -1793,9 +1793,7 @@ def _build_project_autonomy_budget_state(
             high_risk_posture or final_human_review_required
         )
         high_risk_defer_posture = "defer" if high_risk_defer_active else "clear"
-        priority_deferred = bool(
-            high_risk_defer_active or completion_posture == "objective_blocked"
-        )
+        priority_deferred = bool(high_risk_defer_active)
         any_budget_exhausted = bool(
             run_budget_exhausted
             or objective_budget_exhausted
@@ -2066,8 +2064,6 @@ def _build_project_quality_gate_state(
         or final_human_review_required
         or continuation_failure_bucket_denied
         or continuation_no_progress_stop_required
-        or completion_posture == "objective_blocked"
-        or long_running_status in {"paused", "escalated", "safe_stop"}
         or repair_status
         in {
             "executed_verification_failed",
@@ -2077,15 +2073,23 @@ def _build_project_quality_gate_state(
         }
     )
     retry_signal = bool(
-        assimilation_action in {"retry", "replan", "split"}
-        or (
-            next_step_selection_status == "selected"
-            and next_step_target in {"retry", "replan", "truth_gather", "supported_repair"}
+        not final_human_review_required
+        and (
+            assimilation_action in {"retry", "replan", "split"}
+            or (
+                next_step_selection_status == "selected"
+                and next_step_target in {
+                    "retry",
+                    "replan",
+                    "truth_gather",
+                    "supported_repair",
+                }
+            )
+            or normalized_self_healing_status in {"selected", "executed"}
+            or run_budget_posture == "exhausted"
+            or objective_budget_posture == "exhausted"
+            or pr_retry_budget_posture == "exhausted"
         )
-        or normalized_self_healing_status in {"selected", "executed"}
-        or run_budget_posture == "exhausted"
-        or objective_budget_posture == "exhausted"
-        or pr_retry_budget_posture == "exhausted"
     )
     merge_ready = bool(
         completion_posture == "objective_completed"
@@ -3942,7 +3946,11 @@ def _build_approved_restart_execution_contract_surface(
     )
     continuation_budget_objective_key = _normalize_text(objective_id, default="")
     continuation_budget_lane_key = _normalize_text(
-        approved_target_lane or proposed_target_lane,
+        (
+            approved_target_lane
+            if approved_target_lane not in {"", "unknown"}
+            else proposed_target_lane
+        ),
         default="unknown",
     )
     prior_continuation_run_count = _as_non_negative_int(

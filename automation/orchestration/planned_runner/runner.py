@@ -2205,6 +2205,12 @@ class PlannedExecutionRunner:
             _build_approved_restart_execution_summary_surface,
         )
 
+        approved_restart_execution_path = (
+            run_root / "approved_restart_execution_contract.json"
+        )
+        prior_approved_restart_execution_payload = _read_json_object_if_exists(
+            approved_restart_execution_path
+        )
         try:
             approved_restart_execution_payload = (
                 _build_approved_restart_execution_contract_surface(
@@ -2213,13 +2219,15 @@ class PlannedExecutionRunner:
                 objective_contract_payload=objective_contract_payload,
                 approval_email_delivery_payload=approval_email_payload,
                 fleet_safety_control_payload=fleet_safety_payload,
-                approval_runtime_rules_payload={},
+                approval_runtime_rules_payload=approval_runtime_rules_payload,
                 failure_bucketing_hardening_payload=failure_bucketing_payload,
                 loop_hardening_contract_payload=loop_hardening_payload,
                 approved_restart_payload=approved_restart_payload,
                 approval_response_payload=approval_response_payload,
                 approval_safety_payload=approval_safety_payload,
-                prior_approved_restart_execution_payload=None,
+                prior_approved_restart_execution_payload=(
+                    prior_approved_restart_execution_payload
+                ),
                 manifest_units=manifest_units,
                 adapter=self.adapter,
                 dry_run=dry_run,
@@ -2247,9 +2255,6 @@ class PlannedExecutionRunner:
                 "approval_skip_human_gate_preserved": True,
                 "approval_skip_reason": "skip_invalid_or_insufficient_truth",
             }
-        approved_restart_execution_path = (
-            run_root / "approved_restart_execution_contract.json"
-        )
         _write_json(
             approved_restart_execution_path,
             approved_restart_execution_payload,
