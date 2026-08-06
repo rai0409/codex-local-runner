@@ -57,6 +57,18 @@ def _verify_from_safe_validation(result: Any) -> dict[str, Any]:
         "reason": reason, "safe_validation": mapping}
 
 
+def _verify_safe_validation_executor_error() -> dict[str, Any]:
+    return {
+        "status": "failed",
+        "success": False,
+        "commands": [],
+        "command_results": [],
+        "summary": {"total": 0, "passed": 0, "failed": 1},
+        "error": "safe validation executor failed",
+        "reason": "safe_validation_executor_error",
+    }
+
+
 def _retry_not_attempted() -> dict[str, Any]:
     return {
         "attempted": False,
@@ -266,13 +278,16 @@ class CodexCliAdapter(ProviderAdapter):
                             execute_repository_validation(bound_profile)
                         )
                     except SafeValidationExecutorError:
-                        verify_result = _verify_not_run("validation_not_run_execution_status_failed")
+                        verify_result = _verify_safe_validation_executor_error()
                 else:
                     verify_result = _verify_not_run(
                         reason=_not_run_reason_for_execution_status(execution_status),
                     )
 
-            if execution_status == "completed" and verify_result.get("status") == "failed":
+            if (
+                execution_status == "completed"
+                and verify_result.get("reason") == "validation_failed"
+            ):
                 attempt_count = 2
                 retry = {
                     "attempted": True,
@@ -291,9 +306,7 @@ class CodexCliAdapter(ProviderAdapter):
                             execute_repository_validation(bound_profile)
                         )
                     except SafeValidationExecutorError:
-                        verify_result = _verify_not_run(
-                            "validation_not_run_execution_status_failed"
-                        )
+                        verify_result = _verify_safe_validation_executor_error()
                 else:
                     verify_result = _verify_not_run(
                         reason=_not_run_reason_for_execution_status(execution_status),

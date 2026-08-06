@@ -11,6 +11,7 @@ from adapters.codex_cli import CodexCliAdapter
 from automation.orchestration.repository_profile import APPROVAL_ACTIONS
 from automation.orchestration.repository_profile import FORBIDDEN_GIT_OPERATION_IDS
 from automation.orchestration.repository_profile import validate_repository_profile
+from automation.orchestration.safe_validation_executor import SafeValidationExecutorError
 from automation.orchestration.safe_validation_executor import ValidationCommandResult
 from automation.orchestration.safe_validation_executor import ValidationExecutionResult
 from orchestrator import main as orchestrator_main
@@ -63,6 +64,157 @@ class SafeValidationAdapterIntegrationTests(unittest.TestCase):
         self.assertEqual(result["retry"]["outcome"], "retry_succeeded")
         legacy.assert_not_called()
         self.assertNotIn("run_validation_commands", __import__("adapters.codex_cli", fromlist=["*"]).__dict__)
+
+    def test_executor_error_fails_closed_without_retry(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            profile = _profile(root)
+            execution = {
+                "status": "completed",
+                "return_code": 0,
+                "started_at": "a",
+                "finished_at": "b",
+                "artifacts": [],
+                "error": "",
+            }
+            executor_error = SafeValidationExecutorError(
+                "safe_validation.executor.internal",
+                "test executor failure",
+            )
+            with (
+                mock.patch(
+                    "adapters.codex_cli.prepare_git_worktree",
+                    return_value={
+                        "created": True,
+                        "cleanup_needed": True,
+                        "worktree_path": str(root),
+                        "branch_name": "branch",
+                        "error": "",
+                    },
+                ),
+                mock.patch(
+                    "adapters.codex_cli.cleanup_git_worktree",
+                    return_value={"error": ""},
+                ),
+                mock.patch(
+                    "adapters.codex_cli.bind_repository_profile_to_worktree",
+                    return_value=profile,
+                ),
+                mock.patch(
+                    "adapters.codex_cli.run_codex",
+                    return_value=execution,
+                ) as codex,
+                mock.patch(
+                    "adapters.codex_cli.execute_repository_validation",
+                    side_effect=executor_error,
+                ) as validate,
+            ):
+                result = adapter.execute(
+                    {
+                        "repo_path": str(root),
+                        "work_dir": str(root),
+                        "repository_profile": profile,
+                    }
+                )
+
+        codex.assert_called_once()
+        validate.assert_called_once()
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["verify"]["status"], "failed")
+        self.assertFalse(result["verify"]["success"])
+        self.assertEqual(
+            result["verify"]["reason"],
+            "safe_validation_executor_error",
+        )
+        self.assertFalse(result["retry"]["attempted"])
+        self.assertEqual(result["retry"]["outcome"], "not_attempted")
+        self.assertEqual(
+            result["result_interpretation"],
+            "completed_verified_failed",
+        )
+        self.assertEqual(
+            result["review_recommendation"],
+            "review_recommended",
+        )
+        self.assertEqual(
+            result["review_handoff_summary"]["final_verify_reason"],
+            "safe_validation_executor_error",
+        )
+
+    def test_executor_error_after_retry_remains_failed(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            profile = _profile(root)
+            execution = {
+                "status": "completed",
+                "return_code": 0,
+                "started_at": "a",
+                "finished_at": "b",
+                "artifacts": [],
+                "error": "",
+            }
+            executor_error = SafeValidationExecutorError(
+                "safe_validation.executor.internal",
+                "test executor failure",
+            )
+            with (
+                mock.patch(
+                    "adapters.codex_cli.prepare_git_worktree",
+                    return_value={
+                        "created": True,
+                        "cleanup_needed": True,
+                        "worktree_path": str(root),
+                        "branch_name": "branch",
+                        "error": "",
+                    },
+                ),
+                mock.patch(
+                    "adapters.codex_cli.cleanup_git_worktree",
+                    return_value={"error": ""},
+                ),
+                mock.patch(
+                    "adapters.codex_cli.bind_repository_profile_to_worktree",
+                    return_value=profile,
+                ),
+                mock.patch(
+                    "adapters.codex_cli.run_codex",
+                    side_effect=[execution, execution],
+                ) as codex,
+                mock.patch(
+                    "adapters.codex_cli.execute_repository_validation",
+                    side_effect=[
+                        _safe_result("failed"),
+                        executor_error,
+                    ],
+                ) as validate,
+            ):
+                result = adapter.execute(
+                    {
+                        "repo_path": str(root),
+                        "work_dir": str(root),
+                        "repository_profile": profile,
+                    }
+                )
+
+        self.assertEqual(codex.call_count, 2)
+        self.assertEqual(validate.call_count, 2)
+        self.assertEqual(result["verify"]["status"], "failed")
+        self.assertEqual(
+            result["verify"]["reason"],
+            "safe_validation_executor_error",
+        )
+        self.assertTrue(result["retry"]["attempted"])
+        self.assertEqual(result["retry"]["outcome"], "retry_failed")
+        self.assertEqual(
+            result["result_interpretation"],
+            "completed_verified_failed_after_retry",
+        )
+        self.assertEqual(
+            result["review_recommendation"],
+            "review_recommended_after_retry_failure",
+        )
 
     def test_legacy_cli_input_is_rejected_without_command_echo(self) -> None:
         parser = orchestrator_main._build_parser()
