@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import sys
 import tempfile
 import unittest
@@ -54,15 +55,40 @@ class SafeValidationAdapterIntegrationTests(unittest.TestCase):
             root = Path(raw)
             profile = _profile(root)
             execution = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
-            with mock.patch("adapters.codex_cli.prepare_git_worktree", return_value={"created": True, "cleanup_needed": True, "worktree_path": str(root), "branch_name": "branch", "error": ""}), mock.patch("adapters.codex_cli.cleanup_git_worktree", return_value={"error": ""}), mock.patch("adapters.codex_cli.bind_repository_profile_to_worktree", return_value=profile), mock.patch("adapters.codex_cli.run_codex", side_effect=[execution, execution]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", side_effect=[_safe_result("failed"), _safe_result("passed")]) as validate:
+            with mock.patch("adapters.codex_cli.prepare_git_worktree", return_value={"created": True, "cleanup_needed": True, "worktree_path": str(root), "branch_name": "branch", "error": ""}), mock.patch("adapters.codex_cli.cleanup_git_worktree", return_value={"error": ""}), mock.patch("adapters.codex_cli.bind_repository_profile_to_worktree", return_value=profile), mock.patch("adapters.codex_cli.run_codex", side_effect=[execution, execution]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", side_effect=[_safe_result("failed"), _safe_result("passed")]) as validate, mock.patch("verify.runner.run_validation_commands") as legacy:
                 result = adapter.execute({"repo_path": str(root), "work_dir": str(root), "repository_profile": profile, "validation_commands": ["ignored"]})
         self.assertEqual(codex.call_count, 2)
         self.assertEqual(validate.call_count, 2)
         self.assertEqual(result["verify"]["reason"], "validation_passed")
         self.assertEqual(result["retry"]["outcome"], "retry_succeeded")
+        legacy.assert_not_called()
         self.assertNotIn("run_validation_commands", __import__("adapters.codex_cli", fromlist=["*"]).__dict__)
 
     def test_legacy_cli_input_is_rejected_without_command_echo(self) -> None:
         parser = orchestrator_main._build_parser()
         args = parser.parse_args(["--repo", "r", "--task-type", "t", "--goal", "g", "--validation-command", "secret command"])
         self.assertEqual(args.validation_commands, ["secret command"])
+
+    def test_static_adapter_and_test_integrity_contract(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        adapter_tree = ast.parse((root / "adapters/codex_cli.py").read_text(encoding="utf-8"))
+        test_tree = ast.parse((root / "tests/test_execution_path.py").read_text(encoding="utf-8"))
+        forbidden_calls = []
+        for node in ast.walk(adapter_tree):
+            if isinstance(node, ast.Call) and ((isinstance(node.func, ast.Name) and node.func.id == "run_validation_commands") or (isinstance(node.func, ast.Attribute) and node.func.attr == "run_validation_commands")):
+                forbidden_calls.append(node.lineno)
+            if isinstance(node, ast.ImportFrom) and node.module == "verify.runner":
+                forbidden_calls.extend(alias.name for alias in node.names if alias.name == "run_validation_commands")
+        self.assertEqual(forbidden_calls, [])
+        replacements = []
+        classes = {}
+        for node in test_tree.body:
+            if isinstance(node, ast.ClassDef):
+                classes.setdefault(node.name, 0)
+                classes[node.name] += 1
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Attribute) and target.attr.startswith("test_"):
+                        replacements.append(node.lineno)
+        self.assertEqual(replacements, [])
+        self.assertEqual(classes.get("CodexCliExecutionTests"), 1)
