@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from adapters import get_registered_adapters, resolve_adapter
+from automation.orchestration.repository_profile import RepositoryProfileValidationError
+from automation.orchestration.repository_profile import load_repository_profile
 from orchestrator.config_loader import load_yaml_file
 from orchestrator.job_evaluator import evaluate_job_directory
 from orchestrator.job_evaluator import persist_evaluation_artifacts
@@ -49,6 +51,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
     )
+    parser.add_argument("--repository-profile", default="")
     return parser
 
 
@@ -95,9 +98,9 @@ def _extract_merge_attempt_signal(result_payload: dict) -> dict | None:
 
 def main() -> int:
     args = _build_parser().parse_args()
-    validation_commands = [
-        str(command).strip() for command in args.validation_commands if str(command).strip()
-    ]
+    legacy_validation_commands_requested = bool(args.validation_commands)
+    # Keep parser compatibility, but do not let legacy commands enter any payload.
+    validation_commands: list[str] = []
     target_ref = str(args.target_ref).strip()
     source_sha = str(args.source_sha).strip()
     base_sha = str(args.base_sha).strip()
@@ -188,32 +191,54 @@ def main() -> int:
             str(result_path),
         ]
         if result_payload["status"] == "accepted":
-            try:
-                execution_payload = {
-                    "prompt": request.goal,
-                    "repo_path": args.execution_repo_path,
-                    "work_dir": str(out_dir),
-                    "validation_commands": request.validation_commands,
-                }
-                execution_result = resolved_adapter.execute(execution_payload)
-            except NotImplementedError as exc:
-                execution_result = {
-                    "adapter": resolved_adapter.name,
-                    "status": "not_implemented",
-                    "started_at": None,
-                    "finished_at": None,
-                    "artifacts": [],
-                    "error": str(exc),
-                }
-            except Exception as exc:
+            if legacy_validation_commands_requested:
                 execution_result = {
                     "adapter": resolved_adapter.name,
                     "status": "failed",
                     "started_at": None,
                     "finished_at": None,
                     "artifacts": [],
-                    "error": f"Unexpected execution error ({type(exc).__name__}): {exc}",
+                    "error": "legacy_validation_commands_forbidden",
                 }
+            else:
+                try:
+                    profile = load_repository_profile(args.repository_profile)
+                except (RepositoryProfileValidationError, OSError, ValueError):
+                    execution_result = {
+                        "adapter": resolved_adapter.name,
+                        "status": "failed",
+                        "started_at": None,
+                        "finished_at": None,
+                        "artifacts": [],
+                        "error": "safe_validation.profile.invalid",
+                    }
+                else:
+                    try:
+                        execution_payload = {
+                            "prompt": request.goal,
+                            "repo_path": args.execution_repo_path,
+                            "work_dir": str(out_dir),
+                            "repository_profile": profile,
+                        }
+                        execution_result = resolved_adapter.execute(execution_payload)
+                    except NotImplementedError as exc:
+                        execution_result = {
+                            "adapter": resolved_adapter.name,
+                            "status": "not_implemented",
+                            "started_at": None,
+                            "finished_at": None,
+                            "artifacts": [],
+                            "error": str(exc),
+                        }
+                    except Exception as exc:
+                        execution_result = {
+                            "adapter": resolved_adapter.name,
+                            "status": "failed",
+                            "started_at": None,
+                            "finished_at": None,
+                            "artifacts": [],
+                            "error": f"Unexpected execution error ({type(exc).__name__}): {exc}",
+                        }
         else:
             execution_result = {
                 "adapter": resolved_adapter.name,
