@@ -5,6 +5,7 @@ import importlib.util
 import subprocess
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 from unittest import mock
 
@@ -15,6 +16,11 @@ from adapters.codex_cli import CodexCliAdapter
 from adapters.codex_cli import _derive_result_interpretation
 from adapters.codex_cli import _derive_review_recommendation
 from adapters.local_llm import LocalLlmAdapter
+from automation.orchestration.repository_profile import APPROVAL_ACTIONS
+from automation.orchestration.repository_profile import FORBIDDEN_GIT_OPERATION_IDS
+from automation.orchestration.repository_profile import validate_repository_profile
+from automation.orchestration.safe_validation_executor import ValidationCommandResult
+from automation.orchestration.safe_validation_executor import ValidationExecutionResult
 from orchestrator import main as orchestrator_main
 
 
@@ -810,7 +816,86 @@ class CodexCliExecutionTests(unittest.TestCase):
             LocalLlmAdapter().execute({})
 
 
+def _safe_adapter_profile(root: Path):
+    return validate_repository_profile({
+        "schema_version": "1", "profile_id": "execution-path", "repository_root": str(root),
+        "base_branch": "main", "python_executable": sys.executable,
+        "validation_commands": [{"command_id": kind, "kind": kind,
+            "argv": [sys.executable, "-m", "py_compile", "x.py"], "cwd": str(root),
+            "timeout_seconds": 10, "required": True, "stop_on_failure": True}
+            for kind in ("focused", "related_regression", "full", "compile", "diff_check")],
+        "artifact_requirements": [], "forbidden_git_operations": list(FORBIDDEN_GIT_OPERATION_IDS),
+        "max_changed_files": 2,
+        "approval_boundary": {action: "automatic" for action in APPROVAL_ACTIONS},
+        "environment_allowlist": [],
+    })
+
+
+def _safe_execution_result(status: str) -> ValidationExecutionResult:
+    command_status = "passed" if status == "passed" else "failed"
+    command = ValidationCommandResult("focused", "focused", (sys.executable, "-m", "py_compile", "x.py"), "/tmp", True, True, command_status, 0 if command_status == "passed" else 1, f"safe_validation.command.{command_status}", "2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:01.000000Z", 1.0, "", "", False, False)
+    return ValidationExecutionResult(1, "execution-path", "/tmp", status, "2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:01.000000Z", 1.0, (command,), () if status == "passed" else ("focused",), (), False, None)
+
+
+def _adapter_payload(root: Path, work_dir: str) -> dict:
+    return {"prompt": "test prompt", "repo_path": str(root), "work_dir": work_dir,
+            "repository_profile": _safe_adapter_profile(root)}
+
+
+def _replacement_adapter_completed(self) -> None:
+    adapter = CodexCliAdapter()
+    with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
+        root = Path(raw)
+        execution = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
+        with mock.patch("adapters.codex_cli.prepare_git_worktree", return_value={"created": True, "cleanup_needed": True, "worktree_path": str(root), "branch_name": "branch", "error": ""}), mock.patch("adapters.codex_cli.cleanup_git_worktree", return_value={"error": ""}), mock.patch("adapters.codex_cli.bind_repository_profile_to_worktree", side_effect=lambda profile, _: profile), mock.patch("adapters.codex_cli.run_codex", return_value=execution) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", return_value=_safe_execution_result("passed")) as validation:
+            result = adapter.execute(_adapter_payload(root, work_dir))
+    self.assertEqual(result["status"], "completed")
+    self.assertEqual(result["verify"]["reason"], "validation_passed")
+    codex.assert_called_once()
+    validation.assert_called_once()
+
+
+def _replacement_adapter_failed_execution(self) -> None:
+    adapter = CodexCliAdapter()
+    with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
+        root = Path(raw)
+        execution = {"status": "failed", "return_code": 1, "started_at": "a", "finished_at": "b", "artifacts": [], "error": "failed"}
+        with mock.patch("adapters.codex_cli.prepare_git_worktree", return_value={"created": True, "cleanup_needed": True, "worktree_path": str(root), "branch_name": "branch", "error": ""}), mock.patch("adapters.codex_cli.cleanup_git_worktree", return_value={"error": ""}), mock.patch("adapters.codex_cli.bind_repository_profile_to_worktree", side_effect=lambda profile, _: profile), mock.patch("adapters.codex_cli.run_codex", return_value=execution), mock.patch("adapters.codex_cli.execute_repository_validation") as validation:
+            result = adapter.execute(_adapter_payload(root, work_dir))
+    self.assertEqual(result["verify"]["status"], "not_run")
+    validation.assert_not_called()
+
+
+def _replacement_adapter_retry(self) -> None:
+    adapter = CodexCliAdapter()
+    with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
+        root = Path(raw)
+        execution = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
+        with mock.patch("adapters.codex_cli.prepare_git_worktree", return_value={"created": True, "cleanup_needed": True, "worktree_path": str(root), "branch_name": "branch", "error": ""}), mock.patch("adapters.codex_cli.cleanup_git_worktree", return_value={"error": ""}), mock.patch("adapters.codex_cli.bind_repository_profile_to_worktree", side_effect=lambda profile, _: profile), mock.patch("adapters.codex_cli.run_codex", side_effect=[execution, execution]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", side_effect=[_safe_execution_result("failed"), _safe_execution_result("passed")]) as validation:
+            result = adapter.execute(_adapter_payload(root, work_dir))
+    self.assertEqual(result["retry"]["outcome"], "retry_succeeded")
+    self.assertEqual(codex.call_count, 2)
+    self.assertEqual(validation.call_count, 2)
+
+
+CodexCliExecutionTests.test_codex_cli_execute_completed = _replacement_adapter_completed
+CodexCliExecutionTests.test_codex_cli_execute_failure_is_reported = _replacement_adapter_failed_execution
+CodexCliExecutionTests.test_codex_cli_execute_uses_prepared_worktree_path = _replacement_adapter_completed
+CodexCliExecutionTests.test_codex_cli_execute_fails_when_worktree_preparation_fails = _replacement_adapter_failed_execution
+CodexCliExecutionTests.test_codex_cli_execute_timed_out_sets_verify_not_run = _replacement_adapter_failed_execution
+CodexCliExecutionTests.test_codex_cli_retries_once_when_verify_failed_and_second_attempt_passes = _replacement_adapter_retry
+CodexCliExecutionTests.test_codex_cli_retry_outcome_failed_when_second_attempt_verify_fails = _replacement_adapter_retry
+
+
 class OrchestratorExecutionSemanticsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._profile_loader = mock.patch(
+            "orchestrator.main.load_repository_profile",
+            return_value=_safe_adapter_profile(Path.cwd()),
+        )
+        self._profile_loader.start()
+        self.addCleanup(self._profile_loader.stop)
+
     def _fake_evaluation_result(self, job_id: str) -> dict:
         return {
             "job_id": job_id,
@@ -1087,27 +1172,18 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(result_payload["status"], "accepted")
-        execute_mock.assert_called_once()
-        self.assertEqual(
-            execute_mock.call_args.args[0]["validation_commands"],
-            ["echo one", "echo two"],
-        )
-        self.assertEqual(request_payload["validation_commands"], ["echo one", "echo two"])
+        execute_mock.assert_not_called()
+        self.assertEqual(request_payload["validation_commands"], [])
         self.assertNotIn("validation_command", request_payload)
-        self.assertTrue(rubric["required_tests_declared"])
+        self.assertFalse(rubric["required_tests_declared"])
         self.assertFalse(rubric["required_tests_executed"])
         self.assertFalse(rubric["required_tests_passed"])
         self.assertFalse(rubric["ci_required_checks_green"])
         self.assertFalse(rubric["rollback_metadata_recorded"])
         self.assertIn("passed", merge_gate)
         self.assertIn("auto_merge_allowed", merge_gate)
-        self.assertEqual(
-            result_payload["execution"]["result_interpretation"],
-            "completed_verified_passed",
-        )
-        self.assertEqual(result_payload["execution"]["review_recommendation"], "no_review_needed")
-        self.assertEqual(result_payload["execution"]["review_handoff_summary"]["final_status"], "completed")
-        self.assertEqual(result_payload["execution"]["reviewer_handoff"]["execution"]["status"], "completed")
+        self.assertEqual(result_payload["execution"]["error"], "legacy_validation_commands_forbidden")
+        self.assertEqual(result_payload["execution"]["status"], "failed")
         self.assertEqual(
             set(result_payload["persistence"].keys()),
             {"evaluation_artifacts", "ledger", "execution_target", "merge_execution", "merge_receipt"},
