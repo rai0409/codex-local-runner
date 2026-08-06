@@ -20,9 +20,19 @@ from typing import Any, Callable
 
 from adapters import resolve_adapter
 from automation.orchestration.repository_profile_binding import bind_repository_profile_to_worktree
-from automation.orchestration.repository_registry import load_repository_registry, resolve_repository
+from automation.orchestration.repository_registry import (
+    DEFAULT_REPOSITORY_BINDINGS_PATH,
+    load_repository_registry,
+    resolve_repository,
+)
 from automation.orchestration.repository_single_task_spec import load_repository_single_task_spec
 from automation.orchestration.repository_state_analyzer import analyze_repository_state, repository_state_to_mapping
+
+
+DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT = (
+    "~/.local/state/codex-local-runner/"
+    "repository-single-task-runs"
+)
 
 
 @dataclass(frozen=True)
@@ -147,9 +157,9 @@ def run_repository_single_task(
     task_spec_path: str | os.PathLike[str],
     *,
     registry_path: str | os.PathLike[str] = "config/repos.yaml",
-    bindings_path: str | os.PathLike[str] | None = None,
+    bindings_path: str | os.PathLike[str] | None = DEFAULT_REPOSITORY_BINDINGS_PATH,
     providers_path: str | os.PathLike[str] = "config/providers.yaml",
-    output_root: str | os.PathLike[str] = "/tmp/repository-single-task-runs",
+    output_root: str | os.PathLike[str] = DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT,
     adapter_resolver: Callable[[], Any] | None = None,
 ) -> RepositorySingleTaskRunResult:
     """Process exactly one task, returning a receipt-backed terminal result.
@@ -159,7 +169,7 @@ def run_repository_single_task(
     """
     started = _utc_now()
     run_id = "run-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-    output_directory = Path(output_root) / run_id
+    output_directory = Path(output_root).expanduser() / run_id
     output_directory.mkdir(parents=True, exist_ok=False)
 
     spec: Any = None
@@ -359,7 +369,7 @@ def run_repository_single_task(
             "prompt": spec.prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
             "repository_profile": bound_profile,
         })
-    except (OSError, ValueError, TypeError):
+    except Exception:
         worktree_preserved = True
         return record("failed", "single_task.execution.not_completed")
     if not isinstance(response, dict):
@@ -461,6 +471,7 @@ def run_repository_single_task(
 
 
 __all__ = [
+    "DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT",
     "RepositorySingleTaskControllerError", "RepositorySingleTaskRunResult",
     "repository_single_task_run_result_to_mapping", "run_repository_single_task",
     "serialize_repository_single_task_run_result",

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,7 +19,7 @@ from automation.orchestration.repository_resolved_single_task_controller import 
 )
 
 
-PYTHON = str(Path("/home/rai/codex-local-runner/.venv/bin/python").resolve())
+PYTHON = str(Path(sys.executable).resolve())
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -200,6 +202,121 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         result = self._run(FakePreparedAdapter(change_source))
         self.assertEqual(result.reason_code, "single_task.source.changed_during_run")
         self.assertNotEqual(result.status, "completed")
+
+
+    def test_production_defaults_load_home_bindings_and_persist_receipt(self):
+        home = self.base / "home"
+        default_bindings = (
+            home
+            / ".config"
+            / "codex-local-runner"
+            / "repository-bindings.json"
+        )
+        default_bindings.parent.mkdir(parents=True, exist_ok=True)
+        default_bindings.write_text(
+            self.bindings.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        adapter = FakePreparedAdapter(self._modify)
+
+        with patch.dict(os.environ, {"HOME": str(home)}):
+            result = run_repository_single_task(
+                "repo",
+                self.spec,
+                registry_path=self.registry,
+                adapter_resolver=lambda: adapter,
+            )
+
+        self.assertEqual(PYTHON, str(Path(sys.executable).resolve()))
+        self.assertTrue(Path(PYTHON).is_file())
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(adapter.calls, 1)
+
+        expected_output_root = (
+            home
+            / ".local"
+            / "state"
+            / "codex-local-runner"
+            / "repository-single-task-runs"
+        )
+        receipt_path = Path(result.receipt_path)
+        self.assertTrue(receipt_path.is_relative_to(expected_output_root))
+        self.assertTrue(receipt_path.is_file())
+
+        digest = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        self.assertEqual(
+            Path(result.receipt_sha256_path).read_text(encoding="utf-8"),
+            f"{digest}  receipt.json\n",
+        )
+        self.assertEqual(
+            git(self.source, "rev-parse", "HEAD").stdout.strip(),
+            self.head,
+        )
+        self.assertEqual(
+            git(self.source, "status", "--porcelain").stdout,
+            "",
+        )
+
+    def test_unexpected_adapter_exception_is_receipt_backed_and_redacted(self):
+        marker = "TOKEN_SECRET_MARKER_52AF ENV_SECRET_MARKER_91D4"
+
+        def explode(_worktree):
+            raise RuntimeError(marker)
+
+        result = self._run(FakePreparedAdapter(explode))
+
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(
+            result.reason_code,
+            "single_task.execution.not_completed",
+        )
+        self.assertTrue(result.worktree_preserved)
+        self.assertTrue(Path(result.worktree_path).exists())
+        self.assertTrue(Path(result.receipt_path).is_file())
+        self.assertTrue(Path(result.receipt_sha256_path).is_file())
+
+        digest = hashlib.sha256(
+            Path(result.receipt_path).read_bytes()
+        ).hexdigest()
+        self.assertEqual(
+            Path(result.receipt_sha256_path).read_text(encoding="utf-8"),
+            f"{digest}  receipt.json\n",
+        )
+
+        for artifact in Path(result.receipt_path).parent.iterdir():
+            if artifact.is_file():
+                self.assertNotIn(
+                    marker,
+                    artifact.read_text(
+                        encoding="utf-8",
+                        errors="replace",
+                    ),
+                )
+
+        self.assertEqual(
+            git(self.source, "rev-parse", "HEAD").stdout.strip(),
+            self.head,
+        )
+        self.assertEqual(
+            git(self.source, "status", "--porcelain").stdout,
+            "",
+        )
+
+        branch_check = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.source),
+                "show-ref",
+                "--verify",
+                "--quiet",
+                "refs/heads/codex-task/repo/task-1",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(branch_check.returncode, 0)
 
     def test_result_mapping_is_deterministic(self):
         result = RepositorySingleTaskRunResult("1", "run", "blocked", "single_task.changed_files.none", None, "repo", "task", "/tmp/repo", "main", "a" * 40, "a" * 40, "profile", "b" * 64, "/tmp/work", False, None, None, None, (), "codex_cli", "completed", "passed", "validation_passed", False, "not_attempted", "/tmp/r", "/tmp/s", "start", "finish")

@@ -58,7 +58,7 @@ class RepositorySingleTaskCliTests(unittest.TestCase):
     def test_controller_exception_is_redacted(self):
         cli = _module()
         output = io.StringIO()
-        with mock.patch.object(cli, "run_repository_single_task", side_effect=ValueError("TOKEN_SECRET_MARKER_52AF ENV_SECRET_MARKER_91D4")), redirect_stdout(output):
+        with mock.patch.object(cli, "run_repository_single_task", side_effect=RuntimeError("TOKEN_SECRET_MARKER_52AF ENV_SECRET_MARKER_91D4")), redirect_stdout(output):
             self.assertEqual(cli.main(["--repository-id", "repo", "--task-spec", "task.json"]), 1)
         self.assertIn("FAILED_REPOSITORY_SINGLE_TASK", output.getvalue())
         self.assertNotIn("TOKEN_SECRET_MARKER_52AF", output.getvalue())

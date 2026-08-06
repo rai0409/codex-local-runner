@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
             repository_id=arguments.repository_id,
             task_spec_path=arguments.task_spec,
         )
-    except (OSError, ValueError, TypeError):
+    except Exception:
         print("status=failed\nreason_code=single_task.cli.controller_failed\nreceipt_path=\nrepository_id=\ntask_id=\ntask_branch=\ncommit_sha=\nworktree_preserved=")
         print("FAILED_REPOSITORY_SINGLE_TASK")
         return 1
