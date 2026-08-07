@@ -327,6 +327,9 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
 
         setup_environment = os.environ.copy()
         setup_environment["HOME"] = str(home)
+        setup_environment["GIT_CONFIG_GLOBAL"] = str(
+            home / ".gitconfig"
+        )
 
         subprocess.run(
             [
