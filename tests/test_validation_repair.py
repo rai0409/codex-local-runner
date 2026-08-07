@@ -41,6 +41,19 @@ class ValidationRepairTests(unittest.TestCase):
         self.assertIn("Do not weaken validation", prompt)
         self.assertEqual(prompt, build_repair_prompt("original objective " * 2000, 1, failure, ("src/a.py", "tests/test_a.py")))
 
+    def test_prompt_accepts_actionable_failure_with_nonzero_return_code(self):
+        failure = {
+            "command_id": "focused", "kind": "focused", "status": "failed",
+            "return_code": 1, "reason_code": "safe_validation.command.failed",
+            "stdout_tail": "focused output", "stderr_tail": "focused error",
+        }
+
+        prompt = build_repair_prompt("fix the focused validation failure", 1, failure)
+
+        self.assertIn("command_id: focused", prompt)
+        self.assertIn("return_code: 1", prompt)
+        self.assertIn("reason_code: safe_validation.command.failed", prompt)
+
     def test_helpers_are_pure(self):
         module = __import__("automation.orchestration.validation_repair", fromlist=["*"])
         source = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))

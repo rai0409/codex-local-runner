@@ -21,7 +21,59 @@ from automation.orchestration.repository_profile import FORBIDDEN_GIT_OPERATION_
 from automation.orchestration.repository_profile import validate_repository_profile
 from automation.orchestration.safe_validation_executor import ValidationCommandResult
 from automation.orchestration.safe_validation_executor import ValidationExecutionResult
+from orchestrator.codex_execution import execute_codex_cli
 from orchestrator import main as orchestrator_main
+
+
+class CodexExecutionArtifactTests(unittest.TestCase):
+    def test_default_execution_persists_prompt_for_backward_compatibility(self) -> None:
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
+            result = execute_codex_cli(
+                task={"repo_path": repo_dir},
+                prompt="backward compatible prompt",
+                work_root=work_root,
+                which=lambda _: "/usr/bin/codex",
+                run_subprocess=lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "ok", ""),
+            )
+
+            self.assertEqual(Path(result["prompt_path"]).read_text(encoding="utf-8"), "backward compatible prompt")
+            self.assertIn("backward compatible prompt", Path(result["meta_path"]).read_text(encoding="utf-8"))
+            self.assertIn("prompt", {artifact["name"] for artifact in result["artifacts"]})
+
+    def test_no_persistence_mode_passes_prompt_but_redacts_runner_artifacts(self) -> None:
+        prompt = "DISTINCTIVE-PROMPT-MARKER-7f3d\nA detailed task instruction."
+        captured: dict[str, object] = {}
+
+        def transport(command, **kwargs):
+            captured["command"] = command
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                f"echoed prompt: {prompt}\nDISTINCTIVE-PROMPT-MARKER-7f3d\nuseful stdout",
+                f"error context: {prompt}",
+            )
+
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
+            result = execute_codex_cli(
+                task={"repo_path": repo_dir}, prompt=prompt, work_root=work_root,
+                which=lambda _: "/usr/bin/codex", run_subprocess=transport,
+                persist_prompt=False,
+            )
+            run_dir = Path(result["run_dir"])
+            persisted = [
+                Path(result["stdout_path"]).read_text(encoding="utf-8"),
+                Path(result["stderr_path"]).read_text(encoding="utf-8"),
+                Path(result["meta_path"]).read_text(encoding="utf-8"),
+            ]
+
+            self.assertEqual(captured["command"][-1], prompt)
+            self.assertEqual(result["prompt_path"], "")
+            self.assertFalse((run_dir / "prompt.txt").exists())
+            self.assertNotIn("prompt", {artifact["name"] for artifact in result["artifacts"]})
+            for content in persisted:
+                self.assertNotIn(prompt, content)
+                self.assertNotIn("DISTINCTIVE-PROMPT-MARKER-7f3d", content)
+            self.assertIn("useful stdout", persisted[0])
 
 
 class CodexCliExecutionTests(unittest.TestCase):

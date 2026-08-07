@@ -231,7 +231,12 @@ class CodexCliAdapter(ProviderAdapter):
         current_prompt, phase = prompt, "initial"
         while True:
             attempt_count += 1
-            execution = run_codex(task={"repo_path": str(worktree)}, prompt=current_prompt, work_root=str(work_dir / "execution_runs"))
+            execution = run_codex(
+                task={"repo_path": str(worktree)},
+                prompt=current_prompt,
+                work_root=str(work_dir / "execution_runs"),
+                persist_prompt=False,
+            )
             status = str(execution["status"])
             verify = _verify_not_run(_not_run_reason_for_execution_status(status))
             if status == "completed":

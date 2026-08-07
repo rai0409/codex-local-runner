@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import shutil
 import subprocess
 from datetime import datetime
@@ -43,6 +44,19 @@ def _to_text(value: str | bytes | None) -> str:
     return str(value)
 
 
+def _sanitize_prompt_from_stream(stream: str, prompt: str) -> str:
+    """Remove the prompt and distinctive prompt lines from persisted output."""
+    sanitized = stream.replace(prompt, "[prompt redacted]")
+    markers = sorted(
+        {line for line in prompt.splitlines() if len(line.strip()) >= 8},
+        key=len,
+        reverse=True,
+    )
+    for marker in markers:
+        sanitized = sanitized.replace(marker, "[prompt content redacted]")
+    return sanitized
+
+
 def _empty_result(error: str) -> RunCodexResult:
     return {
         "status": "not_started",
@@ -71,6 +85,7 @@ def execute_codex_cli(
     which: Callable[[str], str | None] = shutil.which,
     run_subprocess: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     now: Callable[[], datetime] = datetime.now,
+    persist_prompt: bool = True,
 ) -> RunCodexResult:
     codex_path = which("codex")
     cmd = ["codex", "exec", "--skip-git-repo-check", prompt]
@@ -105,7 +120,8 @@ def execute_codex_cli(
     meta_path = run_dir / "meta.json"
 
     task_path.write_text(json.dumps(task, ensure_ascii=False, indent=2), encoding="utf-8")
-    prompt_path.write_text(prompt, encoding="utf-8")
+    if persist_prompt:
+        prompt_path.write_text(prompt, encoding="utf-8")
 
     return_code = None
     stdout_text = ""
@@ -147,6 +163,9 @@ def execute_codex_cli(
     else:
         status = "failed"
 
+    if not persist_prompt:
+        stdout_text = _sanitize_prompt_from_stream(stdout_text, prompt)
+        stderr_text = _sanitize_prompt_from_stream(stderr_text, prompt)
     stdout_path.write_text(stdout_text, encoding="utf-8")
     stderr_path.write_text(stderr_text, encoding="utf-8")
 
@@ -156,7 +175,7 @@ def execute_codex_cli(
         "run_dir": str(run_dir),
         "started_at": started_at,
         "finished_at": finished_at,
-        "command": cmd,
+        "command": cmd if persist_prompt else [*cmd[:-1], "[prompt redacted]"],
         "cwd": cwd,
         "codex_path": codex_path,
         "success": success,
@@ -164,15 +183,19 @@ def execute_codex_cli(
         "timed_out": timed_out,
         "timeout_seconds": timeout_seconds,
     }
+    if not persist_prompt:
+        meta["prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        meta["prompt_bytes"] = len(prompt.encode("utf-8"))
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     artifacts: list[RunCodexArtifact] = [
         {"name": "task", "path": str(task_path)},
-        {"name": "prompt", "path": str(prompt_path)},
         {"name": "stdout", "path": str(stdout_path)},
         {"name": "stderr", "path": str(stderr_path)},
         {"name": "meta", "path": str(meta_path)},
     ]
+    if persist_prompt:
+        artifacts.insert(1, {"name": "prompt", "path": str(prompt_path)})
 
     return {
         "status": status,
@@ -182,7 +205,7 @@ def execute_codex_cli(
         "stdout_path": str(stdout_path),
         "stderr_path": str(stderr_path),
         "task_path": str(task_path),
-        "prompt_path": str(prompt_path),
+        "prompt_path": str(prompt_path) if persist_prompt else "",
         "meta_path": str(meta_path),
         "error": stderr_text if (return_code is None or return_code != 0) else "",
         "timed_out": timed_out,

@@ -56,6 +56,7 @@ class SafeValidationAdapterIntegrationTests(unittest.TestCase):
         self.assertEqual(codex.call_count, 2)
         self.assertEqual(codex.call_args_list[0].kwargs["prompt"], "original task")
         repair_prompt = codex.call_args_list[1].kwargs["prompt"]
+        self.assertTrue(all(call.kwargs["persist_prompt"] is False for call in codex.call_args_list))
         self.assertNotEqual(repair_prompt, "original task")
         self.assertIn("command_id: focused", repair_prompt); self.assertIn("FAILURE_OUTPUT", repair_prompt); self.assertIn("x.py", repair_prompt)
         self.assertEqual(result["attempt_count"], 2); self.assertEqual(result["retry"]["outcome"], "retry_succeeded")

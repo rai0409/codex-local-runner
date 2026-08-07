@@ -9,7 +9,13 @@ from orchestrator.codex_execution import RunCodexStatus
 from orchestrator.codex_execution import execute_codex_cli
 
 
-def run_codex(task: dict, prompt: str, work_root: str = "tasks/runs") -> RunCodexResult:
+def run_codex(
+    task: dict,
+    prompt: str,
+    work_root: str = "tasks/runs",
+    *,
+    persist_prompt: bool = True,
+) -> RunCodexResult:
     return execute_codex_cli(
         task=task,
         prompt=prompt,
@@ -17,4 +23,5 @@ def run_codex(task: dict, prompt: str, work_root: str = "tasks/runs") -> RunCode
         which=shutil.which,
         run_subprocess=subprocess.run,
         now=datetime.now,
+        persist_prompt=persist_prompt,
     )
