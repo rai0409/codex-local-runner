@@ -47,6 +47,25 @@ class FakePreparedAdapter:
         return {"status": "completed", "verify": {"status": "passed" if self.reason in {"validation_passed", "validation_partial"} else "failed", "reason": self.reason, "safe_validation": {"status": safe}}, "retry": {"attempted": False, "outcome": "not_attempted"}}
 
 
+class RepairPreparedAdapter(FakePreparedAdapter):
+    def __init__(self, action, *, exhausted=False):
+        super().__init__(action)
+        self.exhausted = exhausted
+        self.payload = None
+
+    def execute_prepared_worktree(self, payload):
+        self.payload = payload
+        self.calls += 1
+        self.action(Path(payload["worktree_path"]))
+        safe = "failed" if self.exhausted else "passed"
+        return {
+            "status": "completed", "verify": {"status": safe, "reason": "validation_failed" if self.exhausted else "validation_passed", "safe_validation": {"status": safe}},
+            "retry": {"attempted": True, "outcome": "retry_failed" if self.exhausted else "retry_succeeded"},
+            "repair": {"attempted": True, "max_attempts": 2, "attempts_used": 2 if self.exhausted else 1, "outcome": "repair_exhausted" if self.exhausted else "repair_succeeded"},
+            "validation_attempts": [{"attempt_number": 1, "phase": "initial", "execution_status": "completed", "validation_status": "failed", "validation_reason": "validation_failed", "failure": {"command_id": "compile", "kind": "compile", "status": "failed", "return_code": 1, "reason_code": "failed", "stdout_tail_sha256": "a" * 64, "stderr_tail_sha256": "b" * 64}}],
+        }
+
+
 class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -152,6 +171,30 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
                 self.assertTrue(result.worktree_preserved)
                 self.assertTrue(Path(result.worktree_path).exists())
                 self.assertEqual(git(self.source, "rev-list", "--count", "main").stdout.strip(), "1")
+
+    def test_repair_metadata_scope_artifact_and_commit_contract(self):
+        adapter = RepairPreparedAdapter(self._modify)
+        result = self._run(adapter)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(adapter.payload["allowed_changed_paths"], ("allowed.txt",))
+        self.assertEqual(git(self.source, "rev-parse", f"{result.commit_sha}^").stdout.strip(), self.head)
+        self.assertEqual(git(self.source, "rev-parse", "HEAD").stdout.strip(), self.head)
+        self.assertEqual(git(self.source, "status", "--porcelain").stdout, "")
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        artifact = Path(receipt["artifact_paths"]["validation_attempts"])
+        self.assertTrue(artifact.is_file())
+        rendered = artifact.read_text(encoding="utf-8")
+        self.assertNotIn("PROMPT_SECRET_MARKER_8B71", rendered)
+        self.assertNotIn("PROMPT_SECRET_MARKER_8B71", Path(result.receipt_path).read_text(encoding="utf-8"))
+
+    def test_exhausted_repair_preserves_worktree_without_commit_and_writes_artifact(self):
+        result = self._run(RepairPreparedAdapter(self._modify, exhausted=True))
+        self.assertEqual(result.status, "blocked")
+        self.assertTrue(result.worktree_preserved)
+        self.assertTrue(Path(result.worktree_path).exists())
+        self.assertEqual(git(self.source, "rev-list", "--count", "main").stdout.strip(), "1")
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertTrue(Path(receipt["artifact_paths"]["validation_attempts"]).is_file())
 
     def test_codex_git_mutations_are_detected_and_preserved(self):
         def stage(worktree):

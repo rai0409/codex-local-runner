@@ -13,6 +13,9 @@ from automation.orchestration.repository_profile_binding import bind_repository_
 from automation.orchestration.safe_validation_executor import execute_repository_validation
 from automation.orchestration.safe_validation_executor import SafeValidationExecutorError
 from automation.orchestration.safe_validation_executor import validation_execution_result_to_mapping
+from automation.orchestration.validation_repair import MAX_VALIDATION_REPAIR_ATTEMPTS
+from automation.orchestration.validation_repair import build_repair_prompt
+from automation.orchestration.validation_repair import extract_actionable_failure
 from run_codex import run_codex
 from workspace.worktree import cleanup_git_worktree
 from workspace.worktree import prepare_git_worktree
@@ -75,6 +78,26 @@ def _retry_not_attempted() -> dict[str, Any]:
         "trigger": "not_applicable",
         "outcome": "not_attempted",
     }
+
+
+def _repair_not_attempted() -> dict[str, Any]:
+    return {"attempted": False, "max_attempts": MAX_VALIDATION_REPAIR_ATTEMPTS,
+            "attempts_used": 0, "outcome": "not_attempted"}
+
+
+def _validation_attempt(
+    attempt_number: int, phase: str, execution_status: str, verify: Mapping[str, Any],
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {"attempt_number": attempt_number, "phase": phase,
+        "execution_status": execution_status, "validation_status": verify.get("status"),
+        "validation_reason": verify.get("reason")}
+    failure = extract_actionable_failure(verify.get("safe_validation"))
+    if failure is not None:
+        import hashlib
+        entry["failure"] = {key: failure[key] for key in ("command_id", "kind", "status", "return_code", "reason_code")}
+        entry["failure"].update({"stdout_tail_sha256": hashlib.sha256(failure["stdout_tail"].encode()).hexdigest(),
+            "stderr_tail_sha256": hashlib.sha256(failure["stderr_tail"].encode()).hexdigest()})
+    return entry
 
 
 def _derive_result_interpretation(
@@ -201,31 +224,42 @@ class CodexCliAdapter(ProviderAdapter):
             return self._prepared_failure("safe_validation.profile.invalid")
         if profile.approval_boundary.test_execution != "automatic":
             return self._prepared_failure("safe_validation.test_execution_not_automatic")
-        attempt_count, retry = 1, _retry_not_attempted()
-        execution = run_codex(task={"repo_path": str(worktree)}, prompt=prompt, work_root=str(work_dir / "execution_runs"))
-        status = str(execution["status"])
-        verify = _verify_not_run(_not_run_reason_for_execution_status(status))
-        if status == "completed":
-            try: verify = _verify_from_safe_validation(execute_repository_validation(profile))
-            except SafeValidationExecutorError: verify = _verify_safe_validation_executor_error()
-        if status == "completed" and verify.get("reason") == "validation_failed":
-            attempt_count, retry = 2, {"attempted": True, "trigger": "verify_failed", "outcome": "retry_failed"}
-            execution = run_codex(task={"repo_path": str(worktree)}, prompt=prompt, work_root=str(work_dir / "execution_runs"))
+        allowed_changed_paths = payload.get("allowed_changed_paths")
+        if not isinstance(allowed_changed_paths, (list, tuple)) or not all(isinstance(path, str) for path in allowed_changed_paths):
+            allowed_changed_paths = None
+        attempt_count, retry, repair, validation_attempts = 0, _retry_not_attempted(), _repair_not_attempted(), []
+        current_prompt, phase = prompt, "initial"
+        while True:
+            attempt_count += 1
+            execution = run_codex(task={"repo_path": str(worktree)}, prompt=current_prompt, work_root=str(work_dir / "execution_runs"))
             status = str(execution["status"])
             verify = _verify_not_run(_not_run_reason_for_execution_status(status))
             if status == "completed":
                 try: verify = _verify_from_safe_validation(execute_repository_validation(profile))
                 except SafeValidationExecutorError: verify = _verify_safe_validation_executor_error()
-            if verify.get("status") == "passed": retry["outcome"] = "retry_succeeded"
+            validation_attempts.append(_validation_attempt(attempt_count, phase, status, verify))
+            failure = extract_actionable_failure(verify.get("safe_validation"))
+            if not (status == "completed" and verify.get("reason") == "validation_failed" and failure is not None and repair["attempts_used"] < MAX_VALIDATION_REPAIR_ATTEMPTS):
+                break
+            repair["attempted"] = True
+            repair["attempts_used"] += 1
+            retry = {"attempted": True, "trigger": "verify_failed", "outcome": "retry_failed"}
+            current_prompt = build_repair_prompt(prompt, repair["attempts_used"], failure, allowed_changed_paths)
+            phase = "repair"
+        if repair["attempted"]:
+            if verify.get("status") == "passed":
+                retry["outcome"], repair["outcome"] = "retry_succeeded", "repair_succeeded"
+            else:
+                repair["outcome"] = "repair_exhausted"
         interpretation = _derive_result_interpretation(status, verify, retry)
         recommendation = _derive_review_recommendation(interpretation)
         summary = _build_review_handoff_summary(final_status=status, final_verify_status=verify["status"], final_verify_reason=verify["reason"], retry_attempted=retry["attempted"], retry_outcome=retry["outcome"], result_interpretation=interpretation, review_recommendation=recommendation)
-        return {"adapter":self.name,"status":status,"started_at":execution["started_at"],"finished_at":execution["finished_at"],"artifacts":[str(item.get("path")) for item in execution["artifacts"] if isinstance(item,dict) and item.get("path")],"error":str(execution["error"]).strip() or None,"return_code":execution["return_code"],"verify":verify,"attempt_count":attempt_count,"retry":retry,"result_interpretation":interpretation,"review_recommendation":recommendation,"review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status=status,attempt_count=attempt_count,return_code=execution["return_code"],verify_result=verify)}
+        return {"adapter":self.name,"status":status,"started_at":execution["started_at"],"finished_at":execution["finished_at"],"artifacts":[str(item.get("path")) for item in execution["artifacts"] if isinstance(item,dict) and item.get("path")],"error":str(execution["error"]).strip() or None,"return_code":execution["return_code"],"verify":verify,"attempt_count":attempt_count,"retry":retry,"repair":repair,"validation_attempts":validation_attempts,"result_interpretation":interpretation,"review_recommendation":recommendation,"review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status=status,attempt_count=attempt_count,return_code=execution["return_code"],verify_result=verify)}
 
     def _prepared_failure(self, reason: str) -> dict[str, Any]:
         verify, retry = _verify_not_run("validation_not_run_execution_status_failed"), _retry_not_attempted()
         summary = _build_review_handoff_summary(final_status="failed",final_verify_status=verify["status"],final_verify_reason=verify["reason"],retry_attempted=False,retry_outcome=retry["outcome"],result_interpretation="execution_not_completed",review_recommendation="review_recommended")
-        return {"adapter":self.name,"status":"failed","started_at":None,"finished_at":None,"artifacts":[],"error":reason,"return_code":None,"verify":verify,"attempt_count":1,"retry":retry,"result_interpretation":"execution_not_completed","review_recommendation":"review_recommended","review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status="failed",attempt_count=1,return_code=None,verify_result=verify)}
+        return {"adapter":self.name,"status":"failed","started_at":None,"finished_at":None,"artifacts":[],"error":reason,"return_code":None,"verify":verify,"attempt_count":1,"retry":retry,"repair":_repair_not_attempted(),"validation_attempts":[],"result_interpretation":"execution_not_completed","review_recommendation":"review_recommended","review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status="failed",attempt_count=1,return_code=None,verify_result=verify)}
 
     def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Prepare/bind/clean a worktree, delegating execution exactly once."""
@@ -253,7 +287,7 @@ class CodexCliAdapter(ProviderAdapter):
             summary = _build_review_handoff_summary(final_status="failed", final_verify_status=verify["status"], final_verify_reason=verify["reason"], retry_attempted=False, retry_outcome=retry["outcome"], result_interpretation="execution_not_completed", review_recommendation="review_recommended")
             return {"adapter": self.name, "status": "failed", "started_at": None, "finished_at": None,
                 "artifacts": [], "error": profile_error, "return_code": None, "verify": verify,
-                "attempt_count": 1, "retry": retry, "result_interpretation": "execution_not_completed",
+                "attempt_count": 1, "retry": retry, "repair": _repair_not_attempted(), "validation_attempts": [], "result_interpretation": "execution_not_completed",
                 "review_recommendation": "review_recommended", "review_handoff_summary": summary,
                 "reviewer_handoff": _build_reviewer_handoff(review_handoff_summary=summary, final_status="failed", attempt_count=1, return_code=None, verify_result=verify)}
         worktree_result = prepare_git_worktree(
@@ -295,6 +329,8 @@ class CodexCliAdapter(ProviderAdapter):
                 "verify": early_verify,
                 "attempt_count": early_attempt_count,
                 "retry": early_retry,
+                "repair": _repair_not_attempted(),
+                "validation_attempts": [],
                 "result_interpretation": early_result_interpretation,
                 "review_recommendation": early_review_recommendation,
                 "review_handoff_summary": review_handoff_summary,
@@ -316,6 +352,7 @@ class CodexCliAdapter(ProviderAdapter):
                     "worktree_path": worktree_result["worktree_path"],
                     "work_dir": str(work_dir),
                     "repository_profile": bound_profile,
+                    "allowed_changed_paths": payload.get("allowed_changed_paths"),
                 })
         finally:
             if worktree_result["cleanup_needed"]:

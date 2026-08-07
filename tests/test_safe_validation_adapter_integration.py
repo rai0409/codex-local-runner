@@ -38,13 +38,29 @@ def _git_worktree(root: Path) -> None:
     subprocess.run(["git", "-C", str(root), "init"], check=True, capture_output=True)
 
 
-def _safe_result(status: str) -> ValidationExecutionResult:
+def _safe_result(status: str, stdout: str = "", stderr: str = "") -> ValidationExecutionResult:
     result_status = "passed" if status == "passed" else "failed"
-    command = ValidationCommandResult("focused", "focused", (sys.executable, "-m", "py_compile", "x.py"), "/tmp", True, True, result_status, 0 if result_status == "passed" else 1, f"safe_validation.command.{result_status}", "2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:01.000000Z", 1.0, "", "", False, False)
+    command = ValidationCommandResult("focused", "focused", (sys.executable, "-m", "py_compile", "x.py"), "/tmp", True, True, result_status, 0 if result_status == "passed" else 1, f"safe_validation.command.{result_status}", "2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:01.000000Z", 1.0, stdout, stderr, False, False)
     return ValidationExecutionResult(1, "adapter-test", "/tmp", status, "2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:01.000000Z", 1.0, (command,), () if status == "passed" else ("focused",), (), False, None)
 
 
 class SafeValidationAdapterIntegrationTests(unittest.TestCase):
+    def test_repair_uses_new_prompt_with_failure_context_and_scope(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); _git_worktree(root); profile = _profile(root)
+            execution = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
+            payload = {"prompt": "original task", "worktree_path": str(root), "work_dir": str(root), "repository_profile": profile, "allowed_changed_paths": ["x.py"]}
+            with mock.patch("adapters.codex_cli.run_codex", side_effect=[execution, execution]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", side_effect=[_safe_result("failed", "FAILURE_OUTPUT"), _safe_result("passed")]):
+                result = adapter.execute_prepared_worktree(payload)
+        self.assertEqual(codex.call_count, 2)
+        self.assertEqual(codex.call_args_list[0].kwargs["prompt"], "original task")
+        repair_prompt = codex.call_args_list[1].kwargs["prompt"]
+        self.assertNotEqual(repair_prompt, "original task")
+        self.assertIn("command_id: focused", repair_prompt); self.assertIn("FAILURE_OUTPUT", repair_prompt); self.assertIn("x.py", repair_prompt)
+        self.assertEqual(result["attempt_count"], 2); self.assertEqual(result["retry"]["outcome"], "retry_succeeded")
+        self.assertEqual(result["repair"], {"attempted": True, "max_attempts": 2, "attempts_used": 1, "outcome": "repair_succeeded"})
+        self.assertEqual(result["verify"]["status"], "passed")
     def test_mismatch_and_nonautomatic_preflight_do_not_start_codex(self) -> None:
         adapter = CodexCliAdapter()
         with tempfile.TemporaryDirectory() as raw:
@@ -266,10 +282,12 @@ class SafeValidationAdapterIntegrationTests(unittest.TestCase):
             root = Path(raw); _git_worktree(root); profile = _profile(root)
             execution = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
             payload = {"prompt": "test prompt", "worktree_path": str(root), "work_dir": str(root), "repository_profile": profile}
-            with mock.patch("adapters.codex_cli.run_codex", side_effect=[execution, execution]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", side_effect=[_safe_result("failed"), _safe_result("failed")]) as validation:
+            with mock.patch("adapters.codex_cli.run_codex", side_effect=[execution, execution, execution]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", side_effect=[_safe_result("failed"), _safe_result("failed"), _safe_result("failed")]) as validation:
                 failed = adapter.execute_prepared_worktree(payload)
-            self.assertEqual(codex.call_count, 2); self.assertEqual(validation.call_count, 2)
+            self.assertEqual(codex.call_count, 3); self.assertEqual(validation.call_count, 3)
             self.assertEqual(failed["retry"]["outcome"], "retry_failed")
+            self.assertEqual(failed["repair"]["attempts_used"], 2)
+            self.assertEqual(failed["repair"]["outcome"], "repair_exhausted")
             self.assertEqual(failed["result_interpretation"], "completed_verified_failed_after_retry")
             error = SafeValidationExecutorError("safe_validation.executor.internal", "test executor failure")
             with mock.patch("adapters.codex_cli.run_codex", return_value=execution) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", side_effect=error) as validation:

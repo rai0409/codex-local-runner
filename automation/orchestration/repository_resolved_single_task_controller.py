@@ -166,6 +166,24 @@ def _worktree_can_be_removed(snapshot: Any, expected_head: str, branch_created: 
     )
 
 
+def _safe_validation_attempts(value: Any) -> list[dict[str, Any]]:
+    """Retain only the adapter's secret-safe validation receipt fields."""
+    if not isinstance(value, list):
+        return []
+    allowed = {"attempt_number", "phase", "execution_status", "validation_status", "validation_reason"}
+    failure_allowed = {"command_id", "kind", "status", "return_code", "reason_code", "stdout_tail_sha256", "stderr_tail_sha256"}
+    result: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        safe = {key: item[key] for key in allowed if key in item}
+        failure = item.get("failure")
+        if isinstance(failure, dict):
+            safe["failure"] = {key: failure[key] for key in failure_allowed if key in failure}
+        result.append(safe)
+    return result
+
+
 def run_repository_single_task(
     repository_id: str,
     task_spec_path: str | os.PathLike[str],
@@ -210,6 +228,8 @@ def run_repository_single_task(
     validation_reason: str | None = None
     retry_attempted = False
     retry_outcome: str | None = None
+    validation_attempts: list[dict[str, Any]] = []
+    repair_summary: dict[str, Any] = {"attempted": False, "max_attempts": 2, "attempts_used": 0, "outcome": "not_attempted"}
     cleanup_status = "not_started"
 
     def record(status: str, reason: str, detail: str | None = None) -> RepositorySingleTaskRunResult:
@@ -229,6 +249,7 @@ def run_repository_single_task(
             "worktree_state": str(output_directory / "worktree_state.json"),
             "execution_summary": str(output_directory / "execution_summary.json"),
             "changed_files": str(output_directory / "changed_files.json"),
+            "validation_attempts": str(output_directory / "validation_attempts.json"),
         }
         receipt = {
             "schema_version": "1", "run_id": run_id, "status": status,
@@ -270,7 +291,9 @@ def run_repository_single_task(
                 "adapter_name": adapter_name, "execution_status": execution_status,
                 "validation_status": validation_status, "validation_reason": validation_reason,
                 "retry_attempted": retry_attempted, "retry_outcome": retry_outcome,
+                "repair": repair_summary,
             })
+            _atomic_json(Path(paths["validation_attempts"]), {"repair": repair_summary, "validation_attempts": validation_attempts})
             _atomic_json(Path(paths["changed_files"]), {
                 "allowed_changed_paths": receipt["allowed_changed_paths"],
                 "actual_changed_files": list(changed_files),
@@ -381,7 +404,7 @@ def run_repository_single_task(
     try:
         response = adapter.execute_prepared_worktree({
             "prompt": spec.prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
-            "repository_profile": bound_profile,
+            "repository_profile": bound_profile, "allowed_changed_paths": spec.allowed_changed_paths,
         })
     except Exception:
         worktree_preserved = True
@@ -392,6 +415,8 @@ def run_repository_single_task(
     execution_status = response.get("status")
     verify = response.get("verify")
     retry_data = response.get("retry")
+    raw_validation_attempts = response.get("validation_attempts", [])
+    raw_repair = response.get("repair", repair_summary)
     if not isinstance(verify, dict) or not isinstance(retry_data, dict):
         worktree_preserved = True
         return record("blocked", "single_task.validation.failed")
@@ -400,6 +425,9 @@ def run_repository_single_task(
     validation_status = safe_validation.get("status") if isinstance(safe_validation, dict) else None
     retry_attempted = bool(retry_data.get("attempted"))
     retry_outcome = retry_data.get("outcome")
+    validation_attempts = _safe_validation_attempts(raw_validation_attempts)
+    if isinstance(raw_repair, dict):
+        repair_summary = {key: raw_repair[key] for key in ("attempted", "max_attempts", "attempts_used", "outcome") if key in raw_repair}
     if execution_status != "completed":
         worktree_preserved = True
         return record("blocked", "single_task.execution.not_completed")
