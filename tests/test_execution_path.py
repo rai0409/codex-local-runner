@@ -845,6 +845,10 @@ def _safe_adapter_profile(root: Path):
     })
 
 
+def _prepared_git_directory(root: Path) -> None:
+    subprocess.run(["git", "-C", str(root), "init"], check=True, capture_output=True)
+
+
 def _safe_execution_result(status: str) -> ValidationExecutionResult:
     command_status = "passed" if status == "passed" else "failed"
     command = ValidationCommandResult("focused", "focused", (sys.executable, "-m", "py_compile", "x.py"), "/tmp", True, True, command_status, 0 if command_status == "passed" else 1, f"safe_validation.command.{command_status}", "2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:01.000000Z", 1.0, "", "", False, False)
@@ -860,6 +864,7 @@ def _replacement_adapter_completed(self) -> None:
     adapter = CodexCliAdapter()
     with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
         root = Path(raw)
+        _prepared_git_directory(root)
         execution = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
         with mock.patch("adapters.codex_cli.prepare_git_worktree", return_value={"created": True, "cleanup_needed": True, "worktree_path": str(root), "branch_name": "branch", "error": ""}), mock.patch("adapters.codex_cli.cleanup_git_worktree", return_value={"error": ""}), mock.patch("adapters.codex_cli.bind_repository_profile_to_worktree", side_effect=lambda profile, _: profile), mock.patch("adapters.codex_cli.run_codex", return_value=execution) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", return_value=_safe_execution_result("passed")) as validation:
             result = adapter.execute(_adapter_payload(root, work_dir))
@@ -873,6 +878,7 @@ def _replacement_adapter_failed_execution(self) -> None:
     adapter = CodexCliAdapter()
     with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
         root = Path(raw)
+        _prepared_git_directory(root)
         execution = {"status": "failed", "return_code": 1, "started_at": "a", "finished_at": "b", "artifacts": [], "error": "failed"}
         with mock.patch("adapters.codex_cli.prepare_git_worktree", return_value={"created": True, "cleanup_needed": True, "worktree_path": str(root), "branch_name": "branch", "error": ""}), mock.patch("adapters.codex_cli.cleanup_git_worktree", return_value={"error": ""}), mock.patch("adapters.codex_cli.bind_repository_profile_to_worktree", side_effect=lambda profile, _: profile), mock.patch("adapters.codex_cli.run_codex", return_value=execution), mock.patch("adapters.codex_cli.execute_repository_validation") as validation:
             result = adapter.execute(_adapter_payload(root, work_dir))
@@ -884,6 +890,7 @@ def _replacement_adapter_retry(self) -> None:
     adapter = CodexCliAdapter()
     with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
         root = Path(raw)
+        _prepared_git_directory(root)
         execution = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
         with mock.patch("adapters.codex_cli.prepare_git_worktree", return_value={"created": True, "cleanup_needed": True, "worktree_path": str(root), "branch_name": "branch", "error": ""}), mock.patch("adapters.codex_cli.cleanup_git_worktree", return_value={"error": ""}), mock.patch("adapters.codex_cli.bind_repository_profile_to_worktree", side_effect=lambda profile, _: profile), mock.patch("adapters.codex_cli.run_codex", side_effect=[execution, execution]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", side_effect=[_safe_execution_result("failed"), _safe_execution_result("passed")]) as validation:
             result = adapter.execute(_adapter_payload(root, work_dir))

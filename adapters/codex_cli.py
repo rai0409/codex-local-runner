@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import shlex
-from typing import Any
+from typing import Any, Mapping
 
 from adapters.base import ProviderAdapter
 from automation.orchestration.repository_profile import RepositoryProfile
@@ -176,7 +176,59 @@ class CodexCliAdapter(ProviderAdapter):
     def dispatch(self, payload: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError("codex_cli provider execution is not implemented in Phase 1")
 
+    def execute_prepared_worktree(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """Execute Codex and Safe Validation in an already prepared worktree only."""
+        if not isinstance(payload, Mapping):
+            return self._prepared_failure("safe_validation.profile.invalid")
+        prompt = payload.get("prompt")
+        raw_worktree = payload.get("worktree_path")
+        raw_work_dir = payload.get("work_dir")
+        profile = payload.get("repository_profile")
+        if not isinstance(prompt, str) or not prompt.strip() or not isinstance(raw_worktree, str) or not raw_worktree.strip() or not isinstance(raw_work_dir, str) or not raw_work_dir.strip():
+            return self._prepared_failure("safe_validation.profile.invalid")
+        worktree = Path(raw_worktree)
+        work_dir = Path(raw_work_dir)
+        if not isinstance(profile, RepositoryProfile):
+            return self._prepared_failure("safe_validation.profile.invalid")
+        try:
+            if not worktree.is_absolute() or not worktree.exists() or not worktree.is_dir() or not (worktree / ".git").exists():
+                return self._prepared_failure("safe_validation.profile.invalid")
+            worktree = worktree.resolve(strict=True)
+            profile = validate_repository_profile(profile)
+            if worktree != Path(profile.repository_root).resolve(strict=True):
+                return self._prepared_failure("safe_validation.profile_repository_mismatch")
+        except (RepositoryProfileValidationError, OSError):
+            return self._prepared_failure("safe_validation.profile.invalid")
+        if profile.approval_boundary.test_execution != "automatic":
+            return self._prepared_failure("safe_validation.test_execution_not_automatic")
+        attempt_count, retry = 1, _retry_not_attempted()
+        execution = run_codex(task={"repo_path": str(worktree)}, prompt=prompt, work_root=str(work_dir / "execution_runs"))
+        status = str(execution["status"])
+        verify = _verify_not_run(_not_run_reason_for_execution_status(status))
+        if status == "completed":
+            try: verify = _verify_from_safe_validation(execute_repository_validation(profile))
+            except SafeValidationExecutorError: verify = _verify_safe_validation_executor_error()
+        if status == "completed" and verify.get("reason") == "validation_failed":
+            attempt_count, retry = 2, {"attempted": True, "trigger": "verify_failed", "outcome": "retry_failed"}
+            execution = run_codex(task={"repo_path": str(worktree)}, prompt=prompt, work_root=str(work_dir / "execution_runs"))
+            status = str(execution["status"])
+            verify = _verify_not_run(_not_run_reason_for_execution_status(status))
+            if status == "completed":
+                try: verify = _verify_from_safe_validation(execute_repository_validation(profile))
+                except SafeValidationExecutorError: verify = _verify_safe_validation_executor_error()
+            if verify.get("status") == "passed": retry["outcome"] = "retry_succeeded"
+        interpretation = _derive_result_interpretation(status, verify, retry)
+        recommendation = _derive_review_recommendation(interpretation)
+        summary = _build_review_handoff_summary(final_status=status, final_verify_status=verify["status"], final_verify_reason=verify["reason"], retry_attempted=retry["attempted"], retry_outcome=retry["outcome"], result_interpretation=interpretation, review_recommendation=recommendation)
+        return {"adapter":self.name,"status":status,"started_at":execution["started_at"],"finished_at":execution["finished_at"],"artifacts":[str(item.get("path")) for item in execution["artifacts"] if isinstance(item,dict) and item.get("path")],"error":str(execution["error"]).strip() or None,"return_code":execution["return_code"],"verify":verify,"attempt_count":attempt_count,"retry":retry,"result_interpretation":interpretation,"review_recommendation":recommendation,"review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status=status,attempt_count=attempt_count,return_code=execution["return_code"],verify_result=verify)}
+
+    def _prepared_failure(self, reason: str) -> dict[str, Any]:
+        verify, retry = _verify_not_run("validation_not_run_execution_status_failed"), _retry_not_attempted()
+        summary = _build_review_handoff_summary(final_status="failed",final_verify_status=verify["status"],final_verify_reason=verify["reason"],retry_attempted=False,retry_outcome=retry["outcome"],result_interpretation="execution_not_completed",review_recommendation="review_recommended")
+        return {"adapter":self.name,"status":"failed","started_at":None,"finished_at":None,"artifacts":[],"error":reason,"return_code":None,"verify":verify,"attempt_count":1,"retry":retry,"result_interpretation":"execution_not_completed","review_recommendation":"review_recommended","review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status="failed",attempt_count=1,return_code=None,verify_result=verify)}
+
     def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Prepare/bind/clean a worktree, delegating execution exactly once."""
         prompt = str(payload.get("prompt", "")).strip()
         work_dir = Path(str(payload.get("work_dir", ".")).strip() or ".")
         repo_path = str(Path(str(payload.get("repo_path", ".")).strip() or ".").expanduser())
@@ -249,70 +301,22 @@ class CodexCliAdapter(ProviderAdapter):
                 "reviewer_handoff": reviewer_handoff,
             }
 
+        prepared_result: dict[str, Any]
         cleanup_error = ""
-        attempt_count = 1
-        retry = _retry_not_attempted()
         try:
             try:
                 bound_profile = bind_repository_profile_to_worktree(
                     profile, worktree_result["worktree_path"]
                 )
             except (RepositoryProfileBindingError, RepositoryProfileValidationError):
-                execution_result = {
-                    "status": "failed", "return_code": None, "started_at": None,
-                    "finished_at": None, "artifacts": [],
-                    "error": "safe_validation.profile.invalid",
-                }
-                execution_status = "failed"
-                verify_result = _verify_not_run("validation_not_run_execution_status_failed")
+                prepared_result = self._prepared_failure("safe_validation.profile.invalid")
             else:
-                execution_result = run_codex(
-                    task={"repo_path": worktree_result["worktree_path"]},
-                    prompt=prompt,
-                    work_root=str(work_dir / "execution_runs"),
-                )
-                execution_status = str(execution_result["status"])
-                if execution_status == "completed":
-                    try:
-                        verify_result = _verify_from_safe_validation(
-                            execute_repository_validation(bound_profile)
-                        )
-                    except SafeValidationExecutorError:
-                        verify_result = _verify_safe_validation_executor_error()
-                else:
-                    verify_result = _verify_not_run(
-                        reason=_not_run_reason_for_execution_status(execution_status),
-                    )
-
-            if (
-                execution_status == "completed"
-                and verify_result.get("reason") == "validation_failed"
-            ):
-                attempt_count = 2
-                retry = {
-                    "attempted": True,
-                    "trigger": "verify_failed",
-                    "outcome": "retry_failed",
-                }
-                execution_result = run_codex(
-                    task={"repo_path": worktree_result["worktree_path"]},
-                    prompt=prompt,
-                    work_root=str(work_dir / "execution_runs"),
-                )
-                execution_status = str(execution_result["status"])
-                if execution_status == "completed":
-                    try:
-                        verify_result = _verify_from_safe_validation(
-                            execute_repository_validation(bound_profile)
-                        )
-                    except SafeValidationExecutorError:
-                        verify_result = _verify_safe_validation_executor_error()
-                else:
-                    verify_result = _verify_not_run(
-                        reason=_not_run_reason_for_execution_status(execution_status),
-                    )
-                if verify_result.get("status") == "passed":
-                    retry["outcome"] = "retry_succeeded"
+                prepared_result = self.execute_prepared_worktree({
+                    "prompt": prompt,
+                    "worktree_path": worktree_result["worktree_path"],
+                    "work_dir": str(work_dir),
+                    "repository_profile": bound_profile,
+                })
         finally:
             if worktree_result["cleanup_needed"]:
                 cleanup_result = cleanup_git_worktree(
@@ -322,60 +326,8 @@ class CodexCliAdapter(ProviderAdapter):
                 )
                 cleanup_error = cleanup_result["error"]
 
-        artifacts: list[str] = []
-        for item in execution_result["artifacts"]:
-            if isinstance(item, dict):
-                path = str(item.get("path", "")).strip()
-                if path:
-                    artifacts.append(path)
-
-        execution_error = str(execution_result["error"]).strip()
-        if cleanup_error and execution_status != "completed":
-            if execution_error:
-                execution_error = f"{execution_error}\nWorktree cleanup failed: {cleanup_error}"
-            else:
-                execution_error = f"Worktree cleanup failed: {cleanup_error}"
-
-        result_interpretation = _derive_result_interpretation(
-            execution_status=execution_status,
-            verify_result=verify_result,
-            retry=retry,
-        )
-        review_recommendation = _derive_review_recommendation(result_interpretation)
-        final_verify_status = verify_result["status"]
-        final_verify_reason = verify_result["reason"]
-        retry_attempted = retry["attempted"]
-        retry_outcome = retry["outcome"]
-        review_handoff_summary = _build_review_handoff_summary(
-            final_status=execution_status,
-            final_verify_status=final_verify_status,
-            final_verify_reason=final_verify_reason,
-            retry_attempted=retry_attempted,
-            retry_outcome=retry_outcome,
-            result_interpretation=result_interpretation,
-            review_recommendation=review_recommendation,
-        )
-        final_return_code = execution_result["return_code"]
-        reviewer_handoff = _build_reviewer_handoff(
-            review_handoff_summary=review_handoff_summary,
-            final_status=execution_status,
-            attempt_count=attempt_count,
-            return_code=final_return_code,
-            verify_result=verify_result,
-        )
-        return {
-            "adapter": self.name,
-            "status": execution_status,
-            "started_at": execution_result["started_at"],
-            "finished_at": execution_result["finished_at"],
-            "artifacts": artifacts,
-            "error": execution_error or None,
-            "return_code": final_return_code,
-            "verify": verify_result,
-            "attempt_count": attempt_count,
-            "retry": retry,
-            "result_interpretation": result_interpretation,
-            "review_recommendation": review_recommendation,
-            "review_handoff_summary": review_handoff_summary,
-            "reviewer_handoff": reviewer_handoff,
-        }
+        if cleanup_error and prepared_result["status"] != "completed":
+            prior_error = prepared_result.get("error")
+            prepared_result = dict(prepared_result)
+            prepared_result["error"] = (f"{prior_error}\n" if prior_error else "") + f"Worktree cleanup failed: {cleanup_error}"
+        return prepared_result
