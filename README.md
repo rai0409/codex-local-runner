@@ -51,6 +51,12 @@ Accepted jobs write artifacts under `tasks/control_plane_dispatches/<timestamp>/
 
 Runtime state is persisted in SQLite at `state/jobs.db`, including accepted-job visibility, execution-target identity, merge receipts, merge execution outcomes, rollback traces, and rollback execution outcomes.
 
+## Repository-Resolved Single-Task Controller
+
+This local controller runs one repository-resolved task only. A machine-local Repository Profile and repository binding are required. The task specification must contain `task_id`, `expected_head_sha`, `prompt`, `allowed_changed_paths`, and `commit_message`.
+
+Execution uses a detached Git worktree. On success, it creates exactly one local `codex-task/<repository-id>/<task-id>` branch and one local commit; the source `main` branch and source HEAD remain unchanged. The controller does not push, create pull requests, merge, tag, release, or deploy. Receipts are stored under the controller state directory.
+
 ## Task Status Policy
 
 Phase 1 allows only:
