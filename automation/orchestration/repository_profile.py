@@ -172,14 +172,15 @@ def _base_branch(value: Any) -> str:
 def _python(value: Any, root: Path) -> Path:
     text = _text(value, "profile.python_executable")
     candidate = Path(text) if Path(text).is_absolute() else root / text
+    candidate = Path(os.path.abspath(os.fspath(candidate)))
     if not candidate.exists():
         raise _error("profile.python_executable.not_found", "does not exist")
     resolved = candidate.resolve(strict=True)
     if not resolved.is_file():
         raise _error("profile.python_executable.not_file", "must be a file")
-    if not os.access(resolved, os.X_OK):
+    if not os.access(candidate, os.X_OK):
         raise _error("profile.python_executable.not_executable", "must be executable")
-    return resolved
+    return candidate
 
 
 def _existing_directory(value: Any, root: Path, path: str) -> Path:
@@ -246,10 +247,19 @@ def _command(raw: Any, index: int, root: Path, python: Path, git: Path) -> Valid
     argv = tuple(_text(item, f"{path}.argv[{position}]") for position, item in enumerate(raw_argv))
     executable = Path(argv[0])
     try:
-        resolved_executable = executable.resolve(strict=True) if executable.is_absolute() else None
+        resolved_executable = (
+            executable.resolve(strict=True)
+            if executable.is_absolute()
+            else None
+        )
+        resolved_python = python.resolve(strict=True)
     except OSError:
         resolved_executable = None
-    if argv[0] == str(python) or resolved_executable == python:
+        resolved_python = None
+    if argv[0] == str(python) or (
+        resolved_executable is not None
+        and resolved_executable == resolved_python
+    ):
         normalized = (str(python), *argv[1:])
         _validate_python_argv(normalized, path)
     elif argv[0] == "git" or executable == git or resolved_executable == git:

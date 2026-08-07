@@ -141,6 +141,33 @@ class RepositoryProfileTests(unittest.TestCase):
             directory = self.payload(root, python_executable=root)
             self.error(directory, "profile.python_executable.not_file")
 
+    def test_python_symlink_path_is_preserved_for_validation_commands(self):
+        with tempfile.TemporaryDirectory() as root:
+            python_link = Path(root, "venv-python")
+            try:
+                python_link.symlink_to(Path(sys.executable).resolve())
+            except OSError as exc:
+                self.skipTest(f"symlink unavailable: {exc}")
+
+            profile = validate_repository_profile(
+                self.payload(
+                    root,
+                    python_executable=str(python_link),
+                )
+            )
+
+            self.assertEqual(
+                profile.python_executable,
+                str(python_link),
+            )
+
+            for command in profile.validation_commands:
+                if command.kind != "diff_check":
+                    self.assertEqual(
+                        command.argv[0],
+                        str(python_link),
+                    )
+
     def test_directly_constructed_invalid_nested_instances_are_revalidated(self):
         with tempfile.TemporaryDirectory() as root:
             profile = validate_repository_profile(self.payload(root))
