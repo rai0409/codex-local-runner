@@ -97,6 +97,20 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def _git_environment() -> dict[str, str]:
+    """Return the minimum environment required for local Git operations."""
+    environment = {
+        "GIT_TERMINAL_PROMPT": "0",
+        "LC_ALL": "C",
+        "LANG": "C",
+    }
+    for name in ("HOME", "PATH", "XDG_CONFIG_HOME"):
+        value = os.environ.get(name)
+        if value:
+            environment[name] = value
+    return environment
+
+
 def _git(root: str | Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     """Run a bounded local Git command without a shell or credential prompt."""
     return subprocess.run(
@@ -106,7 +120,7 @@ def _git(root: str | Path, *arguments: str) -> subprocess.CompletedProcess[str]:
         text=True,
         capture_output=True,
         timeout=20,
-        env={"GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C", "LANG": "C"},
+        env=_git_environment(),
         check=False,
     )
 

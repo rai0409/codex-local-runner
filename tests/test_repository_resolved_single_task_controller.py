@@ -318,6 +318,140 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         )
         self.assertNotEqual(branch_check.returncode, 0)
 
+
+    def test_commit_uses_global_identity_from_whitelisted_environment(self):
+        home = self.base / "identity-home"
+        home.mkdir()
+        xdg_home = home / "xdg"
+        xdg_home.mkdir()
+
+        setup_environment = os.environ.copy()
+        setup_environment["HOME"] = str(home)
+
+        subprocess.run(
+            [
+                "git",
+                "config",
+                "--global",
+                "user.name",
+                "Controller Global Test",
+            ],
+            env=setup_environment,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            [
+                "git",
+                "config",
+                "--global",
+                "user.email",
+                "controller-global@example.invalid",
+            ],
+            env=setup_environment,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        git(self.source, "config", "--unset-all", "user.name")
+        git(self.source, "config", "--unset-all", "user.email")
+
+        module = __import__(
+            "automation.orchestration."
+            "repository_resolved_single_task_controller",
+            fromlist=["_git_environment"],
+        )
+
+        controlled_environment = {
+            "HOME": str(home),
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "XDG_CONFIG_HOME": str(xdg_home),
+            "GIT_ASKPASS": "SECRET_GIT_ASKPASS",
+            "SSH_ASKPASS": "SECRET_SSH_ASKPASS",
+            "GH_TOKEN": "SECRET_GH_TOKEN",
+            "GITHUB_TOKEN": "SECRET_GITHUB_TOKEN",
+        }
+
+        with patch.dict(
+            os.environ,
+            controlled_environment,
+            clear=True,
+        ):
+            child_environment = module._git_environment()
+            result = self._run(
+                FakePreparedAdapter(self._modify)
+            )
+
+        self.assertEqual(
+            child_environment,
+            {
+                "GIT_TERMINAL_PROMPT": "0",
+                "LC_ALL": "C",
+                "LANG": "C",
+                "HOME": str(home),
+                "PATH": controlled_environment["PATH"],
+                "XDG_CONFIG_HOME": str(xdg_home),
+            },
+        )
+
+        for forbidden in (
+            "GIT_ASKPASS",
+            "SSH_ASKPASS",
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+        ):
+            self.assertNotIn(forbidden, child_environment)
+
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(
+            result.reason_code,
+            "single_task.completed",
+        )
+        self.assertIsNotNone(result.commit_sha)
+
+        author = git(
+            self.source,
+            "show",
+            "-s",
+            "--format=%an%n%ae",
+            result.commit_sha,
+        ).stdout.splitlines()
+
+        self.assertEqual(
+            author,
+            [
+                "Controller Global Test",
+                "controller-global@example.invalid",
+            ],
+        )
+        self.assertEqual(
+            git(
+                self.source,
+                "rev-parse",
+                f"{result.commit_sha}^",
+            ).stdout.strip(),
+            self.head,
+        )
+        self.assertEqual(
+            git(
+                self.source,
+                "rev-parse",
+                "HEAD",
+            ).stdout.strip(),
+            self.head,
+        )
+        self.assertEqual(
+            git(
+                self.source,
+                "status",
+                "--porcelain",
+            ).stdout,
+            "",
+        )
+        self.assertFalse(Path(result.worktree_path).exists())
+
     def test_result_mapping_is_deterministic(self):
         result = RepositorySingleTaskRunResult("1", "run", "blocked", "single_task.changed_files.none", None, "repo", "task", "/tmp/repo", "main", "a" * 40, "a" * 40, "profile", "b" * 64, "/tmp/work", False, None, None, None, (), "codex_cli", "completed", "passed", "validation_passed", False, "not_attempted", "/tmp/r", "/tmp/s", "start", "finish")
         self.assertEqual(repository_single_task_run_result_to_mapping(result)["changed_files"], [])
