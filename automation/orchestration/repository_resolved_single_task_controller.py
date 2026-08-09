@@ -27,12 +27,20 @@ from automation.orchestration.repository_registry import (
 )
 from automation.orchestration.repository_single_task_spec import load_repository_single_task_spec
 from automation.orchestration.repository_state_analyzer import analyze_repository_state, repository_state_to_mapping
+from automation.orchestration.task_completion_evaluator import (
+    TaskCompletionEvaluation,
+    build_task_completion_evaluator_prompt,
+    build_task_completion_rework_prompt,
+    execute_task_completion_evaluator,
+    task_completion_evaluation_to_mapping,
+)
 
 
 DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT = (
     "~/.local/state/codex-local-runner/"
     "repository-single-task-runs"
 )
+MAX_TASK_REWORK_ATTEMPTS = 2
 
 
 @dataclass(frozen=True)
@@ -184,6 +192,29 @@ def _safe_validation_attempts(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _evaluation_worktree_fingerprint(root: Path, snapshot: Any) -> tuple[dict[str, Any], tuple[tuple[str, str], ...]]:
+    """Capture state plus content identity for evaluator-mutation detection."""
+    identities: list[tuple[str, str]] = []
+    for relative in sorted(set(snapshot.tracked_modified_files) | set(snapshot.untracked_files)):
+        candidate = root / relative
+        digest = hashlib.sha256()
+        try:
+            if candidate.is_symlink():
+                value = "symlink:" + os.readlink(candidate)
+                identities.append((relative, value))
+                continue
+            if not candidate.is_file():
+                identities.append((relative, "not_regular"))
+                continue
+            with candidate.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(65536), b""):
+                    digest.update(chunk)
+            identities.append((relative, digest.hexdigest()))
+        except OSError:
+            identities.append((relative, "unreadable"))
+    return repository_state_to_mapping(snapshot), tuple(identities)
+
+
 def run_repository_single_task(
     repository_id: str,
     task_spec_path: str | os.PathLike[str],
@@ -193,6 +224,7 @@ def run_repository_single_task(
     providers_path: str | os.PathLike[str] = "config/providers.yaml",
     output_root: str | os.PathLike[str] = DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT,
     adapter_resolver: Callable[[], Any] | None = None,
+    evaluator_runner: Callable[..., Any] | None = None,
 ) -> RepositorySingleTaskRunResult:
     """Process exactly one task, returning a receipt-backed terminal result.
 
@@ -231,6 +263,9 @@ def run_repository_single_task(
     validation_attempts: list[dict[str, Any]] = []
     repair_summary: dict[str, Any] = {"attempted": False, "max_attempts": 2, "attempts_used": 0, "outcome": "not_attempted"}
     cleanup_status = "not_started"
+    task_completion_attempts: list[dict[str, Any]] = []
+    final_task_completion: TaskCompletionEvaluation | None = None
+    evaluation_reached = False
 
     def record(status: str, reason: str, detail: str | None = None) -> RepositorySingleTaskRunResult:
         nonlocal source_after
@@ -250,6 +285,8 @@ def run_repository_single_task(
             "execution_summary": str(output_directory / "execution_summary.json"),
             "changed_files": str(output_directory / "changed_files.json"),
             "validation_attempts": str(output_directory / "validation_attempts.json"),
+            "task_completion_evaluation": str(output_directory / "task_completion_evaluation.json"),
+            "task_completion_attempts": str(output_directory / "task_completion_attempts.json"),
         }
         receipt = {
             "schema_version": "1", "run_id": run_id, "status": status,
@@ -292,8 +329,17 @@ def run_repository_single_task(
                 "validation_status": validation_status, "validation_reason": validation_reason,
                 "retry_attempted": retry_attempted, "retry_outcome": retry_outcome,
                 "repair": repair_summary,
+                "task_completion": {
+                    "reached": evaluation_reached,
+                    "final_status": final_task_completion.status if final_task_completion else None,
+                    "reason_code": final_task_completion.reason_code if final_task_completion else None,
+                    "attempts": len(task_completion_attempts),
+                },
             })
             _atomic_json(Path(paths["validation_attempts"]), {"repair": repair_summary, "validation_attempts": validation_attempts})
+            if evaluation_reached:
+                _atomic_json(Path(paths["task_completion_evaluation"]), task_completion_evaluation_to_mapping(final_task_completion) if final_task_completion else {})
+                _atomic_json(Path(paths["task_completion_attempts"]), {"attempts": task_completion_attempts})
             _atomic_json(Path(paths["changed_files"]), {
                 "allowed_changed_paths": receipt["allowed_changed_paths"],
                 "actual_changed_files": list(changed_files),
@@ -441,6 +487,104 @@ def run_repository_single_task(
         worktree_preserved = True
         return record("blocked", "single_task.validation.failed")
 
+    # Completion is intentionally independent from Safe Validation.  Each
+    # rework uses the same prepared-worktree adapter surface, which owns the
+    # existing bounded validation-repair loop.
+    for evaluation_number in range(1, MAX_TASK_REWORK_ATTEMPTS + 2):
+        try:
+            pre_evaluation = analyze_repository_state(worktree)
+        except (OSError, ValueError):
+            worktree_preserved = True
+            return record("blocked", "single_task.task_completion.blocked", "state_unavailable")
+        pre_evaluation_fingerprint = _evaluation_worktree_fingerprint(worktree, pre_evaluation)
+        evaluation_changed = tuple(sorted(set(pre_evaluation.tracked_modified_files) | set(pre_evaluation.untracked_files)))
+        bounded_diff = _git(worktree, "diff", "--no-ext-diff", "--", *evaluation_changed).stdout[:8192]
+        artifact_evidence: dict[str, Any] = {}
+        for requirement in profile.artifact_requirements:
+            candidate = worktree / requirement.path
+            artifact_evidence[requirement.artifact_id] = {
+                "path": requirement.path, "required": requirement.required,
+                "exists": candidate.exists(), "expected_type": requirement.expected_type,
+            }
+        prompt = build_task_completion_evaluator_prompt(
+            original_task=spec.prompt, allowed_changed_paths=spec.allowed_changed_paths,
+            changed_paths=evaluation_changed,
+            repository_state=repository_state_to_mapping(pre_evaluation),
+            diff_evidence=bounded_diff,
+            validation_evidence={"status": validation_status, "reason": validation_reason, "attempts": validation_attempts[-1:]},
+            artifact_evidence=artifact_evidence,
+        )
+        evaluation_reached = True
+        final_task_completion = execute_task_completion_evaluator(
+            worktree_path=str(worktree), run_root=str(output_directory / "task_completion_evaluation_runs"),
+            prompt=prompt, **({"runner": evaluator_runner} if evaluator_runner is not None else {}),
+        )
+        try:
+            post_evaluation = analyze_repository_state(worktree)
+        except (OSError, ValueError):
+            post_evaluation = None
+        mutation = post_evaluation is None or pre_evaluation_fingerprint != _evaluation_worktree_fingerprint(worktree, post_evaluation)
+        attempt: dict[str, Any] = {
+            "evaluation_number": evaluation_number,
+            **task_completion_evaluation_to_mapping(final_task_completion),
+            "rework_attempted": False, "rework_validation_status": None, "rework_validation_reason": None,
+        }
+        task_completion_attempts.append(attempt)
+        if mutation:
+            final_task_completion = TaskCompletionEvaluation("blocked", "task_completion.worktree_mutated", (), (), ())
+            task_completion_attempts[-1].update(task_completion_evaluation_to_mapping(final_task_completion))
+            worktree_preserved = True
+            return record("blocked", "single_task.task_completion.blocked", "evaluator_worktree_mutated")
+        if final_task_completion.status == "completed":
+            break
+        if final_task_completion.status == "blocked":
+            worktree_preserved = True
+            return record("blocked", "single_task.task_completion.blocked", final_task_completion.reason_code)
+        if evaluation_number > MAX_TASK_REWORK_ATTEMPTS:
+            worktree_preserved = True
+            return record("blocked", "single_task.task_completion.rework_exhausted")
+        attempt["rework_attempted"] = True
+        rework_prompt = build_task_completion_rework_prompt(
+            original_task=spec.prompt, allowed_changed_paths=spec.allowed_changed_paths,
+            evaluation=final_task_completion,
+        )
+        try:
+            response = adapter.execute_prepared_worktree({
+                "prompt": rework_prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
+                "repository_profile": bound_profile, "allowed_changed_paths": spec.allowed_changed_paths,
+            })
+        except Exception:
+            worktree_preserved = True
+            return record("failed", "single_task.execution.not_completed")
+        if not isinstance(response, dict):
+            worktree_preserved = True
+            return record("blocked", "single_task.validation.failed")
+        execution_status, verify, retry_data = response.get("status"), response.get("verify"), response.get("retry")
+        raw_validation_attempts, raw_repair = response.get("validation_attempts", []), response.get("repair", repair_summary)
+        if not isinstance(verify, dict) or not isinstance(retry_data, dict):
+            worktree_preserved = True
+            return record("blocked", "single_task.validation.failed")
+        validation_reason = verify.get("reason")
+        safe_validation = verify.get("safe_validation")
+        validation_status = safe_validation.get("status") if isinstance(safe_validation, dict) else None
+        retry_attempted, retry_outcome = bool(retry_data.get("attempted")), retry_data.get("outcome")
+        validation_attempts = _safe_validation_attempts(raw_validation_attempts)
+        if isinstance(raw_repair, dict):
+            repair_summary = {key: raw_repair[key] for key in ("attempted", "max_attempts", "attempts_used", "outcome") if key in raw_repair}
+        attempt["rework_validation_status"], attempt["rework_validation_reason"] = validation_status, validation_reason
+        if execution_status != "completed":
+            worktree_preserved = True
+            return record("blocked", "single_task.execution.not_completed")
+        if validation_reason == "validation_partial":
+            worktree_preserved = True
+            return record("blocked", "single_task.validation.partial")
+        if validation_reason == "safe_validation_executor_error":
+            worktree_preserved = True
+            return record("blocked", "single_task.validation.executor_error")
+        if not (verify.get("status") == "passed" and validation_reason == "validation_passed" and validation_status == "passed" and retry_outcome in {"not_attempted", "retry_succeeded"}):
+            worktree_preserved = True
+            return record("blocked", "single_task.validation.failed")
+
     worktree_state = analyze_repository_state(worktree)
     if worktree_state.head_sha != source_head:
         worktree_preserved = True
@@ -513,7 +657,7 @@ def run_repository_single_task(
 
 
 __all__ = [
-    "DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT",
+    "DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT", "MAX_TASK_REWORK_ATTEMPTS",
     "RepositorySingleTaskControllerError", "RepositorySingleTaskRunResult",
     "repository_single_task_run_result_to_mapping", "run_repository_single_task",
     "serialize_repository_single_task_run_result",

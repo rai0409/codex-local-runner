@@ -103,8 +103,21 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.bindings.write_text(json.dumps({"version": 1, "bindings": [{"repository_id": "repo", "profile_path": str(self.profile)}]}), encoding="utf-8")
         self.spec.write_text(json.dumps({"schema_version": "1", "task_id": "task-1", "expected_head_sha": self.head, "prompt": "PROMPT_SECRET_MARKER_8B71", "allowed_changed_paths": ["allowed.txt"], "commit_message": "Controller task"}), encoding="utf-8")
 
+    def _evaluator_runner(self, *, task, prompt, work_root, persist_prompt):
+        self.assertFalse(persist_prompt)
+        run_directory = Path(work_root) / "fake"
+        run_directory.mkdir(parents=True, exist_ok=True)
+        stdout = run_directory / "stdout.txt"
+        stdout.write_text(
+            "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+            '{"status":"completed","reason_code":"task.satisfied","satisfied_criteria":["change present"],"unsatisfied_criteria":[],"evidence_refs":["git:diff"]}'
+            "\nTASK_COMPLETION_EVALUATION_JSON_END",
+            encoding="utf-8",
+        )
+        return {"status": "completed", "stdout_path": str(stdout)}
+
     def _run(self, adapter):
-        return run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: adapter)
+        return run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: adapter, evaluator_runner=self._evaluator_runner)
 
     @staticmethod
     def _modify(worktree: Path, name="allowed.txt") -> None:
@@ -187,6 +200,43 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.assertNotIn("PROMPT_SECRET_MARKER_8B71", rendered)
         self.assertNotIn("PROMPT_SECRET_MARKER_8B71", Path(result.receipt_path).read_text(encoding="utf-8"))
 
+    def test_needs_rework_runs_same_worktree_through_validation_then_evaluates_again(self):
+        decisions = iter(("needs_rework", "completed"))
+        roots = []
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            roots.append(task["repo_path"])
+            status = next(decisions)
+            run_directory = Path(work_root) / str(len(roots))
+            run_directory.mkdir(parents=True)
+            output = run_directory / "stdout.txt"
+            output.write_text(
+                "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+                + json.dumps({"status": status, "reason_code": "task.missing" if status == "needs_rework" else "task.done", "satisfied_criteria": [], "unsatisfied_criteria": ["required behavior"] if status == "needs_rework" else [], "evidence_refs": ["git:diff"]})
+                + "\nTASK_COMPLETION_EVALUATION_JSON_END", encoding="utf-8")
+            return {"status": "completed", "stdout_path": str(output)}
+        adapter = FakePreparedAdapter(self._modify)
+        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: adapter, evaluator_runner=evaluator_runner)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(adapter.calls, 2)
+        self.assertEqual(len(set(roots)), 1)
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        attempts = json.loads(Path(receipt["artifact_paths"]["task_completion_attempts"]).read_text(encoding="utf-8"))["attempts"]
+        self.assertEqual([item["status"] for item in attempts], ["needs_rework", "completed"])
+        self.assertTrue(attempts[0]["rework_attempted"])
+
+    def test_evaluator_mutation_blocks_without_stage_or_commit(self):
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            (Path(task["repo_path"]) / "allowed.txt").write_text("evaluator mutation\n", encoding="utf-8")
+            root = Path(work_root) / "mutation"; root.mkdir(parents=True)
+            output = root / "stdout.txt"
+            output.write_text("TASK_COMPLETION_EVALUATION_JSON_BEGIN\n{\"status\":\"completed\",\"reason_code\":\"task.done\",\"satisfied_criteria\":[],\"unsatisfied_criteria\":[],\"evidence_refs\":[]}\nTASK_COMPLETION_EVALUATION_JSON_END", encoding="utf-8")
+            return {"status": "completed", "stdout_path": str(output)}
+        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(self._modify), evaluator_runner=evaluator_runner)
+        self.assertEqual(result.reason_code, "single_task.task_completion.blocked")
+        self.assertTrue(result.worktree_preserved)
+        self.assertIsNone(result.commit_sha)
+        self.assertEqual(git(self.source, "rev-list", "--count", "main").stdout.strip(), "1")
+
     def test_exhausted_repair_preserves_worktree_without_commit_and_writes_artifact(self):
         result = self._run(RepairPreparedAdapter(self._modify, exhausted=True))
         self.assertEqual(result.status, "blocked")
@@ -268,6 +318,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
                 self.spec,
                 registry_path=self.registry,
                 adapter_resolver=lambda: adapter,
+                evaluator_runner=self._evaluator_runner,
             )
 
         self.assertEqual(PYTHON, str(Path(sys.executable).resolve()))
