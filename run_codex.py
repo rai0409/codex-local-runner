@@ -15,6 +15,7 @@ def run_codex(
     work_root: str = "tasks/runs",
     *,
     persist_prompt: bool = True,
+    return_transient_stdout: bool = False,
 ) -> RunCodexResult:
     return execute_codex_cli(
         task=task,
@@ -24,4 +25,5 @@ def run_codex(
         run_subprocess=subprocess.run,
         now=datetime.now,
         persist_prompt=persist_prompt,
+        return_transient_stdout=return_transient_stdout,
     )

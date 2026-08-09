@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Literal, TypedDict
+from typing import Callable, Literal, NotRequired, TypedDict
 
 
 RunCodexStatus = Literal["completed", "failed", "timed_out", "not_started"]
@@ -32,6 +32,7 @@ class RunCodexResult(TypedDict):
     started_at: str | None
     finished_at: str | None
     artifacts: list[RunCodexArtifact]
+    transient_stdout: NotRequired[str]
 
 
 def _to_text(value: str | bytes | None) -> str:
@@ -86,6 +87,7 @@ def execute_codex_cli(
     run_subprocess: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     now: Callable[[], datetime] = datetime.now,
     persist_prompt: bool = True,
+    return_transient_stdout: bool = False,
 ) -> RunCodexResult:
     codex_path = which("codex")
     cmd = ["codex", "exec", "--skip-git-repo-check", prompt]
@@ -163,6 +165,7 @@ def execute_codex_cli(
     else:
         status = "failed"
 
+    transient_stdout = stdout_text
     if not persist_prompt:
         stdout_text = _sanitize_prompt_from_stream(stdout_text, prompt)
         stderr_text = _sanitize_prompt_from_stream(stderr_text, prompt)
@@ -197,7 +200,7 @@ def execute_codex_cli(
     if persist_prompt:
         artifacts.insert(1, {"name": "prompt", "path": str(prompt_path)})
 
-    return {
+    result: RunCodexResult = {
         "status": status,
         "success": success,
         "return_code": return_code,
@@ -213,3 +216,6 @@ def execute_codex_cli(
         "finished_at": finished_at,
         "artifacts": artifacts,
     }
+    if return_transient_stdout:
+        result["transient_stdout"] = transient_stdout
+    return result

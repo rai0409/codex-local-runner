@@ -51,16 +51,37 @@ class TaskCompletionEvaluatorTests(unittest.TestCase):
         for text in ("missing behavior", "git:diff", "a.py", "Do not stage, commit", "Do not weaken"):
             self.assertIn(text, rework)
 
-    def test_execution_uses_nonpersisted_prompt_and_no_runner_prompt_file(self):
+    def test_execution_uses_transient_stdout_when_persisted_output_is_sanitized(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             captured = {}
             def runner(**kwargs):
                 captured.update(kwargs)
                 out = root / "stdout.txt"
-                out.write_text(envelope('{"status":"completed","reason_code":"task.ok","satisfied_criteria":["done"],"unsatisfied_criteria":[],"evidence_refs":["git:diff"]}'), encoding="utf-8")
-                return {"status": "completed", "stdout_path": str(out)}
+                out.write_text("[prompt content redacted]\n{\"status\":\"completed\"}\n[prompt content redacted]", encoding="utf-8")
+                return {"status": "completed", "stdout_path": str(out), "transient_stdout": envelope('{"status":"completed","reason_code":"task.ok","satisfied_criteria":["done"],"unsatisfied_criteria":[],"evidence_refs":["git:diff"]}')}
             result = execute_task_completion_evaluator(worktree_path=str(root), run_root=str(root / "runs"), prompt="DISTINCTIVE_ORIGINAL_TASK", runner=runner)
             self.assertEqual(result.status, "completed")
             self.assertFalse(captured["persist_prompt"])
+            self.assertTrue(captured["return_transient_stdout"])
 
+    def test_execution_legacy_runner_falls_back_to_strict_stdout_envelope(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            def runner(*, task, prompt, work_root, persist_prompt):
+                out = root / "stdout.txt"
+                out.write_text(envelope('{"status":"completed","reason_code":"task.ok","satisfied_criteria":["done"],"unsatisfied_criteria":[],"evidence_refs":["git:diff"]}'), encoding="utf-8")
+                return {"status": "completed", "stdout_path": str(out)}
+            result = execute_task_completion_evaluator(worktree_path=str(root), run_root=str(root / "runs"), prompt="task", runner=runner)
+            self.assertEqual(result.status, "completed")
+
+    def test_malformed_transient_stdout_cannot_fall_back_to_persisted_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            def runner(**kwargs):
+                out = root / "stdout.txt"
+                out.write_text(envelope('{"status":"completed","reason_code":"task.ok","satisfied_criteria":["done"],"unsatisfied_criteria":[],"evidence_refs":["git:diff"]}'), encoding="utf-8")
+                return {"status": "completed", "stdout_path": str(out), "transient_stdout": "malformed"}
+            result = execute_task_completion_evaluator(worktree_path=str(root), run_root=str(root / "runs"), prompt="task", runner=runner)
+            self.assertEqual(result.status, "blocked")
+            self.assertEqual(result.reason_code, "task_completion.envelope.invalid")

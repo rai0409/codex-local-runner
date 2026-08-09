@@ -7,6 +7,7 @@ uses the established Codex runner with prompt persistence disabled.
 from __future__ import annotations
 
 import json
+import inspect
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -94,16 +95,34 @@ def build_task_completion_rework_prompt(*, original_task: str, allowed_changed_p
 def execute_task_completion_evaluator(*, worktree_path: str, run_root: str, prompt: str, runner: Callable[..., Mapping[str, Any]] = run_codex) -> TaskCompletionEvaluation:
     """Invoke the established Codex runner once, retaining no raw result here."""
     try:
-        result = runner(task={"repo_path": worktree_path}, prompt=prompt, work_root=run_root, persist_prompt=False)
+        runner_kwargs = {
+            "task": {"repo_path": worktree_path},
+            "prompt": prompt,
+            "work_root": run_root,
+            "persist_prompt": False,
+        }
+        try:
+            parameters = inspect.signature(runner).parameters.values()
+        except (TypeError, ValueError):
+            parameters = ()
+        if any(parameter.name == "return_transient_stdout" or parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters):
+            result = runner(**runner_kwargs, return_transient_stdout=True)
+        else:
+            result = runner(**runner_kwargs)
         if not isinstance(result, Mapping) or result.get("status") != "completed":
             return _blocked("task_completion.execution.failed")
-        stdout_path = result.get("stdout_path")
-        if not isinstance(stdout_path, str) or not stdout_path:
-            return _blocked("task_completion.execution.output_missing")
-        output_path = Path(stdout_path)
-        if output_path.stat().st_size > MAX_EVALUATOR_OUTPUT_BYTES:
-            return _blocked("task_completion.output.unbounded")
-        output = output_path.read_text(encoding="utf-8", errors="replace")
+        if "transient_stdout" in result:
+            output = result["transient_stdout"]
+            if not isinstance(output, str) or len(output.encode("utf-8", errors="ignore")) > MAX_EVALUATOR_OUTPUT_BYTES:
+                return _blocked("task_completion.output.unbounded")
+        else:
+            stdout_path = result.get("stdout_path")
+            if not isinstance(stdout_path, str) or not stdout_path:
+                return _blocked("task_completion.execution.output_missing")
+            output_path = Path(stdout_path)
+            if output_path.stat().st_size > MAX_EVALUATOR_OUTPUT_BYTES:
+                return _blocked("task_completion.output.unbounded")
+            output = output_path.read_text(encoding="utf-8", errors="replace")
     except Exception:
         return _blocked("task_completion.execution.failed")
     return parse_task_completion_evaluation_output(output)
