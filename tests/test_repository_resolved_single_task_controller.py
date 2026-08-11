@@ -144,6 +144,9 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.assertEqual(git(self.source, "rev-parse", f"{commit}^").stdout.strip(), self.head)
         self.assertEqual(git(self.source, "log", "-1", "--format=%s", commit).stdout.strip(), "Controller task")
         self.assertEqual(git(self.source, "diff-tree", "--no-commit-id", "--name-only", "-r", commit).stdout.splitlines(), ["allowed.txt"])
+        changed_artifact = json.loads((Path(result.receipt_path).parent / "changed_files.json").read_text(encoding="utf-8"))
+        self.assertEqual(changed_artifact["actual_changed_files"], ["allowed.txt"])
+        self.assertEqual(changed_artifact["commit_changed_files"], ["allowed.txt"])
         self.assertIn(("add", "--", "allowed.txt"), invocations)
         self.assertNotIn(("add", "."), invocations)
         self.assertNotIn(("add", "-A"), invocations)
@@ -154,6 +157,25 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.assertEqual(Path(result.receipt_sha256_path).read_text(encoding="utf-8"), f"{digest}  receipt.json\n")
         self.assertFalse(list(Path(result.receipt_path).parent.glob(".receipt-*.tmp")))
         self.assertNotIn("PROMPT_SECRET_MARKER_8B71", Path(result.receipt_path).read_text(encoding="utf-8"))
+
+    def test_execution_base_uses_descendant_without_moving_source(self):
+        blob = subprocess.run(["git", "-C", str(self.source), "hash-object", "-w", "--stdin"], input="previous\n", text=True, capture_output=True, check=True).stdout.strip()
+        tree = subprocess.run(["git", "-C", str(self.source), "mktree"], input=f"100644 blob {blob}\tprevious.txt\n", text=True, capture_output=True, check=True).stdout.strip()
+        execution_base = git(self.source, "commit-tree", tree, "-p", self.head, "-m", "Previous").stdout.strip()
+        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(self._modify), evaluator_runner=self._evaluator_runner, execution_base_sha=execution_base)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.source_head_before, self.head)
+        self.assertEqual(result.source_head_after, self.head)
+        self.assertEqual(result.commit_parent_sha, execution_base)
+        self.assertEqual(git(self.source, "rev-parse", "HEAD").stdout.strip(), self.head)
+        self.assertEqual(result.changed_files, ("allowed.txt",))
+        self.assertEqual(git(self.source, "show", f"{execution_base}:previous.txt").stdout, "previous\n")
+
+    def test_invalid_execution_bases_fail_closed(self):
+        for base, reason in (("z" * 40, "single_task.execution_base.invalid"), ("a" * 40, "single_task.execution_base.not_found")):
+            with self.subTest(base=base):
+                result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(self._modify), evaluator_runner=self._evaluator_runner, execution_base_sha=base)
+                self.assertEqual(result.reason_code, reason)
 
     def test_source_preflight_blocks_before_adapter(self):
         cases = {
@@ -223,6 +245,8 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         attempts = json.loads(Path(receipt["artifact_paths"]["task_completion_attempts"]).read_text(encoding="utf-8"))["attempts"]
         self.assertEqual([item["status"] for item in attempts], ["needs_rework", "completed"])
         self.assertTrue(attempts[0]["rework_attempted"])
+        changed_artifact = json.loads(Path(receipt["artifact_paths"]["changed_files"]).read_text(encoding="utf-8"))
+        self.assertEqual(changed_artifact["actual_changed_files"], ["allowed.txt"])
 
     def test_evaluator_mutation_blocks_without_stage_or_commit(self):
         def evaluator_runner(*, task, prompt, work_root, persist_prompt):
@@ -236,6 +260,32 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.assertTrue(result.worktree_preserved)
         self.assertIsNone(result.commit_sha)
         self.assertEqual(git(self.source, "rev-list", "--count", "main").stdout.strip(), "1")
+
+    def test_evaluator_blocked_receipt_records_final_forbidden_paths(self):
+        def create_paths(worktree):
+            self._modify(worktree)
+            cache = worktree / "__pycache__"
+            cache.mkdir()
+            (cache / "forbidden.pyc").write_bytes(b"compiled")
+
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            root = Path(work_root) / "blocked"; root.mkdir(parents=True)
+            output = root / "stdout.txt"
+            output.write_text("TASK_COMPLETION_EVALUATION_JSON_BEGIN\n{\"status\":\"blocked\",\"reason_code\":\"scope.forbidden_changed_paths\",\"satisfied_criteria\":[],\"unsatisfied_criteria\":[],\"evidence_refs\":[\"git:status\"]}\nTASK_COMPLETION_EVALUATION_JSON_END", encoding="utf-8")
+            return {"status": "completed", "stdout_path": str(output)}
+
+        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(create_paths), evaluator_runner=evaluator_runner)
+        self.assertEqual(result.reason_code, "single_task.task_completion.blocked")
+        self.assertTrue(result.worktree_preserved)
+        self.assertIsNone(result.commit_sha)
+        expected = ("__pycache__/forbidden.pyc", "allowed.txt")
+        self.assertEqual(result.changed_files, expected)
+        artifact = json.loads((Path(result.receipt_path).parent / "changed_files.json").read_text(encoding="utf-8"))
+        self.assertEqual(artifact["actual_changed_files"], list(expected))
+        self.assertEqual(artifact["unexpected_changed_files"], ["__pycache__/forbidden.pyc"])
+        self.assertEqual(artifact["commit_changed_files"], [])
+        actual = tuple(sorted(line[3:] for line in git(Path(result.worktree_path), "status", "--porcelain", "--untracked-files=all").stdout.splitlines()))
+        self.assertEqual(actual, expected)
 
     def test_exhausted_repair_preserves_worktree_without_commit_and_writes_artifact(self):
         result = self._run(RepairPreparedAdapter(self._modify, exhausted=True))

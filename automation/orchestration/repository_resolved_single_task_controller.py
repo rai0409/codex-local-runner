@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 from dataclasses import asdict, dataclass
@@ -192,6 +193,11 @@ def _safe_validation_attempts(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _actual_changed_paths(snapshot: Any) -> tuple[str, ...]:
+    """Return the canonical changed-path set for evaluator and receipts."""
+    return tuple(sorted(set(snapshot.tracked_modified_files) | set(snapshot.untracked_files)))
+
+
 def _evaluation_worktree_fingerprint(root: Path, snapshot: Any) -> tuple[dict[str, Any], tuple[tuple[str, str], ...]]:
     """Capture state plus content identity for evaluator-mutation detection."""
     identities: list[tuple[str, str]] = []
@@ -225,6 +231,7 @@ def run_repository_single_task(
     output_root: str | os.PathLike[str] = DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT,
     adapter_resolver: Callable[[], Any] | None = None,
     evaluator_runner: Callable[..., Any] | None = None,
+    execution_base_sha: str | None = None,
 ) -> RepositorySingleTaskRunResult:
     """Process exactly one task, returning a receipt-backed terminal result.
 
@@ -244,6 +251,7 @@ def run_repository_single_task(
     source_root: str | None = None
     source_branch: str | None = None
     source_head: str | None = None
+    execution_head: str | None = None
     task_id: str | None = None
     profile_id: str | None = None
     specification_sha: str | None = None
@@ -268,11 +276,17 @@ def run_repository_single_task(
     evaluation_reached = False
 
     def record(status: str, reason: str, detail: str | None = None) -> RepositorySingleTaskRunResult:
-        nonlocal source_after
+        nonlocal source_after, worktree_state, changed_files
         try:
             source_after = analyze_repository_state(source_root) if source_root else None
         except (OSError, ValueError):
             source_after = None
+        if worktree is not None and worktree.exists():
+            try:
+                worktree_state = analyze_repository_state(worktree)
+                changed_files = _actual_changed_paths(worktree_state)
+            except (OSError, ValueError):
+                pass
         finished = _utc_now()
         receipt_path = output_directory / "receipt.json"
         sha_path = output_directory / "receipt.sha256"
@@ -411,12 +425,25 @@ def run_repository_single_task(
     if not _is_clean(source_before):
         return record("blocked", "single_task.source.dirty")
 
+    execution_head = source_head if execution_base_sha is None else execution_base_sha
+    if not isinstance(execution_head, str) or not re.fullmatch(r"[0-9a-f]{40}", execution_head):
+        return record("blocked", "single_task.execution_base.invalid")
+    try:
+        is_commit = _git(source_root, "cat-file", "-e", f"{execution_head}^{{commit}}").returncode == 0
+        is_descendant = _git(source_root, "merge-base", "--is-ancestor", source_head, execution_head).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        is_commit = is_descendant = False
+    if not is_commit:
+        return record("blocked", "single_task.execution_base.not_found")
+    if not is_descendant:
+        return record("blocked", "single_task.execution_base.not_descendant")
+
     task_branch = f"codex-task/{repository_id}/{spec.task_id}"
     if _git(source_root, "show-ref", "--verify", "--quiet", f"refs/heads/{task_branch}").returncode == 0:
         return record("blocked", "single_task.task_branch.exists")
     worktree = output_directory / "worktree"
     try:
-        prepared = _git(source_root, "worktree", "add", "--detach", str(worktree), source_head)
+        prepared = _git(source_root, "worktree", "add", "--detach", str(worktree), execution_head)
     except (OSError, subprocess.TimeoutExpired):
         return record("failed", "single_task.worktree.prepare_failed")
     if prepared.returncode:
@@ -426,7 +453,7 @@ def run_repository_single_task(
     except (OSError, ValueError):
         worktree_preserved = True
         return record("blocked", "single_task.worktree.initial_state_invalid")
-    if not worktree_state.detached_head or worktree_state.head_sha != source_head or not _is_clean(worktree_state):
+    if not worktree_state.detached_head or worktree_state.head_sha != execution_head or not _is_clean(worktree_state):
         worktree_preserved = True
         return record("blocked", "single_task.worktree.initial_state_invalid")
     try:
@@ -497,7 +524,7 @@ def run_repository_single_task(
             worktree_preserved = True
             return record("blocked", "single_task.task_completion.blocked", "state_unavailable")
         pre_evaluation_fingerprint = _evaluation_worktree_fingerprint(worktree, pre_evaluation)
-        evaluation_changed = tuple(sorted(set(pre_evaluation.tracked_modified_files) | set(pre_evaluation.untracked_files)))
+        evaluation_changed = _actual_changed_paths(pre_evaluation)
         bounded_diff = _git(worktree, "diff", "--no-ext-diff", "--", *evaluation_changed).stdout[:8192]
         artifact_evidence: dict[str, Any] = {}
         for requirement in profile.artifact_requirements:
@@ -586,7 +613,7 @@ def run_repository_single_task(
             return record("blocked", "single_task.validation.failed")
 
     worktree_state = analyze_repository_state(worktree)
-    if worktree_state.head_sha != source_head:
+    if worktree_state.head_sha != execution_head:
         worktree_preserved = True
         return record("blocked", "single_task.codex.head_changed")
     if not worktree_state.detached_head:
@@ -598,7 +625,7 @@ def run_repository_single_task(
     if worktree_state.operations_in_progress:
         worktree_preserved = True
         return record("blocked", "single_task.codex.operation_in_progress")
-    changed_files = tuple(sorted(set(worktree_state.tracked_modified_files) | set(worktree_state.untracked_files)))
+    changed_files = _actual_changed_paths(worktree_state)
     if not changed_files:
         cleanup = _git(source_root, "worktree", "remove", str(worktree))
         cleanup_status = "removed" if cleanup.returncode == 0 else "failed"
@@ -640,7 +667,7 @@ def run_repository_single_task(
     subject = _git(worktree, "log", "-1", "--format=%s").stdout.strip()
     committed_files = tuple(sorted(filter(None, _git(worktree, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").stdout.splitlines())))
     worktree_state = analyze_repository_state(worktree)
-    if len(commit_sha) != 40 or commit_parent != source_head or subject != spec.commit_message or committed_files != changed_files or worktree_state.branch != task_branch or not _is_clean(worktree_state):
+    if len(commit_sha) != 40 or commit_parent != execution_head or subject != spec.commit_message or committed_files != changed_files or worktree_state.branch != task_branch or not _is_clean(worktree_state):
         worktree_preserved = True
         return record("failed", "single_task.commit.contract_mismatch")
     source_after = analyze_repository_state(source_root)
