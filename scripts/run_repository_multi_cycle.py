@@ -14,6 +14,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a repository-resolved local task queue")
     parser.add_argument("--repository-id", required=True)
     parser.add_argument("--queue-spec", required=True)
+    parser.add_argument("--resume-cycle-run-id")
     return parser
 
 
@@ -26,7 +27,7 @@ def _emit(result: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
-        result = run_repository_multi_cycle(repository_id=arguments.repository_id, queue_spec_path=arguments.queue_spec)
+        result = run_repository_multi_cycle(repository_id=arguments.repository_id, queue_spec_path=arguments.queue_spec, resume_cycle_run_id=arguments.resume_cycle_run_id)
     except Exception:
         print("status=failed\nreason_code=multi_cycle.cli.controller_failed\nreceipt_path=\nrepository_id=\nsource_anchor_sha=\naccepted_head_sha=\ncompleted_count=\nstopped_task_id=")
         print("FAILED_REPOSITORY_MULTI_CYCLE")

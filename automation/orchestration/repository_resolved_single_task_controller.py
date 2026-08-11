@@ -26,7 +26,12 @@ from automation.orchestration.repository_registry import (
     load_repository_registry,
     resolve_repository,
 )
-from automation.orchestration.repository_single_task_spec import load_repository_single_task_spec
+from automation.orchestration.repository_single_task_spec import (
+    RepositorySingleTaskSpec,
+    load_repository_single_task_spec,
+    serialize_repository_single_task_spec,
+    validate_repository_single_task_spec,
+)
 from automation.orchestration.repository_state_analyzer import analyze_repository_state, repository_state_to_mapping
 from automation.orchestration.task_completion_evaluator import (
     TaskCompletionEvaluation,
@@ -223,7 +228,7 @@ def _evaluation_worktree_fingerprint(root: Path, snapshot: Any) -> tuple[dict[st
 
 def run_repository_single_task(
     repository_id: str,
-    task_spec_path: str | os.PathLike[str],
+    task_spec_path: str | os.PathLike[str] | None,
     *,
     registry_path: str | os.PathLike[str] = "config/repos.yaml",
     bindings_path: str | os.PathLike[str] | None = DEFAULT_REPOSITORY_BINDINGS_PATH,
@@ -232,6 +237,8 @@ def run_repository_single_task(
     adapter_resolver: Callable[[], Any] | None = None,
     evaluator_runner: Callable[..., Any] | None = None,
     execution_base_sha: str | None = None,
+    requested_run_id: str | None = None,
+    task_spec_override: RepositorySingleTaskSpec | None = None,
 ) -> RepositorySingleTaskRunResult:
     """Process exactly one task, returning a receipt-backed terminal result.
 
@@ -239,7 +246,9 @@ def run_repository_single_task(
     isolated tests; production resolves ``codex_cli`` from the providers file.
     """
     started = _utc_now()
-    run_id = "run-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    run_id = requested_run_id if requested_run_id is not None else "run-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    if not isinstance(run_id, str) or not re.fullmatch(r"run-[a-z0-9-]{1,80}", run_id):
+        raise RepositorySingleTaskControllerError("single_task.run_id.invalid", "invalid requested run ID")
     output_directory = Path(output_root).expanduser() / run_id
     output_directory.mkdir(parents=True, exist_ok=False)
 
@@ -386,9 +395,17 @@ def run_repository_single_task(
         )
 
     try:
-        spec = load_repository_single_task_spec(task_spec_path)
+        if (task_spec_path is None) == (task_spec_override is None):
+            raise ValueError("exactly one task spec source is required")
+        if task_spec_override is not None:
+            spec = validate_repository_single_task_spec(task_spec_override)
+            specification_sha = hashlib.sha256(
+                serialize_repository_single_task_spec(spec).encode("utf-8")
+            ).hexdigest()
+        else:
+            spec = load_repository_single_task_spec(task_spec_path)
+            specification_sha = hashlib.sha256(Path(task_spec_path).read_bytes()).hexdigest()
         task_id = spec.task_id
-        specification_sha = hashlib.sha256(Path(task_spec_path).read_bytes()).hexdigest()
     except (OSError, ValueError):
         return record("blocked", "single_task.task_spec.invalid")
     try:

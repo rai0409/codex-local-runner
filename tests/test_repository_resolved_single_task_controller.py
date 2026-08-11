@@ -17,6 +17,7 @@ from automation.orchestration.repository_resolved_single_task_controller import 
     run_repository_single_task,
     serialize_repository_single_task_run_result,
 )
+from automation.orchestration.repository_single_task_spec import RepositorySingleTaskSpec, serialize_repository_single_task_spec
 
 
 PYTHON = str(Path(sys.executable).resolve())
@@ -118,6 +119,20 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
 
     def _run(self, adapter):
         return run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: adapter, evaluator_runner=self._evaluator_runner)
+
+    def test_in_memory_task_spec_override_uses_canonical_spec_hash(self):
+        raw = json.loads(self.spec.read_text(encoding="utf-8"))
+        spec = RepositorySingleTaskSpec(raw["schema_version"], raw["task_id"], raw["expected_head_sha"], raw["prompt"], tuple(raw["allowed_changed_paths"]), raw["commit_message"])
+        result = run_repository_single_task("repo", None, task_spec_override=spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(self._modify), evaluator_runner=self._evaluator_runner, requested_run_id="run-override")
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.task_spec_sha256, hashlib.sha256(serialize_repository_single_task_spec(spec).encode("utf-8")).hexdigest())
+
+    def test_task_spec_source_requires_exactly_one_mode(self):
+        raw = json.loads(self.spec.read_text(encoding="utf-8")); spec = RepositorySingleTaskSpec(raw["schema_version"], raw["task_id"], raw["expected_head_sha"], raw["prompt"], tuple(raw["allowed_changed_paths"]), raw["commit_message"])
+        both = run_repository_single_task("repo", self.spec, task_spec_override=spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, requested_run_id="run-both")
+        neither = run_repository_single_task("repo", None, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, requested_run_id="run-neither")
+        self.assertEqual(both.reason_code, "single_task.task_spec.invalid")
+        self.assertEqual(neither.reason_code, "single_task.task_spec.invalid")
 
     @staticmethod
     def _modify(worktree: Path, name="allowed.txt") -> None:
