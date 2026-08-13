@@ -15,6 +15,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repository-id", required=True)
     parser.add_argument("--queue-spec", required=True)
     parser.add_argument("--resume-cycle-run-id")
+    parser.add_argument("--registry-path")
+    parser.add_argument("--bindings-path")
+    parser.add_argument("--providers-path")
+    parser.add_argument("--output-root")
+    parser.add_argument("--single-task-output-root")
     return parser
 
 
@@ -27,7 +32,11 @@ def _emit(result: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
-        result = run_repository_multi_cycle(repository_id=arguments.repository_id, queue_spec_path=arguments.queue_spec, resume_cycle_run_id=arguments.resume_cycle_run_id)
+        kwargs = {"repository_id": arguments.repository_id, "queue_spec_path": arguments.queue_spec, "resume_cycle_run_id": arguments.resume_cycle_run_id}
+        for argument, keyword in (("registry_path","registry_path"),("bindings_path","bindings_path"),("providers_path","providers_path"),("output_root","output_root"),("single_task_output_root","single_task_output_root")):
+            value = getattr(arguments, argument)
+            if value is not None: kwargs[keyword] = value
+        result = run_repository_multi_cycle(**kwargs)
     except Exception:
         print("status=failed\nreason_code=multi_cycle.cli.controller_failed\nreceipt_path=\nrepository_id=\nsource_anchor_sha=\naccepted_head_sha=\ncompleted_count=\nstopped_task_id=")
         print("FAILED_REPOSITORY_MULTI_CYCLE")
