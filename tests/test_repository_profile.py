@@ -79,6 +79,10 @@ class RepositoryProfileTests(unittest.TestCase):
             timeout = self.payload(root); timeout["validation_commands"][0]["timeout_seconds"] = True
             self.error(timeout, "profile.validation_commands[0].timeout_seconds.invalid_type")
             self.error(self.payload(root, max_changed_files=True), "profile.max_changed_files.invalid_type")
+            self.assertEqual(validate_repository_profile(self.payload(root, execution_timeout_seconds=1200)).execution_timeout_seconds, 1200)
+            for invalid in (True, "900", 0, -1):
+                self.error(self.payload(root, execution_timeout_seconds=invalid), "profile.execution_timeout_seconds.invalid_type")
+            self.error(self.payload(root, execution_timeout_seconds=1801), "profile.execution_timeout_seconds.invalid_value")
 
     def test_command_uniqueness_kinds_and_argv_safety(self):
         with tempfile.TemporaryDirectory() as root:

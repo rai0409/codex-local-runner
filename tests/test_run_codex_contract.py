@@ -50,6 +50,30 @@ class RunCodexContractTests(unittest.TestCase):
             for item in result["artifacts"]:
                 self.assertTrue(Path(item["path"]).exists())
 
+    def test_default_timeout_is_900_seconds(self) -> None:
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
+            with mock.patch("run_codex.shutil.which", return_value="/usr/bin/codex"), mock.patch(
+                "run_codex.subprocess.run",
+                return_value=subprocess.CompletedProcess(args=["codex", "exec"], returncode=0, stdout="", stderr=""),
+            ) as execute:
+                run_codex(task={"repo_path": repo_dir}, prompt="test", work_root=work_root)
+        self.assertEqual(execute.call_args.kwargs["timeout"], 900)
+
+    def test_task_timeout_is_bounded_and_invalid_values_do_not_execute(self) -> None:
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
+            with mock.patch("run_codex.shutil.which", return_value="/usr/bin/codex"), mock.patch(
+                "run_codex.subprocess.run",
+                return_value=subprocess.CompletedProcess(args=["codex", "exec"], returncode=0, stdout="", stderr=""),
+            ) as execute:
+                result = run_codex(task={"repo_path": repo_dir, "execution_timeout_seconds": 1200}, prompt="test", work_root=work_root)
+                self.assertEqual(result["status"], "completed")
+                self.assertEqual(execute.call_args.kwargs["timeout"], 1200)
+                for invalid in (True, "900", 0, -1, 1801):
+                    failed = run_codex(task={"repo_path": repo_dir, "execution_timeout_seconds": invalid}, prompt="test", work_root=work_root)
+                    self.assertEqual(failed["status"], "not_started")
+                    self.assertEqual(failed["error"], "codex_execution.timeout.invalid")
+        self.assertEqual(execute.call_count, 1)
+
     def test_timed_out_status_is_explicit(self) -> None:
         timeout_exc = subprocess.TimeoutExpired(
             cmd=["codex", "exec"], timeout=600, output="partial", stderr="stream"

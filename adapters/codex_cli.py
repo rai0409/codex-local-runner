@@ -16,6 +16,9 @@ from automation.orchestration.safe_validation_executor import validation_executi
 from automation.orchestration.validation_repair import MAX_VALIDATION_REPAIR_ATTEMPTS
 from automation.orchestration.validation_repair import build_repair_prompt
 from automation.orchestration.validation_repair import extract_actionable_failure
+from orchestrator.codex_execution import DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS
+from orchestrator.codex_execution import MAX_CODEX_EXECUTION_TIMEOUT_SECONDS
+from orchestrator.codex_execution import validate_codex_execution_timeout_seconds
 from run_codex import run_codex
 from workspace.worktree import cleanup_git_worktree
 from workspace.worktree import prepare_git_worktree
@@ -83,6 +86,24 @@ def _retry_not_attempted() -> dict[str, Any]:
 def _repair_not_attempted() -> dict[str, Any]:
     return {"attempted": False, "max_attempts": MAX_VALIDATION_REPAIR_ATTEMPTS,
             "attempts_used": 0, "outcome": "not_attempted"}
+
+
+def _resolve_execution_timeout(payload: Mapping[str, Any], profile: RepositoryProfile) -> int:
+    if "execution_timeout_seconds" in payload:
+        return validate_codex_execution_timeout_seconds(payload["execution_timeout_seconds"])
+    if profile.execution_timeout_seconds is not None:
+        return validate_codex_execution_timeout_seconds(profile.execution_timeout_seconds)
+    return DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS
+
+
+def _timeout_recovery_evidence(effective_timeout_seconds: int) -> dict[str, Any]:
+    return {
+        "effective_timeout_seconds": effective_timeout_seconds,
+        "timeout_retry_attempted": False,
+        "timeout_retry_count": 0,
+        "first_execution_outcome": "not_started",
+        "final_execution_outcome": "not_started",
+    }
 
 
 def _validation_attempt(
@@ -224,10 +245,15 @@ class CodexCliAdapter(ProviderAdapter):
             return self._prepared_failure("safe_validation.profile.invalid")
         if profile.approval_boundary.test_execution != "automatic":
             return self._prepared_failure("safe_validation.test_execution_not_automatic")
+        try:
+            effective_timeout_seconds = _resolve_execution_timeout(payload, profile)
+        except ValueError:
+            return self._prepared_failure("codex_execution.timeout.invalid")
         allowed_changed_paths = payload.get("allowed_changed_paths")
         if not isinstance(allowed_changed_paths, (list, tuple)) or not all(isinstance(path, str) for path in allowed_changed_paths):
             allowed_changed_paths = None
         attempt_count, retry, repair, validation_attempts = 0, _retry_not_attempted(), _repair_not_attempted(), []
+        timeout_recovery = _timeout_recovery_evidence(effective_timeout_seconds)
         current_prompt, phase = prompt, "initial"
         while True:
             attempt_count += 1
@@ -235,8 +261,30 @@ class CodexCliAdapter(ProviderAdapter):
                 task={"repo_path": str(worktree)},
                 prompt=current_prompt,
                 work_root=str(work_dir / "execution_runs"),
+                timeout_seconds=effective_timeout_seconds,
                 persist_prompt=False,
             )
+            if timeout_recovery["first_execution_outcome"] == "not_started":
+                timeout_recovery["first_execution_outcome"] = execution["status"]
+            if (
+                execution["status"] == "timed_out"
+                and timeout_recovery["timeout_retry_count"] < 1
+            ):
+                retry_timeout_seconds = min(
+                    MAX_CODEX_EXECUTION_TIMEOUT_SECONDS,
+                    effective_timeout_seconds * 2,
+                )
+                if retry_timeout_seconds > effective_timeout_seconds:
+                    timeout_recovery["timeout_retry_attempted"] = True
+                    timeout_recovery["timeout_retry_count"] += 1
+                    execution = run_codex(
+                        task={"repo_path": str(worktree)},
+                        prompt=current_prompt,
+                        work_root=str(work_dir / "execution_runs"),
+                        timeout_seconds=retry_timeout_seconds,
+                        persist_prompt=False,
+                    )
+            timeout_recovery["final_execution_outcome"] = execution["status"]
             status = str(execution["status"])
             verify = _verify_not_run(_not_run_reason_for_execution_status(status))
             if status == "completed":
@@ -259,7 +307,7 @@ class CodexCliAdapter(ProviderAdapter):
         interpretation = _derive_result_interpretation(status, verify, retry)
         recommendation = _derive_review_recommendation(interpretation)
         summary = _build_review_handoff_summary(final_status=status, final_verify_status=verify["status"], final_verify_reason=verify["reason"], retry_attempted=retry["attempted"], retry_outcome=retry["outcome"], result_interpretation=interpretation, review_recommendation=recommendation)
-        return {"adapter":self.name,"status":status,"started_at":execution["started_at"],"finished_at":execution["finished_at"],"artifacts":[str(item.get("path")) for item in execution["artifacts"] if isinstance(item,dict) and item.get("path")],"error":str(execution["error"]).strip() or None,"return_code":execution["return_code"],"verify":verify,"attempt_count":attempt_count,"retry":retry,"repair":repair,"validation_attempts":validation_attempts,"result_interpretation":interpretation,"review_recommendation":recommendation,"review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status=status,attempt_count=attempt_count,return_code=execution["return_code"],verify_result=verify)}
+        return {"adapter":self.name,"status":status,"started_at":execution["started_at"],"finished_at":execution["finished_at"],"artifacts":[str(item.get("path")) for item in execution["artifacts"] if isinstance(item,dict) and item.get("path")],"error":str(execution["error"]).strip() or None,"return_code":execution["return_code"],"verify":verify,"attempt_count":attempt_count,"retry":retry,"repair":repair,"timeout_recovery":timeout_recovery,"validation_attempts":validation_attempts,"result_interpretation":interpretation,"review_recommendation":recommendation,"review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status=status,attempt_count=attempt_count,return_code=execution["return_code"],verify_result=verify)}
 
     def _prepared_failure(self, reason: str) -> dict[str, Any]:
         verify, retry = _verify_not_run("validation_not_run_execution_status_failed"), _retry_not_attempted()
@@ -358,6 +406,8 @@ class CodexCliAdapter(ProviderAdapter):
                     "work_dir": str(work_dir),
                     "repository_profile": bound_profile,
                     "allowed_changed_paths": payload.get("allowed_changed_paths"),
+                    **({"execution_timeout_seconds": payload["execution_timeout_seconds"]}
+                       if "execution_timeout_seconds" in payload else {}),
                 })
         finally:
             if worktree_result["cleanup_needed"]:

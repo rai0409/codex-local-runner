@@ -90,7 +90,9 @@ def bind_repository_profile_to_worktree(
         "forbidden_git_operations": list(source.forbidden_git_operations),
         "max_changed_files": source.max_changed_files,
         "approval_boundary": asdict(source.approval_boundary),
-        "environment_allowlist": list(source.environment_allowlist)})
+        "environment_allowlist": list(source.environment_allowlist),
+        **({"execution_timeout_seconds": source.execution_timeout_seconds}
+           if source.execution_timeout_seconds is not None else {})})
 
 
 __all__ = ["RepositoryProfileBindingError", "bind_repository_profile_to_worktree"]

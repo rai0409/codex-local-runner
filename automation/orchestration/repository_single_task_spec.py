@@ -8,8 +8,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from orchestrator.codex_execution import validate_codex_execution_timeout_seconds
+
 REPOSITORY_SINGLE_TASK_SPEC_SCHEMA_VERSION = "1"
-_FIELDS = frozenset(("schema_version", "task_id", "expected_head_sha", "prompt", "allowed_changed_paths", "commit_message"))
+_FIELDS = frozenset(("schema_version", "task_id", "expected_head_sha", "prompt", "allowed_changed_paths", "commit_message", "execution_timeout_seconds"))
+_REQUIRED_FIELDS = _FIELDS - {"execution_timeout_seconds"}
 _TASK_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -26,6 +29,7 @@ class RepositorySingleTaskSpec:
     prompt: str
     allowed_changed_paths: tuple[str, ...]
     commit_message: str
+    execution_timeout_seconds: int | None = None
 
 def _error(code: str, message: str) -> RepositorySingleTaskSpecValidationError:
     return RepositorySingleTaskSpecValidationError(code, message)
@@ -44,9 +48,11 @@ def validate_repository_single_task_spec(value: Mapping[str, Any] | RepositorySi
     raw = asdict(value) if isinstance(value, RepositorySingleTaskSpec) else _mapping(value)
     if isinstance(value, RepositorySingleTaskSpec):
         raw["allowed_changed_paths"] = list(value.allowed_changed_paths)
+        if value.execution_timeout_seconds is None:
+            del raw["execution_timeout_seconds"]
     unknown = sorted(str(key) for key in raw if key not in _FIELDS)
     if unknown: raise _error(f"single_task_spec.{unknown[0]}.unknown_field", "unknown field")
-    missing = next((key for key in _FIELDS if key not in raw), None)
+    missing = next((key for key in _REQUIRED_FIELDS if key not in raw), None)
     if missing: raise _error(f"single_task_spec.{missing}.required", "required")
     if raw["schema_version"] != REPOSITORY_SINGLE_TASK_SPEC_SCHEMA_VERSION: raise _error("single_task_spec.schema_version.unsupported", "unsupported schema")
     task_id = _text(raw["task_id"], "single_task_spec.task_id.invalid")
@@ -66,7 +72,13 @@ def validate_repository_single_task_spec(value: Mapping[str, Any] | RepositorySi
     if len(set(validated)) != len(validated): raise _error("single_task_spec.allowed_changed_paths.duplicate", "duplicate path")
     message=_text(raw["commit_message"], "single_task_spec.commit_message.invalid")
     if len(message.encode("utf-8")) > 200: raise _error("single_task_spec.commit_message.invalid", "too long")
-    return RepositorySingleTaskSpec("1", task_id, sha, prompt, tuple(sorted(validated)), message)
+    timeout = None
+    if "execution_timeout_seconds" in raw:
+        try:
+            timeout = validate_codex_execution_timeout_seconds(raw["execution_timeout_seconds"])
+        except ValueError as exc:
+            raise _error("single_task_spec.execution_timeout_seconds.invalid", "must be a bounded positive integer") from exc
+    return RepositorySingleTaskSpec("1", task_id, sha, prompt, tuple(sorted(validated)), message, timeout)
 
 def load_repository_single_task_spec(path: str | os.PathLike[str]) -> RepositorySingleTaskSpec:
     if isinstance(path, bool) or not isinstance(path, (str, os.PathLike)): raise _error("single_task_spec_file.invalid_type", "invalid path")
@@ -83,7 +95,7 @@ def load_repository_single_task_spec(path: str | os.PathLike[str]) -> Repository
 def repository_single_task_spec_to_mapping(spec: RepositorySingleTaskSpec) -> dict[str, Any]:
     if not isinstance(spec, RepositorySingleTaskSpec): raise TypeError("spec must be RepositorySingleTaskSpec")
     value=validate_repository_single_task_spec(spec)
-    return {"schema_version":value.schema_version,"task_id":value.task_id,"expected_head_sha":value.expected_head_sha,"prompt":value.prompt,"allowed_changed_paths":list(value.allowed_changed_paths),"commit_message":value.commit_message}
+    return {"schema_version":value.schema_version,"task_id":value.task_id,"expected_head_sha":value.expected_head_sha,"prompt":value.prompt,"allowed_changed_paths":list(value.allowed_changed_paths),"commit_message":value.commit_message, **({"execution_timeout_seconds": value.execution_timeout_seconds} if value.execution_timeout_seconds is not None else {})}
 
 def serialize_repository_single_task_spec(spec: RepositorySingleTaskSpec) -> str:
     return json.dumps(repository_single_task_spec_to_mapping(spec), ensure_ascii=True, sort_keys=True, separators=(",", ":"))

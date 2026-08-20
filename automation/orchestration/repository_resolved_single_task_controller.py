@@ -495,6 +495,8 @@ def run_repository_single_task(
         response = adapter.execute_prepared_worktree({
             "prompt": spec.prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
             "repository_profile": bound_profile, "allowed_changed_paths": spec.allowed_changed_paths,
+            **({"execution_timeout_seconds": spec.execution_timeout_seconds}
+               if spec.execution_timeout_seconds is not None else {}),
         })
     except Exception:
         worktree_preserved = True
@@ -596,6 +598,8 @@ def run_repository_single_task(
             response = adapter.execute_prepared_worktree({
                 "prompt": rework_prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
                 "repository_profile": bound_profile, "allowed_changed_paths": spec.allowed_changed_paths,
+                **({"execution_timeout_seconds": spec.execution_timeout_seconds}
+                   if spec.execution_timeout_seconds is not None else {}),
             })
         except Exception:
             worktree_preserved = True
