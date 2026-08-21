@@ -35,9 +35,11 @@ class FakePreparedAdapter:
         self.reason = reason
         self.malformed = malformed
         self.calls = 0
+        self.payloads = []
 
     def execute_prepared_worktree(self, payload):
         self.calls += 1
+        self.payloads.append(payload)
         if self.action:
             self.action(Path(payload["worktree_path"]))
         if self.malformed == "verify":
@@ -167,7 +169,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.assertNotIn(("add", "-A"), invocations)
         self.assertNotIn(("add", "--all"), invocations)
         receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
-        self.assertEqual(set(receipt), {"schema_version", "run_id", "status", "reason_code", "detail_reason_code", "repository_id", "task_id", "task_spec_sha256", "source_repository_root", "profile_id", "profile_base_branch", "profile_max_changed_files", "approvals", "source_state_before", "source_state_after", "expected_head_sha", "worktree_path", "worktree_preserved", "task_branch", "adapter_name", "execution_status", "validation_status", "validation_reason", "retry_attempted", "retry_outcome", "changed_files", "allowed_changed_paths", "commit_created", "commit_sha", "commit_parent_sha", "commit_message", "worktree_cleanup_status", "artifact_paths", "started_at", "finished_at"})
+        self.assertEqual(set(receipt), {"schema_version", "run_id", "status", "reason_code", "detail_reason_code", "repository_id", "task_id", "task_spec_sha256", "source_repository_root", "profile_id", "profile_base_branch", "profile_max_changed_files", "approvals", "source_state_before", "source_state_after", "expected_head_sha", "worktree_path", "worktree_preserved", "task_branch", "adapter_name", "execution_status", "validation_status", "validation_reason", "retry_attempted", "retry_outcome", "changed_files", "allowed_changed_paths", "declared_allowed_changed_paths", "actual_changed_files", "original_unexpected_changed_files", "scope_recovery_attempted", "scope_recovery_status", "auto_expanded_paths", "effective_allowed_changed_paths", "unresolved_unexpected_changed_files", "commit_created", "commit_sha", "commit_parent_sha", "commit_message", "worktree_cleanup_status", "artifact_paths", "started_at", "finished_at"})
         digest = hashlib.sha256(Path(result.receipt_path).read_bytes()).hexdigest()
         self.assertEqual(Path(result.receipt_sha256_path).read_text(encoding="utf-8"), f"{digest}  receipt.json\n")
         self.assertFalse(list(Path(result.receipt_path).parent.glob(".receipt-*.tmp")))
@@ -290,7 +292,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
             return {"status": "completed", "stdout_path": str(output)}
 
         result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(create_paths), evaluator_runner=evaluator_runner)
-        self.assertEqual(result.reason_code, "single_task.task_completion.blocked")
+        self.assertEqual(result.reason_code, "single_task.changed_files.out_of_scope")
         self.assertTrue(result.worktree_preserved)
         self.assertIsNone(result.commit_sha)
         expected = ("__pycache__/forbidden.pyc", "allowed.txt")
@@ -298,6 +300,8 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         artifact = json.loads((Path(result.receipt_path).parent / "changed_files.json").read_text(encoding="utf-8"))
         self.assertEqual(artifact["actual_changed_files"], list(expected))
         self.assertEqual(artifact["unexpected_changed_files"], ["__pycache__/forbidden.pyc"])
+        self.assertEqual(artifact["scope_recovery_status"], "blocked")
+        self.assertEqual(artifact["unresolved_unexpected_changed_files"], ["__pycache__/forbidden.pyc"])
         self.assertEqual(artifact["commit_changed_files"], [])
         actual = tuple(sorted(line[3:] for line in git(Path(result.worktree_path), "status", "--porcelain", "--untracked-files=all").stdout.splitlines()))
         self.assertEqual(actual, expected)
@@ -341,6 +345,82 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
                 self.assertEqual(result.worktree_preserved, preserved)
                 self.assertEqual(git(self.source, "rev-list", "--count", "main").stdout.strip(), "1")
                 if not preserved: self.assertFalse(Path(result.worktree_path).exists())
+
+    def test_safe_support_scope_recovery_preserves_declared_scope_and_uses_effective_scope_for_evaluator(self):
+        self._write_configuration(maximum=2)
+        captured = {}
+
+        def create_paths(worktree):
+            self._modify(worktree)
+            support = worktree / "tests" / "test_feature.py"
+            support.parent.mkdir()
+            support.write_text("assert True\n", encoding="utf-8")
+
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            captured["prompt"] = prompt
+            return self._evaluator_runner(task=task, prompt=prompt, work_root=work_root, persist_prompt=persist_prompt)
+
+        adapter = FakePreparedAdapter(create_paths)
+        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: adapter, evaluator_runner=evaluator_runner)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(adapter.payloads[0]["allowed_changed_paths"], ("allowed.txt",))
+        self.assertIn("tests/test_feature.py", captured["prompt"])
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertEqual(receipt["declared_allowed_changed_paths"], ["allowed.txt"])
+        self.assertEqual(receipt["original_unexpected_changed_files"], ["tests/test_feature.py"])
+        self.assertTrue(receipt["scope_recovery_attempted"])
+        self.assertEqual(receipt["scope_recovery_status"], "accepted")
+        self.assertEqual(receipt["auto_expanded_paths"], ["tests/test_feature.py"])
+        self.assertEqual(receipt["effective_allowed_changed_paths"], ["allowed.txt", "tests/test_feature.py"])
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], [])
+        self.assertEqual(git(self.source, "diff-tree", "--no-commit-id", "--name-only", "-r", result.commit_sha).stdout.splitlines(), ["allowed.txt", "tests/test_feature.py"])
+
+    def test_unsafe_scope_recovery_blocks_before_completion_evaluator(self):
+        def unexpected_source(worktree):
+            self._modify(worktree)
+            (worktree / "src").mkdir()
+            (worktree / "src" / "unsafe.py").write_text("x\n", encoding="utf-8")
+
+        def evaluator_runner(**_kwargs):
+            self.fail("unsafe scope must block before evaluator execution")
+
+        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(unexpected_source), evaluator_runner=evaluator_runner)
+        self.assertEqual(result.reason_code, "single_task.changed_files.out_of_scope")
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertEqual(receipt["scope_recovery_status"], "blocked")
+        self.assertEqual(receipt["auto_expanded_paths"], [])
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], ["src/unsafe.py"])
+
+    def test_commit_scope_still_blocks_unresolved_path_added_by_rework(self):
+        calls = []
+
+        def action(worktree):
+            calls.append(worktree)
+            if len(calls) == 1:
+                self._modify(worktree)
+            else:
+                (worktree / "src").mkdir()
+                (worktree / "src" / "late.py").write_text("x\n", encoding="utf-8")
+
+        statuses = iter(("needs_rework", "completed"))
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            status = next(statuses)
+            directory = Path(work_root) / status
+            directory.mkdir(parents=True, exist_ok=True)
+            output = directory / "stdout.txt"
+            output.write_text(
+                "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+                + json.dumps({"status": status, "reason_code": "task.more" if status == "needs_rework" else "task.done", "satisfied_criteria": [], "unsatisfied_criteria": ["more"] if status == "needs_rework" else [], "evidence_refs": []})
+                + "\nTASK_COMPLETION_EVALUATION_JSON_END", encoding="utf-8",
+            )
+            return {"status": "completed", "stdout_path": str(output)}
+
+        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(action), evaluator_runner=evaluator_runner)
+        self.assertEqual(result.reason_code, "single_task.changed_files.out_of_scope")
+        self.assertIsNone(result.commit_sha)
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertEqual(receipt["scope_recovery_status"], "not_needed")
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], ["src/late.py"])
 
     def test_cleanup_failure_and_source_change_do_not_complete(self):
         original_git = __import__("automation.orchestration.repository_resolved_single_task_controller", fromlist=["_git"])._git

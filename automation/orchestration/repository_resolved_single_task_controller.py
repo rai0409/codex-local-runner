@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 from adapters import resolve_adapter
@@ -49,6 +49,36 @@ DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT = (
     "repository-single-task-runs"
 )
 MAX_TASK_REWORK_ATTEMPTS = 2
+MAX_SAFE_SCOPE_AUTO_EXPANSIONS = 4
+
+_SCOPE_HARD_BLOCK_COMPONENTS = frozenset({
+    ".git", ".github", "__pycache__", "alembic", "build", "ci", "credentials",
+    "database", "db", "deploy", "deployment", "env", "environment", "infrastructure",
+    "kubernetes", "migrations", "requirements", "schema", "schemas", "secrets",
+    "terraform", "workflows",
+})
+_SCOPE_HARD_BLOCK_DIRECTORY_COMPONENTS = frozenset({"data", "dataset", "datasets"})
+_SCOPE_HARD_BLOCK_BASENAMES = frozenset({
+    ".env", "compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml",
+    "dockerfile", "package.json", "package-lock.json", "pdm.lock", "pnpm-lock.yaml",
+    "poetry.lock", "pyproject.toml", "requirements.txt", "setup.cfg", "setup.py",
+    "yarn.lock",
+})
+_SCOPE_HARD_BLOCK_SUFFIXES = (
+    ".7z", ".bin", ".bz2", ".dll", ".exe", ".gz", ".jar", ".pyc", ".rar",
+    ".so", ".sql", ".tar", ".tgz", ".xz", ".zip",
+)
+
+
+@dataclass(frozen=True)
+class _ScopeRecovery:
+    declared_allowed_changed_paths: tuple[str, ...]
+    actual_changed_files: tuple[str, ...]
+    original_unexpected_changed_files: tuple[str, ...]
+    scope_recovery_attempted: bool
+    scope_recovery_status: str
+    auto_expanded_paths: tuple[str, ...]
+    effective_allowed_changed_paths: tuple[str, ...]
 
 
 def _phase_timeout(task_value: int | None, profile_value: int | None, default: int) -> int:
@@ -209,6 +239,81 @@ def _actual_changed_paths(snapshot: Any) -> tuple[str, ...]:
     return tuple(sorted(set(snapshot.tracked_modified_files) | set(snapshot.untracked_files)))
 
 
+def _normalized_repository_relative_path(root: Path, value: Any) -> str | None:
+    """Return a safe canonical path, or ``None`` for any ambiguous path."""
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = value.replace("\\", "/")
+    if normalized != value:
+        return None
+    if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        return None
+    parts = PurePosixPath(normalized).parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        return None
+    canonical = "/".join(parts)
+    if canonical != normalized or ".git" in parts:
+        return None
+    try:
+        root_path = root.resolve(strict=True)
+        candidate = root_path.joinpath(*parts)
+        if candidate.is_symlink() or not candidate.resolve(strict=False).is_relative_to(root_path):
+            return None
+    except (OSError, RuntimeError):
+        return None
+    return canonical
+
+
+def _is_safe_support_path(root: Path, value: Any) -> str | None:
+    """Allow only normalized tests/docs support files outside hard-block sets."""
+    path = _normalized_repository_relative_path(root, value)
+    if path is None:
+        return None
+    parts = PurePosixPath(path).parts
+    lowered = tuple(part.casefold() for part in parts)
+    basename = lowered[-1]
+    if (
+        any(part in _SCOPE_HARD_BLOCK_COMPONENTS for part in lowered)
+        or any(part in _SCOPE_HARD_BLOCK_DIRECTORY_COMPONENTS for part in lowered[:-1])
+        or basename in _SCOPE_HARD_BLOCK_BASENAMES
+        or basename.startswith(".env")
+        or basename.startswith("requirements") and basename.endswith(".txt")
+        or basename.endswith(".lock")
+        or "environment" in basename
+        or "secret" in basename
+        or "credential" in basename
+        or basename.endswith(_SCOPE_HARD_BLOCK_SUFFIXES)
+    ):
+        return None
+    if not any(part in {"tests", "docs"} for part in lowered[:-1]):
+        return None
+    return path
+
+
+def _recover_safe_changed_path_scope(
+    root: Path,
+    declared_allowed_changed_paths: tuple[str, ...],
+    actual_changed_files: tuple[str, ...],
+) -> _ScopeRecovery:
+    """Deterministically expand one all-safe support-file set, or block it all."""
+    declared = tuple(sorted(set(declared_allowed_changed_paths)))
+    actual = tuple(sorted(set(actual_changed_files)))
+    declared_set = set(declared)
+    unexpected = tuple(path for path in actual if path not in declared_set)
+    if not unexpected:
+        return _ScopeRecovery(declared, actual, unexpected, False, "not_needed", (), declared)
+    safe_paths = tuple(_is_safe_support_path(root, path) for path in unexpected)
+    if len(unexpected) > MAX_SAFE_SCOPE_AUTO_EXPANSIONS or any(path is None for path in safe_paths):
+        return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared)
+    auto_expanded = tuple(sorted(set(path for path in safe_paths if path is not None)))
+    if len(auto_expanded) != len(unexpected):
+        return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared)
+    return _ScopeRecovery(
+        declared, actual, unexpected, True, "accepted", auto_expanded,
+        tuple(sorted(set(declared) | set(auto_expanded))),
+    )
+
+
 def _evaluation_worktree_fingerprint(root: Path, snapshot: Any) -> tuple[dict[str, Any], tuple[tuple[str, str], ...]]:
     """Capture state plus content identity for evaluator-mutation detection."""
     identities: list[tuple[str, str]] = []
@@ -289,6 +394,12 @@ def run_repository_single_task(
     task_completion_attempts: list[dict[str, Any]] = []
     final_task_completion: TaskCompletionEvaluation | None = None
     evaluation_reached = False
+    declared_allowed_changed_paths: tuple[str, ...] = ()
+    original_unexpected_changed_files: tuple[str, ...] = ()
+    scope_recovery_attempted = False
+    scope_recovery_status = "not_needed"
+    auto_expanded_paths: tuple[str, ...] = ()
+    effective_allowed_changed_paths: tuple[str, ...] = ()
 
     def record(status: str, reason: str, detail: str | None = None) -> RepositorySingleTaskRunResult:
         nonlocal source_after, worktree_state, changed_files
@@ -336,6 +447,14 @@ def run_repository_single_task(
             "retry_attempted": retry_attempted, "retry_outcome": retry_outcome,
             "changed_files": list(changed_files),
             "allowed_changed_paths": list(getattr(spec, "allowed_changed_paths", ())),
+            "declared_allowed_changed_paths": list(declared_allowed_changed_paths),
+            "actual_changed_files": list(changed_files),
+            "original_unexpected_changed_files": list(original_unexpected_changed_files),
+            "scope_recovery_attempted": scope_recovery_attempted,
+            "scope_recovery_status": scope_recovery_status,
+            "auto_expanded_paths": list(auto_expanded_paths),
+            "effective_allowed_changed_paths": list(effective_allowed_changed_paths),
+            "unresolved_unexpected_changed_files": sorted(set(changed_files) - set(effective_allowed_changed_paths)),
             "commit_created": commit_sha is not None, "commit_sha": commit_sha,
             "commit_parent_sha": commit_parent,
             "commit_message": getattr(spec, "commit_message", None),
@@ -371,8 +490,15 @@ def run_repository_single_task(
                 _atomic_json(Path(paths["task_completion_attempts"]), {"attempts": task_completion_attempts})
             _atomic_json(Path(paths["changed_files"]), {
                 "allowed_changed_paths": receipt["allowed_changed_paths"],
+                "declared_allowed_changed_paths": receipt["declared_allowed_changed_paths"],
                 "actual_changed_files": list(changed_files),
                 "unexpected_changed_files": sorted(set(changed_files) - set(receipt["allowed_changed_paths"])),
+                "original_unexpected_changed_files": receipt["original_unexpected_changed_files"],
+                "scope_recovery_attempted": receipt["scope_recovery_attempted"],
+                "scope_recovery_status": receipt["scope_recovery_status"],
+                "auto_expanded_paths": receipt["auto_expanded_paths"],
+                "effective_allowed_changed_paths": receipt["effective_allowed_changed_paths"],
+                "unresolved_unexpected_changed_files": receipt["unresolved_unexpected_changed_files"],
                 "staged_files": list(getattr(worktree_state, "staged_files", ())),
                 "commit_changed_files": list(changed_files) if commit_sha else [],
             })
@@ -412,6 +538,8 @@ def run_repository_single_task(
             spec = load_repository_single_task_spec(task_spec_path)
             specification_sha = hashlib.sha256(Path(task_spec_path).read_bytes()).hexdigest()
         task_id = spec.task_id
+        declared_allowed_changed_paths = spec.allowed_changed_paths
+        effective_allowed_changed_paths = declared_allowed_changed_paths
     except (OSError, ValueError):
         return record("blocked", "single_task.task_spec.invalid")
     try:
@@ -541,6 +669,27 @@ def run_repository_single_task(
         worktree_preserved = True
         return record("blocked", "single_task.validation.failed")
 
+    try:
+        scope_snapshot = analyze_repository_state(worktree)
+        scope_changed_files = _actual_changed_paths(scope_snapshot)
+        if len(scope_changed_files) > profile.max_changed_files:
+            worktree_preserved = True
+            return record("blocked", "single_task.changed_files.limit_exceeded")
+        scope_recovery = _recover_safe_changed_path_scope(
+            worktree, declared_allowed_changed_paths, scope_changed_files,
+        )
+    except (OSError, ValueError):
+        worktree_preserved = True
+        return record("blocked", "single_task.changed_files.out_of_scope")
+    original_unexpected_changed_files = scope_recovery.original_unexpected_changed_files
+    scope_recovery_attempted = scope_recovery.scope_recovery_attempted
+    scope_recovery_status = scope_recovery.scope_recovery_status
+    auto_expanded_paths = scope_recovery.auto_expanded_paths
+    effective_allowed_changed_paths = scope_recovery.effective_allowed_changed_paths
+    if scope_recovery_status == "blocked":
+        worktree_preserved = True
+        return record("blocked", "single_task.changed_files.out_of_scope")
+
     # Completion is intentionally independent from Safe Validation.  Each
     # rework uses the same prepared-worktree adapter surface, which owns the
     # existing bounded validation-repair loop.
@@ -561,7 +710,7 @@ def run_repository_single_task(
                 "exists": candidate.exists(), "expected_type": requirement.expected_type,
             }
         prompt = build_task_completion_evaluator_prompt(
-            original_task=spec.prompt, allowed_changed_paths=spec.allowed_changed_paths,
+            original_task=spec.prompt, allowed_changed_paths=effective_allowed_changed_paths,
             changed_paths=evaluation_changed,
             repository_state=repository_state_to_mapping(pre_evaluation),
             diff_evidence=bounded_diff,
@@ -602,13 +751,13 @@ def run_repository_single_task(
             return record("blocked", "single_task.task_completion.rework_exhausted")
         attempt["rework_attempted"] = True
         rework_prompt = build_task_completion_rework_prompt(
-            original_task=spec.prompt, allowed_changed_paths=spec.allowed_changed_paths,
+            original_task=spec.prompt, allowed_changed_paths=effective_allowed_changed_paths,
             evaluation=final_task_completion,
         )
         try:
             response = adapter.execute_prepared_worktree({
                 "prompt": rework_prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
-                "repository_profile": bound_profile, "allowed_changed_paths": spec.allowed_changed_paths,
+                "repository_profile": bound_profile, "allowed_changed_paths": effective_allowed_changed_paths,
                 "execution_timeout_seconds": _phase_timeout(spec.completion_rework_timeout_seconds, bound_profile.completion_rework_timeout_seconds, DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS),
                 **({"validation_timeout_seconds": spec.validation_timeout_seconds}
                    if spec.validation_timeout_seconds is not None else {}),
@@ -667,7 +816,7 @@ def run_repository_single_task(
     if len(changed_files) > profile.max_changed_files:
         worktree_preserved = True
         return record("blocked", "single_task.changed_files.limit_exceeded")
-    if not set(changed_files).issubset(spec.allowed_changed_paths):
+    if set(changed_files) - set(effective_allowed_changed_paths):
         worktree_preserved = True
         return record("blocked", "single_task.changed_files.out_of_scope")
     root_path = worktree.resolve()
