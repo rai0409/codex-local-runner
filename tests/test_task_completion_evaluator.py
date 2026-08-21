@@ -64,6 +64,18 @@ class TaskCompletionEvaluatorTests(unittest.TestCase):
             self.assertEqual(result.status, "completed")
             self.assertFalse(captured["persist_prompt"])
             self.assertTrue(captured["return_transient_stdout"])
+            self.assertEqual(captured["timeout_seconds"], 3600)
+
+    def test_evaluator_timeout_is_bounded_and_preserved_across_protocol_retry(self):
+        calls = []
+        def runner(**kwargs):
+            calls.append(kwargs)
+            return {"status": "completed", "transient_stdout": "invalid" if len(calls) == 1 else envelope('{"status":"completed","reason_code":"task.ok","satisfied_criteria":[],"unsatisfied_criteria":[],"evidence_refs":[]}')}
+        result = execute_task_completion_evaluator(worktree_path="/tmp", run_root="/tmp", prompt="task", timeout_seconds=7200, runner=runner)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual([call["timeout_seconds"] for call in calls], [7200, 7200])
+        invalid = execute_task_completion_evaluator(worktree_path="/tmp", run_root="/tmp", prompt="task", timeout_seconds=7201, runner=runner)
+        self.assertEqual(invalid.reason_code, "task_completion.execution.timeout_invalid")
 
     def test_execution_legacy_runner_falls_back_to_strict_stdout_envelope(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -85,3 +97,121 @@ class TaskCompletionEvaluatorTests(unittest.TestCase):
             result = execute_task_completion_evaluator(worktree_path=str(root), run_root=str(root / "runs"), prompt="task", runner=runner)
             self.assertEqual(result.status, "blocked")
             self.assertEqual(result.reason_code, "task_completion.envelope.invalid")
+
+    def test_execution_retries_once_for_invalid_protocol_envelope(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            calls = []
+
+            payload = (
+                '{"status":"completed","reason_code":"task.ok",'
+                '"satisfied_criteria":["done"],'
+                '"unsatisfied_criteria":[],'
+                '"evidence_refs":["git:diff"]}'
+            )
+
+            def runner(**kwargs):
+                calls.append(kwargs)
+                out = root / "stdout.txt"
+                out.write_text("sanitized", encoding="utf-8")
+
+                if len(calls) == 1:
+                    transient = (
+                        TASK_COMPLETION_EVALUATION_BEGIN
+                        + "\n"
+                        + payload
+                    )
+                else:
+                    transient = envelope(payload)
+
+                return {
+                    "status": "completed",
+                    "stdout_path": str(out),
+                    "transient_stdout": transient,
+                }
+
+            result = execute_task_completion_evaluator(
+                worktree_path=str(root),
+                run_root=str(root / "runs"),
+                prompt="task",
+                runner=runner,
+            )
+
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(result.reason_code, "task.ok")
+            self.assertEqual(len(calls), 2)
+            self.assertIn("Protocol retry only", calls[1]["prompt"])
+
+    def test_execution_protocol_retry_is_bounded_to_one_retry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            calls = []
+
+            payload = (
+                '{"status":"completed","reason_code":"task.ok",'
+                '"satisfied_criteria":["done"],'
+                '"unsatisfied_criteria":[],'
+                '"evidence_refs":["git:diff"]}'
+            )
+
+            def runner(**kwargs):
+                calls.append(kwargs)
+                out = root / "stdout.txt"
+                out.write_text("sanitized", encoding="utf-8")
+
+                return {
+                    "status": "completed",
+                    "stdout_path": str(out),
+                    "transient_stdout": (
+                        TASK_COMPLETION_EVALUATION_BEGIN
+                        + "\n"
+                        + payload
+                    ),
+                }
+
+            result = execute_task_completion_evaluator(
+                worktree_path=str(root),
+                run_root=str(root / "runs"),
+                prompt="task",
+                runner=runner,
+            )
+
+            self.assertEqual(result.status, "blocked")
+            self.assertEqual(
+                result.reason_code,
+                "task_completion.envelope.invalid",
+            )
+            self.assertEqual(len(calls), 2)
+
+    def test_execution_semantic_block_does_not_protocol_retry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            calls = []
+
+            def runner(**kwargs):
+                calls.append(kwargs)
+                out = root / "stdout.txt"
+                out.write_text("sanitized", encoding="utf-8")
+
+                return {
+                    "status": "completed",
+                    "stdout_path": str(out),
+                    "transient_stdout": envelope(
+                        '{"status":"blocked",'
+                        '"reason_code":"scope.unsafe",'
+                        '"satisfied_criteria":[],'
+                        '"unsatisfied_criteria":["unsafe path"],'
+                        '"evidence_refs":["git:status"]}'
+                    ),
+                }
+
+            result = execute_task_completion_evaluator(
+                worktree_path=str(root),
+                run_root=str(root / "runs"),
+                prompt="task",
+                runner=runner,
+            )
+
+            self.assertEqual(result.status, "blocked")
+            self.assertEqual(result.reason_code, "scope.unsafe")
+            self.assertEqual(len(calls), 1)

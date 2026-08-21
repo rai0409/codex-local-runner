@@ -11,6 +11,7 @@ from unittest import mock
 from adapters.codex_cli import CodexCliAdapter
 from automation.orchestration.repository_profile import APPROVAL_ACTIONS
 from automation.orchestration.repository_profile import FORBIDDEN_GIT_OPERATION_IDS
+from automation.orchestration.repository_profile import repository_profile_to_mapping
 from automation.orchestration.repository_profile import validate_repository_profile
 from automation.orchestration.repository_profile_binding import RepositoryProfileBindingError
 from automation.orchestration.safe_validation_executor import SafeValidationExecutorError
@@ -45,6 +46,71 @@ def _safe_result(status: str, stdout: str = "", stderr: str = "") -> ValidationE
 
 
 class SafeValidationAdapterIntegrationTests(unittest.TestCase):
+    def test_timeout_recovery_is_bounded_and_independent_from_validation_repair(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); _git_worktree(root); profile = _profile(root)
+            timed_out = {"status": "timed_out", "return_code": None, "started_at": "a", "finished_at": "b", "artifacts": [], "error": "timed out"}
+            completed = {"status": "completed", "return_code": 0, "started_at": "c", "finished_at": "d", "artifacts": [], "error": ""}
+            payload = {"prompt": "test", "worktree_path": str(root), "work_dir": str(root), "repository_profile": profile, "execution_timeout_seconds": 900}
+            with mock.patch("adapters.codex_cli.run_codex", side_effect=[timed_out, completed]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", return_value=_safe_result("passed")) as validation:
+                recovered = adapter.execute_prepared_worktree(payload)
+            self.assertEqual([call.kwargs["timeout_seconds"] for call in codex.call_args_list], [900, 2700])
+            self.assertEqual(recovered["status"], "completed")
+            self.assertEqual(recovered["timeout_recovery"], {"configured_timeout_source": "task", "initial_timeout_seconds": 900, "effective_timeout_seconds": 900, "timeout_retry_attempted": True, "timeout_retry_count": 1, "timeout_retry_timeout_seconds": 2700, "initial_execution_outcome": "timed_out", "first_execution_outcome": "timed_out", "final_execution_outcome": "completed"})
+            validation.assert_called_once()
+            with mock.patch("adapters.codex_cli.run_codex", side_effect=[timed_out, timed_out]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation") as validation:
+                exhausted = adapter.execute_prepared_worktree(payload)
+            self.assertEqual(codex.call_count, 2)
+            self.assertEqual(exhausted["status"], "timed_out")
+            self.assertEqual(exhausted["timeout_recovery"]["timeout_retry_count"], 1)
+            validation.assert_not_called()
+            failed = {"status": "failed", "return_code": 1, "started_at": "a", "finished_at": "b", "artifacts": [], "error": "failed"}
+            with mock.patch("adapters.codex_cli.run_codex", return_value=failed) as codex, mock.patch("adapters.codex_cli.execute_repository_validation") as validation:
+                non_timeout = adapter.execute_prepared_worktree(payload)
+            codex.assert_called_once(); validation.assert_not_called()
+            self.assertFalse(non_timeout["timeout_recovery"]["timeout_retry_attempted"])
+
+    def test_timeout_profile_and_task_precedence_are_strict(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); _git_worktree(root)
+            profile = validate_repository_profile({**repository_profile_to_mapping(_profile(root)), "execution_timeout_seconds": 1000})
+            completed = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
+            payload = {"prompt": "test", "worktree_path": str(root), "work_dir": str(root), "repository_profile": profile, "execution_timeout_seconds": 1200}
+            with mock.patch("adapters.codex_cli.run_codex", return_value=completed) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", return_value=_safe_result("passed")):
+                adapter.execute_prepared_worktree({key: value for key, value in payload.items() if key != "execution_timeout_seconds"})
+            self.assertEqual(codex.call_args.kwargs["timeout_seconds"], 1000)
+            with mock.patch("adapters.codex_cli.run_codex", return_value=completed) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", return_value=_safe_result("passed")):
+                adapter.execute_prepared_worktree(payload)
+            self.assertEqual(codex.call_args.kwargs["timeout_seconds"], 1200)
+            for invalid in (True, 1.5, "900", 0, -1, 18001):
+                with mock.patch("adapters.codex_cli.run_codex") as codex:
+                    rejected = adapter.execute_prepared_worktree({**payload, "execution_timeout_seconds": invalid})
+                self.assertEqual(rejected["error"], "codex_execution.timeout.invalid")
+                codex.assert_not_called()
+
+    def test_long_running_timeout_retry_formula_and_validation_timeout(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); _git_worktree(root); profile = _profile(root)
+            timed_out = {"status": "timed_out", "return_code": None, "started_at": "a", "finished_at": "b", "artifacts": [], "error": "timed out"}
+            completed = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
+            for initial, retry in ((3600, 7200), (5400, 10800), (9000, 18000)):
+                payload = {"prompt": "test", "worktree_path": str(root), "work_dir": str(root), "repository_profile": profile, "execution_timeout_seconds": initial}
+                with mock.patch("adapters.codex_cli.run_codex", side_effect=[timed_out, completed]) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", return_value=_safe_result("passed")):
+                    result = adapter.execute_prepared_worktree(payload)
+                self.assertEqual([call.kwargs["timeout_seconds"] for call in codex.call_args_list], [initial, retry])
+                self.assertEqual(result["timeout_recovery"]["timeout_retry_timeout_seconds"], retry)
+            payload = {"prompt": "test", "worktree_path": str(root), "work_dir": str(root), "repository_profile": profile, "execution_timeout_seconds": 18000, "validation_timeout_seconds": 5400}
+            with mock.patch("adapters.codex_cli.run_codex", return_value=timed_out) as codex, mock.patch("adapters.codex_cli.execute_repository_validation") as validation:
+                result = adapter.execute_prepared_worktree(payload)
+            codex.assert_called_once(); validation.assert_not_called()
+            self.assertFalse(result["timeout_recovery"]["timeout_retry_attempted"])
+            with mock.patch("adapters.codex_cli.run_codex", return_value=completed), mock.patch("adapters.codex_cli.execute_repository_validation", return_value=_safe_result("passed")) as validation:
+                result = adapter.execute_prepared_worktree(payload)
+            self.assertEqual(validation.call_args.kwargs["timeout_seconds"], 5400)
+            self.assertEqual(result["verify"]["timeout_seconds"], 5400)
     def test_repair_uses_new_prompt_with_failure_context_and_scope(self) -> None:
         adapter = CodexCliAdapter()
         with tempfile.TemporaryDirectory() as raw:

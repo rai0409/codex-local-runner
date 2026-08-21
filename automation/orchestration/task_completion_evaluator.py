@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from orchestrator.codex_execution import DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS
+from orchestrator.codex_execution import validate_timeout_seconds
 from run_codex import run_codex
 
 
@@ -92,40 +94,113 @@ def build_task_completion_rework_prompt(*, original_task: str, allowed_changed_p
     return f"""Mode: Repair\nContinue in the CURRENT prepared worktree. Preserve valid existing changes and modify only these allowed paths: {json.dumps(list(allowed_changed_paths))}.\n\nOriginal task:\n{original_task}\n\nIndependent evaluator findings:\nreason_code: {evaluation.reason_code}\nunsatisfied_criteria: {json.dumps(list(evaluation.unsatisfied_criteria))}\nevidence_refs: {json.dumps(list(evaluation.evidence_refs))}\n\nFix only the actionable deficiencies above. Do not use implementation self-report as evidence. Do not weaken or modify tests/validation. Do not stage, commit, branch, reset, clean, stash, push, create a PR, merge, tag, release, or deploy.\n"""
 
 
-def execute_task_completion_evaluator(*, worktree_path: str, run_root: str, prompt: str, runner: Callable[..., Mapping[str, Any]] = run_codex) -> TaskCompletionEvaluation:
-    """Invoke the established Codex runner once, retaining no raw result here."""
+def execute_task_completion_evaluator(*, worktree_path: str, run_root: str, prompt: str, timeout_seconds: int = DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS, runner: Callable[..., Mapping[str, Any]] = run_codex) -> TaskCompletionEvaluation:
+    """Invoke the established Codex runner with one bounded protocol-only retry."""
+
     try:
-        runner_kwargs = {
-            "task": {"repo_path": worktree_path},
-            "prompt": prompt,
-            "work_root": run_root,
-            "persist_prompt": False,
-        }
+        timeout_seconds = validate_timeout_seconds(timeout_seconds, maximum=7200)
+    except ValueError:
+        return _blocked("task_completion.execution.timeout_invalid")
+
+    protocol_retryable_reason_codes = frozenset({
+        "task_completion.envelope.invalid",
+        "task_completion.json.invalid",
+        "task_completion.fields.invalid",
+        "task_completion.status.invalid",
+        "task_completion.reason_code.invalid",
+        "task_completion.lists.invalid",
+    })
+
+    def invoke_once(current_prompt: str) -> TaskCompletionEvaluation:
         try:
-            parameters = inspect.signature(runner).parameters.values()
-        except (TypeError, ValueError):
-            parameters = ()
-        if any(parameter.name == "return_transient_stdout" or parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters):
-            result = runner(**runner_kwargs, return_transient_stdout=True)
-        else:
-            result = runner(**runner_kwargs)
-        if not isinstance(result, Mapping) or result.get("status") != "completed":
+            runner_kwargs = {
+                "task": {"repo_path": worktree_path},
+                "prompt": current_prompt,
+                "work_root": run_root,
+                "persist_prompt": False,
+            }
+            try:
+                parameters = inspect.signature(runner).parameters.values()
+            except (TypeError, ValueError):
+                parameters = ()
+
+            if any(
+                parameter.name == "timeout_seconds"
+                or parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in parameters
+            ):
+                runner_kwargs["timeout_seconds"] = timeout_seconds
+
+            if any(
+                parameter.name == "return_transient_stdout"
+                or parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in parameters
+            ):
+                result = runner(
+                    **runner_kwargs,
+                    return_transient_stdout=True,
+                )
+            else:
+                result = runner(**runner_kwargs)
+
+            if not isinstance(result, Mapping) or result.get("status") != "completed":
+                return _blocked("task_completion.execution.failed")
+
+            if "transient_stdout" in result:
+                output = result["transient_stdout"]
+                if (
+                    not isinstance(output, str)
+                    or len(output.encode("utf-8", errors="ignore"))
+                    > MAX_EVALUATOR_OUTPUT_BYTES
+                ):
+                    return _blocked("task_completion.output.unbounded")
+            else:
+                stdout_path = result.get("stdout_path")
+                if not isinstance(stdout_path, str) or not stdout_path:
+                    return _blocked(
+                        "task_completion.execution.output_missing"
+                    )
+
+                output_path = Path(stdout_path)
+
+                if output_path.stat().st_size > MAX_EVALUATOR_OUTPUT_BYTES:
+                    return _blocked("task_completion.output.unbounded")
+
+                output = output_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )
+
+        except Exception:
             return _blocked("task_completion.execution.failed")
-        if "transient_stdout" in result:
-            output = result["transient_stdout"]
-            if not isinstance(output, str) or len(output.encode("utf-8", errors="ignore")) > MAX_EVALUATOR_OUTPUT_BYTES:
-                return _blocked("task_completion.output.unbounded")
-        else:
-            stdout_path = result.get("stdout_path")
-            if not isinstance(stdout_path, str) or not stdout_path:
-                return _blocked("task_completion.execution.output_missing")
-            output_path = Path(stdout_path)
-            if output_path.stat().st_size > MAX_EVALUATOR_OUTPUT_BYTES:
-                return _blocked("task_completion.output.unbounded")
-            output = output_path.read_text(encoding="utf-8", errors="replace")
-    except Exception:
-        return _blocked("task_completion.execution.failed")
-    return parse_task_completion_evaluation_output(output)
+
+        return parse_task_completion_evaluation_output(output)
+
+    first = invoke_once(prompt)
+
+    if first.reason_code not in protocol_retryable_reason_codes:
+        return first
+
+    retry_prompt = (
+        prompt
+        + "\n\n"
+        + "Protocol retry only. The preceding evaluator response violated "
+          "the required output envelope. Re-evaluate the same unchanged "
+          "worktree read-only. Do not edit files, run validation, or change "
+          "the substantive decision. Return exactly one envelope with both "
+          "literal marker lines and no text before or after it:\n"
+        + TASK_COMPLETION_EVALUATION_BEGIN
+        + "\n"
+        + '{"status":"completed|needs_rework|blocked",'
+          '"reason_code":"bounded.machine_code",'
+          '"satisfied_criteria":["non-empty bounded criterion"],'
+          '"unsatisfied_criteria":[],'
+          '"evidence_refs":["objective evidence reference"]}'
+        + "\n"
+        + TASK_COMPLETION_EVALUATION_END
+    )
+
+    return invoke_once(retry_prompt)
 
 
 __all__ = [

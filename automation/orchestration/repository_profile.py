@@ -14,6 +14,8 @@ import shutil
 import subprocess
 from typing import Any, Mapping
 
+from orchestrator.codex_execution import MAX_CODEX_EXECUTION_TIMEOUT_SECONDS
+
 REPOSITORY_PROFILE_SCHEMA_VERSION = "1"
 VALIDATION_COMMAND_KINDS = ("focused", "related_regression", "full", "compile", "diff_check")
 ARTIFACT_EXPECTED_TYPES = ("file", "text", "json", "directory")
@@ -28,7 +30,7 @@ FORBIDDEN_GIT_OPERATION_IDS = (
     "worktree_overwrite", "git_config_write",
 )
 
-_ROOT_FIELDS = frozenset(("schema_version", "profile_id", "repository_root", "base_branch", "python_executable", "validation_commands", "artifact_requirements", "forbidden_git_operations", "max_changed_files", "approval_boundary", "environment_allowlist"))
+_ROOT_FIELDS = frozenset(("schema_version", "profile_id", "repository_root", "base_branch", "python_executable", "validation_commands", "artifact_requirements", "forbidden_git_operations", "max_changed_files", "approval_boundary", "environment_allowlist", "execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds"))
 _COMMAND_FIELDS = frozenset(("command_id", "kind", "argv", "cwd", "timeout_seconds", "required", "stop_on_failure"))
 _ARTIFACT_FIELDS = frozenset(("artifact_id", "path", "required", "expected_type", "minimum_size_bytes", "parse_json", "required_keys", "readback_required", "checksum_required", "allow_outside_repository"))
 _NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -94,6 +96,10 @@ class RepositoryProfile:
     max_changed_files: int
     approval_boundary: ApprovalBoundary
     environment_allowlist: tuple[str, ...]
+    execution_timeout_seconds: int | None = None
+    validation_timeout_seconds: int | None = None
+    completion_evaluator_timeout_seconds: int | None = None
+    completion_rework_timeout_seconds: int | None = None
 
 
 def _error(code: str, message: str) -> RepositoryProfileValidationError:
@@ -267,7 +273,10 @@ def _command(raw: Any, index: int, root: Path, python: Path, git: Path) -> Valid
         _validate_git_argv(normalized, path)
     else:
         raise _error(f"{path}.executable.not_allowed", "only configured Python and Git are allowed")
-    return ValidationCommand(command_id, kind, normalized, str(_existing_directory(_required(value, "cwd", path), root, f"{path}.cwd")), _positive(_required(value, "timeout_seconds", path), f"{path}.timeout_seconds"), _boolean(_required(value, "required", path), f"{path}.required"), _boolean(_required(value, "stop_on_failure", path), f"{path}.stop_on_failure"))
+    timeout_seconds = _positive(_required(value, "timeout_seconds", path), f"{path}.timeout_seconds")
+    if timeout_seconds > MAX_CODEX_EXECUTION_TIMEOUT_SECONDS:
+        raise _error(f"{path}.timeout_seconds.invalid_value", "must not exceed the supported hard maximum")
+    return ValidationCommand(command_id, kind, normalized, str(_existing_directory(_required(value, "cwd", path), root, f"{path}.cwd")), timeout_seconds, _boolean(_required(value, "required", path), f"{path}.required"), _boolean(_required(value, "stop_on_failure", path), f"{path}.stop_on_failure"))
 
 
 def _future_path(value: Any, root: Path, path: str, outside: bool) -> Path:
@@ -328,7 +337,7 @@ def _boundary(raw: Any) -> ApprovalBoundary:
 
 
 def _profile_mapping(profile: RepositoryProfile) -> dict[str, Any]:
-    return {
+    result = {
         "schema_version": profile.schema_version, "profile_id": profile.profile_id,
         "repository_root": profile.repository_root, "base_branch": profile.base_branch,
         "python_executable": profile.python_executable,
@@ -337,6 +346,10 @@ def _profile_mapping(profile: RepositoryProfile) -> dict[str, Any]:
         "forbidden_git_operations": list(profile.forbidden_git_operations), "max_changed_files": profile.max_changed_files,
         "approval_boundary": asdict(profile.approval_boundary), "environment_allowlist": list(profile.environment_allowlist),
     }
+    for field in ("execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds"):
+        if getattr(profile, field) is not None:
+            result[field] = getattr(profile, field)
+    return result
 
 
 def validate_repository_profile(profile: Mapping[str, Any] | RepositoryProfile) -> RepositoryProfile:
@@ -399,7 +412,15 @@ def validate_repository_profile(profile: Mapping[str, Any] | RepositoryProfile) 
         if value in allow:
             raise _error(f"profile.environment_allowlist[{index}].duplicate", "duplicate environment variable")
         allow.add(value)
-    return RepositoryProfile(version, _text(_required(raw, "profile_id", "profile"), "profile.profile_id"), str(root), _base_branch(_required(raw, "base_branch", "profile")), str(python), tuple(sorted(commands, key=lambda item: VALIDATION_COMMAND_KINDS.index(item.kind))), tuple(sorted(artifacts, key=lambda item: item.artifact_id)), tuple(item for item in FORBIDDEN_GIT_OPERATION_IDS if item in forbidden), _positive(_required(raw, "max_changed_files", "profile"), "profile.max_changed_files"), _boundary(_required(raw, "approval_boundary", "profile")), tuple(sorted(allow)))
+    timeout_values: dict[str, int | None] = {}
+    timeout_maximums = {"execution_timeout_seconds": MAX_CODEX_EXECUTION_TIMEOUT_SECONDS, "validation_timeout_seconds": MAX_CODEX_EXECUTION_TIMEOUT_SECONDS, "completion_evaluator_timeout_seconds": 7200, "completion_rework_timeout_seconds": MAX_CODEX_EXECUTION_TIMEOUT_SECONDS}
+    for field, maximum in timeout_maximums.items():
+        timeout_values[field] = None
+        if field in raw:
+            timeout_values[field] = _positive(raw[field], f"profile.{field}")
+            if timeout_values[field] > maximum:
+                raise _error(f"profile.{field}.invalid_value", "must not exceed the supported hard maximum")
+    return RepositoryProfile(version, _text(_required(raw, "profile_id", "profile"), "profile.profile_id"), str(root), _base_branch(_required(raw, "base_branch", "profile")), str(python), tuple(sorted(commands, key=lambda item: VALIDATION_COMMAND_KINDS.index(item.kind))), tuple(sorted(artifacts, key=lambda item: item.artifact_id)), tuple(item for item in FORBIDDEN_GIT_OPERATION_IDS if item in forbidden), _positive(_required(raw, "max_changed_files", "profile"), "profile.max_changed_files"), _boundary(_required(raw, "approval_boundary", "profile")), tuple(sorted(allow)), **timeout_values)
 
 
 def load_repository_profile(profile_path: str | os.PathLike[str]) -> RepositoryProfile:

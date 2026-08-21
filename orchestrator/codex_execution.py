@@ -11,6 +11,32 @@ from typing import Callable, Literal, NotRequired, TypedDict
 
 RunCodexStatus = Literal["completed", "failed", "timed_out", "not_started"]
 
+DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS = 3600
+MAX_CODEX_EXECUTION_TIMEOUT_SECONDS = 18000
+DEFAULT_VALIDATION_TIMEOUT_SECONDS = 3600
+DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS = 3600
+MAX_COMPLETION_EVALUATOR_TIMEOUT_SECONDS = 7200
+DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS = 7200
+
+
+def validate_codex_execution_timeout_seconds(value: object) -> int:
+    """Return one bounded Codex timeout or reject malformed configuration."""
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_CODEX_EXECUTION_TIMEOUT_SECONDS:
+        raise ValueError("codex_execution.timeout.invalid")
+    return value
+
+
+def validate_timeout_seconds(value: object, *, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+        raise ValueError("codex_execution.timeout.invalid")
+    return value
+
+
+def timeout_retry_seconds(initial_timeout_seconds: int) -> int | None:
+    initial = validate_codex_execution_timeout_seconds(initial_timeout_seconds)
+    retry = min(max(initial * 2, initial + 1800), MAX_CODEX_EXECUTION_TIMEOUT_SECONDS)
+    return retry if retry > initial else None
+
 
 class RunCodexArtifact(TypedDict):
     name: str
@@ -82,13 +108,17 @@ def execute_codex_cli(
     prompt: str,
     work_root: str = "tasks/runs",
     *,
-    timeout_seconds: int = 600,
+    timeout_seconds: int = DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS,
     which: Callable[[str], str | None] = shutil.which,
     run_subprocess: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     now: Callable[[], datetime] = datetime.now,
     persist_prompt: bool = True,
     return_transient_stdout: bool = False,
 ) -> RunCodexResult:
+    try:
+        timeout_seconds = validate_codex_execution_timeout_seconds(timeout_seconds)
+    except ValueError as exc:
+        return _empty_result(str(exc))
     codex_path = which("codex")
     cmd = ["codex", "exec", "--skip-git-repo-check", prompt]
     repo_path_raw = str(task.get("repo_path", "")).strip()

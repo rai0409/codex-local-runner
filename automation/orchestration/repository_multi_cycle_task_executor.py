@@ -92,7 +92,7 @@ def _child_run_id(cycle_run_id: str, task_index: int, task_id: str) -> str:
 
 
 def _runtime_single_task_spec(task: Any, source_anchor: str) -> tuple[RepositorySingleTaskSpec, str]:
-    spec = validate_repository_single_task_spec(RepositorySingleTaskSpec("1", task.task_id, source_anchor, task.prompt, tuple(task.allowed_changed_paths), task.commit_message))
+    spec = validate_repository_single_task_spec(RepositorySingleTaskSpec("1", task.task_id, source_anchor, task.prompt, tuple(task.allowed_changed_paths), task.commit_message, task.execution_timeout_seconds, task.validation_timeout_seconds, task.completion_evaluator_timeout_seconds, task.completion_rework_timeout_seconds))
     return spec, hashlib.sha256(serialize_repository_single_task_spec(spec).encode("utf-8")).hexdigest()
 
 
