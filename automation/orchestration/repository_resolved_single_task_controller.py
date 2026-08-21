@@ -40,6 +40,8 @@ from automation.orchestration.task_completion_evaluator import (
     execute_task_completion_evaluator,
     task_completion_evaluation_to_mapping,
 )
+from orchestrator.codex_execution import DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS
+from orchestrator.codex_execution import DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS
 
 
 DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT = (
@@ -47,6 +49,10 @@ DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT = (
     "repository-single-task-runs"
 )
 MAX_TASK_REWORK_ATTEMPTS = 2
+
+
+def _phase_timeout(task_value: int | None, profile_value: int | None, default: int) -> int:
+    return task_value if task_value is not None else profile_value if profile_value is not None else default
 
 
 @dataclass(frozen=True)
@@ -497,6 +503,8 @@ def run_repository_single_task(
             "repository_profile": bound_profile, "allowed_changed_paths": spec.allowed_changed_paths,
             **({"execution_timeout_seconds": spec.execution_timeout_seconds}
                if spec.execution_timeout_seconds is not None else {}),
+            **({"validation_timeout_seconds": spec.validation_timeout_seconds}
+               if spec.validation_timeout_seconds is not None else {}),
         })
     except Exception:
         worktree_preserved = True
@@ -563,7 +571,9 @@ def run_repository_single_task(
         evaluation_reached = True
         final_task_completion = execute_task_completion_evaluator(
             worktree_path=str(worktree), run_root=str(output_directory / "task_completion_evaluation_runs"),
-            prompt=prompt, **({"runner": evaluator_runner} if evaluator_runner is not None else {}),
+            prompt=prompt,
+            timeout_seconds=_phase_timeout(spec.completion_evaluator_timeout_seconds, bound_profile.completion_evaluator_timeout_seconds, DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS),
+            **({"runner": evaluator_runner} if evaluator_runner is not None else {}),
         )
         try:
             post_evaluation = analyze_repository_state(worktree)
@@ -572,6 +582,7 @@ def run_repository_single_task(
         mutation = post_evaluation is None or pre_evaluation_fingerprint != _evaluation_worktree_fingerprint(worktree, post_evaluation)
         attempt: dict[str, Any] = {
             "evaluation_number": evaluation_number,
+            "effective_timeout_seconds": _phase_timeout(spec.completion_evaluator_timeout_seconds, bound_profile.completion_evaluator_timeout_seconds, DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS),
             **task_completion_evaluation_to_mapping(final_task_completion),
             "rework_attempted": False, "rework_validation_status": None, "rework_validation_reason": None,
         }
@@ -598,8 +609,9 @@ def run_repository_single_task(
             response = adapter.execute_prepared_worktree({
                 "prompt": rework_prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
                 "repository_profile": bound_profile, "allowed_changed_paths": spec.allowed_changed_paths,
-                **({"execution_timeout_seconds": spec.execution_timeout_seconds}
-                   if spec.execution_timeout_seconds is not None else {}),
+                "execution_timeout_seconds": _phase_timeout(spec.completion_rework_timeout_seconds, bound_profile.completion_rework_timeout_seconds, DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS),
+                **({"validation_timeout_seconds": spec.validation_timeout_seconds}
+                   if spec.validation_timeout_seconds is not None else {}),
             })
         except Exception:
             worktree_preserved = True

@@ -17,7 +17,8 @@ from automation.orchestration.validation_repair import MAX_VALIDATION_REPAIR_ATT
 from automation.orchestration.validation_repair import build_repair_prompt
 from automation.orchestration.validation_repair import extract_actionable_failure
 from orchestrator.codex_execution import DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS
-from orchestrator.codex_execution import MAX_CODEX_EXECUTION_TIMEOUT_SECONDS
+from orchestrator.codex_execution import DEFAULT_VALIDATION_TIMEOUT_SECONDS
+from orchestrator.codex_execution import timeout_retry_seconds
 from orchestrator.codex_execution import validate_codex_execution_timeout_seconds
 from run_codex import run_codex
 from workspace.worktree import cleanup_git_worktree
@@ -88,19 +89,32 @@ def _repair_not_attempted() -> dict[str, Any]:
             "attempts_used": 0, "outcome": "not_attempted"}
 
 
-def _resolve_execution_timeout(payload: Mapping[str, Any], profile: RepositoryProfile) -> int:
-    if "execution_timeout_seconds" in payload:
-        return validate_codex_execution_timeout_seconds(payload["execution_timeout_seconds"])
-    if profile.execution_timeout_seconds is not None:
-        return validate_codex_execution_timeout_seconds(profile.execution_timeout_seconds)
-    return DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS
+def _resolve_timeout(payload: Mapping[str, Any], profile: RepositoryProfile, *, field: str, default: int) -> tuple[int, str]:
+    if field in payload:
+        return validate_codex_execution_timeout_seconds(payload[field]), "task"
+    profile_timeout = getattr(profile, field)
+    if profile_timeout is not None:
+        return validate_codex_execution_timeout_seconds(profile_timeout), "repository_profile"
+    return default, "default"
 
 
-def _timeout_recovery_evidence(effective_timeout_seconds: int) -> dict[str, Any]:
+def _resolve_execution_timeout(payload: Mapping[str, Any], profile: RepositoryProfile) -> tuple[int, str]:
+    return _resolve_timeout(payload, profile, field="execution_timeout_seconds", default=DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS)
+
+
+def _resolve_validation_timeout(payload: Mapping[str, Any], profile: RepositoryProfile) -> tuple[int, str]:
+    return _resolve_timeout(payload, profile, field="validation_timeout_seconds", default=DEFAULT_VALIDATION_TIMEOUT_SECONDS)
+
+
+def _timeout_recovery_evidence(effective_timeout_seconds: int, configured_timeout_source: str) -> dict[str, Any]:
     return {
+        "configured_timeout_source": configured_timeout_source,
+        "initial_timeout_seconds": effective_timeout_seconds,
         "effective_timeout_seconds": effective_timeout_seconds,
         "timeout_retry_attempted": False,
         "timeout_retry_count": 0,
+        "timeout_retry_timeout_seconds": None,
+        "initial_execution_outcome": "not_started",
         "first_execution_outcome": "not_started",
         "final_execution_outcome": "not_started",
     }
@@ -246,14 +260,15 @@ class CodexCliAdapter(ProviderAdapter):
         if profile.approval_boundary.test_execution != "automatic":
             return self._prepared_failure("safe_validation.test_execution_not_automatic")
         try:
-            effective_timeout_seconds = _resolve_execution_timeout(payload, profile)
+            effective_timeout_seconds, timeout_source = _resolve_execution_timeout(payload, profile)
+            validation_timeout_seconds, validation_timeout_source = _resolve_validation_timeout(payload, profile)
         except ValueError:
             return self._prepared_failure("codex_execution.timeout.invalid")
         allowed_changed_paths = payload.get("allowed_changed_paths")
         if not isinstance(allowed_changed_paths, (list, tuple)) or not all(isinstance(path, str) for path in allowed_changed_paths):
             allowed_changed_paths = None
         attempt_count, retry, repair, validation_attempts = 0, _retry_not_attempted(), _repair_not_attempted(), []
-        timeout_recovery = _timeout_recovery_evidence(effective_timeout_seconds)
+        timeout_recovery = _timeout_recovery_evidence(effective_timeout_seconds, timeout_source)
         current_prompt, phase = prompt, "initial"
         while True:
             attempt_count += 1
@@ -266,17 +281,16 @@ class CodexCliAdapter(ProviderAdapter):
             )
             if timeout_recovery["first_execution_outcome"] == "not_started":
                 timeout_recovery["first_execution_outcome"] = execution["status"]
+                timeout_recovery["initial_execution_outcome"] = execution["status"]
             if (
                 execution["status"] == "timed_out"
                 and timeout_recovery["timeout_retry_count"] < 1
             ):
-                retry_timeout_seconds = min(
-                    MAX_CODEX_EXECUTION_TIMEOUT_SECONDS,
-                    effective_timeout_seconds * 2,
-                )
-                if retry_timeout_seconds > effective_timeout_seconds:
+                retry_timeout_seconds = timeout_retry_seconds(effective_timeout_seconds)
+                if retry_timeout_seconds is not None:
                     timeout_recovery["timeout_retry_attempted"] = True
                     timeout_recovery["timeout_retry_count"] += 1
+                    timeout_recovery["timeout_retry_timeout_seconds"] = retry_timeout_seconds
                     execution = run_codex(
                         task={"repo_path": str(worktree)},
                         prompt=current_prompt,
@@ -288,8 +302,10 @@ class CodexCliAdapter(ProviderAdapter):
             status = str(execution["status"])
             verify = _verify_not_run(_not_run_reason_for_execution_status(status))
             if status == "completed":
-                try: verify = _verify_from_safe_validation(execute_repository_validation(profile))
+                try: verify = _verify_from_safe_validation(execute_repository_validation(profile, timeout_seconds=validation_timeout_seconds))
                 except SafeValidationExecutorError: verify = _verify_safe_validation_executor_error()
+                verify["timeout_seconds"] = validation_timeout_seconds
+                verify["timeout_source"] = validation_timeout_source
             validation_attempts.append(_validation_attempt(attempt_count, phase, status, verify))
             failure = extract_actionable_failure(verify.get("safe_validation"))
             if not (status == "completed" and verify.get("reason") == "validation_failed" and failure is not None and repair["attempts_used"] < MAX_VALIDATION_REPAIR_ATTEMPTS):
@@ -408,6 +424,8 @@ class CodexCliAdapter(ProviderAdapter):
                     "allowed_changed_paths": payload.get("allowed_changed_paths"),
                     **({"execution_timeout_seconds": payload["execution_timeout_seconds"]}
                        if "execution_timeout_seconds" in payload else {}),
+                    **({"validation_timeout_seconds": payload["validation_timeout_seconds"]}
+                       if "validation_timeout_seconds" in payload else {}),
                 })
         finally:
             if worktree_result["cleanup_needed"]:

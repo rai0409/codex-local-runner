@@ -64,6 +64,18 @@ class TaskCompletionEvaluatorTests(unittest.TestCase):
             self.assertEqual(result.status, "completed")
             self.assertFalse(captured["persist_prompt"])
             self.assertTrue(captured["return_transient_stdout"])
+            self.assertEqual(captured["timeout_seconds"], 3600)
+
+    def test_evaluator_timeout_is_bounded_and_preserved_across_protocol_retry(self):
+        calls = []
+        def runner(**kwargs):
+            calls.append(kwargs)
+            return {"status": "completed", "transient_stdout": "invalid" if len(calls) == 1 else envelope('{"status":"completed","reason_code":"task.ok","satisfied_criteria":[],"unsatisfied_criteria":[],"evidence_refs":[]}')}
+        result = execute_task_completion_evaluator(worktree_path="/tmp", run_root="/tmp", prompt="task", timeout_seconds=7200, runner=runner)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual([call["timeout_seconds"] for call in calls], [7200, 7200])
+        invalid = execute_task_completion_evaluator(worktree_path="/tmp", run_root="/tmp", prompt="task", timeout_seconds=7201, runner=runner)
+        self.assertEqual(invalid.reason_code, "task_completion.execution.timeout_invalid")
 
     def test_execution_legacy_runner_falls_back_to_strict_stdout_envelope(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -11,8 +11,12 @@ from typing import Callable, Literal, NotRequired, TypedDict
 
 RunCodexStatus = Literal["completed", "failed", "timed_out", "not_started"]
 
-DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS = 900
-MAX_CODEX_EXECUTION_TIMEOUT_SECONDS = 1800
+DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS = 3600
+MAX_CODEX_EXECUTION_TIMEOUT_SECONDS = 18000
+DEFAULT_VALIDATION_TIMEOUT_SECONDS = 3600
+DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS = 3600
+MAX_COMPLETION_EVALUATOR_TIMEOUT_SECONDS = 7200
+DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS = 7200
 
 
 def validate_codex_execution_timeout_seconds(value: object) -> int:
@@ -20,6 +24,18 @@ def validate_codex_execution_timeout_seconds(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_CODEX_EXECUTION_TIMEOUT_SECONDS:
         raise ValueError("codex_execution.timeout.invalid")
     return value
+
+
+def validate_timeout_seconds(value: object, *, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+        raise ValueError("codex_execution.timeout.invalid")
+    return value
+
+
+def timeout_retry_seconds(initial_timeout_seconds: int) -> int | None:
+    initial = validate_codex_execution_timeout_seconds(initial_timeout_seconds)
+    retry = min(max(initial * 2, initial + 1800), MAX_CODEX_EXECUTION_TIMEOUT_SECONDS)
+    return retry if retry > initial else None
 
 
 class RunCodexArtifact(TypedDict):

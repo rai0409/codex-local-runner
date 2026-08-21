@@ -9,6 +9,7 @@ from typing import Callable
 from typing import Mapping
 
 from orchestrator.codex_execution import execute_codex_cli
+from orchestrator.codex_execution import DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS
 from verify.runner import run_validation_commands
 
 
@@ -105,7 +106,7 @@ def _derive_failure_message(
 @dataclass
 class CodexLiveExecutionTransport:
     repo_path: str
-    timeout_seconds: int = 600
+    timeout_seconds: int = DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS
     execute_fn: Callable[..., Mapping[str, Any]] = execute_codex_cli
     verify_fn: Callable[[list[str], str], Mapping[str, Any]] = run_validation_commands
     now: Callable[[], datetime] = datetime.now

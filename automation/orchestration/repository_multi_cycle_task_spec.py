@@ -14,8 +14,9 @@ from automation.orchestration.repository_single_task_spec import (
 REPOSITORY_MULTI_CYCLE_TASK_SPEC_SCHEMA_VERSION = "1"
 MAX_MULTI_CYCLE_TASKS = 64
 _TOP_LEVEL_FIELDS = frozenset(("schema_version", "tasks"))
-_TASK_FIELDS = frozenset(("task_id", "prompt", "allowed_changed_paths", "commit_message", "execution_timeout_seconds"))
-_REQUIRED_TASK_FIELDS = _TASK_FIELDS - {"execution_timeout_seconds"}
+_OPTIONAL_TIMEOUT_FIELDS = frozenset(("execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds"))
+_TASK_FIELDS = frozenset(("task_id", "prompt", "allowed_changed_paths", "commit_message", *_OPTIONAL_TIMEOUT_FIELDS))
+_REQUIRED_TASK_FIELDS = _TASK_FIELDS - _OPTIONAL_TIMEOUT_FIELDS
 
 
 class RepositoryMultiCycleTaskSpecValidationError(ValueError):
@@ -31,6 +32,9 @@ class RepositoryMultiCycleTask:
     allowed_changed_paths: tuple[str, ...]
     commit_message: str
     execution_timeout_seconds: int | None = None
+    validation_timeout_seconds: int | None = None
+    completion_evaluator_timeout_seconds: int | None = None
+    completion_rework_timeout_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -57,12 +61,11 @@ def _task(value: Any) -> RepositoryMultiCycleTask:
             "schema_version": "1", "expected_head_sha": "0" * 40,
             "task_id": value["task_id"], "prompt": value["prompt"],
         "allowed_changed_paths": value["allowed_changed_paths"], "commit_message": value["commit_message"],
-        **({"execution_timeout_seconds": value["execution_timeout_seconds"]}
-           if "execution_timeout_seconds" in value else {}),
+        **({field: value[field] for field in _OPTIONAL_TIMEOUT_FIELDS if field in value}),
         })
     except RepositorySingleTaskSpecValidationError as exc:
         raise _error("multi_cycle_queue." + exc.reason_code.removeprefix("single_task_spec."), "invalid task field") from exc
-    return RepositoryMultiCycleTask(single.task_id, single.prompt, single.allowed_changed_paths, single.commit_message, single.execution_timeout_seconds)
+    return RepositoryMultiCycleTask(single.task_id, single.prompt, single.allowed_changed_paths, single.commit_message, single.execution_timeout_seconds, single.validation_timeout_seconds, single.completion_evaluator_timeout_seconds, single.completion_rework_timeout_seconds)
 
 
 def validate_repository_multi_cycle_task_spec(value: Mapping[str, Any] | RepositoryMultiCycleTaskSpec) -> RepositoryMultiCycleTaskSpec:

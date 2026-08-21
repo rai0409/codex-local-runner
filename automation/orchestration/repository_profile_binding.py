@@ -91,8 +91,7 @@ def bind_repository_profile_to_worktree(
         "max_changed_files": source.max_changed_files,
         "approval_boundary": asdict(source.approval_boundary),
         "environment_allowlist": list(source.environment_allowlist),
-        **({"execution_timeout_seconds": source.execution_timeout_seconds}
-           if source.execution_timeout_seconds is not None else {})})
+        **({field: getattr(source, field) for field in ("execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds") if getattr(source, field) is not None})})
 
 
 __all__ = ["RepositoryProfileBindingError", "bind_repository_profile_to_worktree"]

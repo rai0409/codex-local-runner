@@ -14,6 +14,7 @@ import signal
 import subprocess
 import threading
 import time
+from dataclasses import replace
 from typing import Any, Mapping
 
 from automation.orchestration.repository_profile import RepositoryProfile
@@ -254,6 +255,7 @@ def execute_repository_validation(
     profile: RepositoryProfile,
     *,
     ambient_environment: Mapping[str, str] | None = None,
+    timeout_seconds: int | None = None,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     termination_grace_seconds: float = DEFAULT_TERMINATION_GRACE_SECONDS,
 ) -> ValidationExecutionResult:
@@ -263,6 +265,15 @@ def execute_repository_validation(
     )
     try:
         validated_profile = validate_repository_profile(profile)
+        if timeout_seconds is not None:
+            from orchestrator.codex_execution import validate_codex_execution_timeout_seconds
+            bounded_timeout = validate_codex_execution_timeout_seconds(timeout_seconds)
+            validation_commands = tuple(
+                replace(command, timeout_seconds=bounded_timeout)
+                for command in validated_profile.validation_commands
+            )
+        else:
+            validation_commands = validated_profile.validation_commands
     except RepositoryProfileValidationError as exc:
         raise _error("safe_validation.profile.invalid", "Profile validation failed", exc.reason_code) from exc
     environment = _safe_environment(validated_profile, source)
@@ -271,7 +282,7 @@ def execute_repository_validation(
     results: list[ValidationCommandResult] = []
     stopped_early = False
     stop_reason: str | None = None
-    for command in validated_profile.validation_commands:
+    for command in validation_commands:
         if stopped_early:
             results.append(_skipped(command))
             continue

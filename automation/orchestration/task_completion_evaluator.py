@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from orchestrator.codex_execution import DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS
+from orchestrator.codex_execution import validate_timeout_seconds
 from run_codex import run_codex
 
 
@@ -92,8 +94,13 @@ def build_task_completion_rework_prompt(*, original_task: str, allowed_changed_p
     return f"""Mode: Repair\nContinue in the CURRENT prepared worktree. Preserve valid existing changes and modify only these allowed paths: {json.dumps(list(allowed_changed_paths))}.\n\nOriginal task:\n{original_task}\n\nIndependent evaluator findings:\nreason_code: {evaluation.reason_code}\nunsatisfied_criteria: {json.dumps(list(evaluation.unsatisfied_criteria))}\nevidence_refs: {json.dumps(list(evaluation.evidence_refs))}\n\nFix only the actionable deficiencies above. Do not use implementation self-report as evidence. Do not weaken or modify tests/validation. Do not stage, commit, branch, reset, clean, stash, push, create a PR, merge, tag, release, or deploy.\n"""
 
 
-def execute_task_completion_evaluator(*, worktree_path: str, run_root: str, prompt: str, runner: Callable[..., Mapping[str, Any]] = run_codex) -> TaskCompletionEvaluation:
+def execute_task_completion_evaluator(*, worktree_path: str, run_root: str, prompt: str, timeout_seconds: int = DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS, runner: Callable[..., Mapping[str, Any]] = run_codex) -> TaskCompletionEvaluation:
     """Invoke the established Codex runner with one bounded protocol-only retry."""
+
+    try:
+        timeout_seconds = validate_timeout_seconds(timeout_seconds, maximum=7200)
+    except ValueError:
+        return _blocked("task_completion.execution.timeout_invalid")
 
     protocol_retryable_reason_codes = frozenset({
         "task_completion.envelope.invalid",
@@ -116,6 +123,13 @@ def execute_task_completion_evaluator(*, worktree_path: str, run_root: str, prom
                 parameters = inspect.signature(runner).parameters.values()
             except (TypeError, ValueError):
                 parameters = ()
+
+            if any(
+                parameter.name == "timeout_seconds"
+                or parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in parameters
+            ):
+                runner_kwargs["timeout_seconds"] = timeout_seconds
 
             if any(
                 parameter.name == "return_transient_stdout"
