@@ -7,6 +7,7 @@ solely with local, read-only Git commands and is removed when its context exits.
 from __future__ import annotations
 
 import io
+import json
 import re
 import shutil
 import subprocess
@@ -14,12 +15,24 @@ import tarfile
 import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Any, Mapping
+
+from automation.orchestration.repository_multi_cycle_replan import (
+    ReplanEnvelope,
+    ReplanFailureEvidence,
+    RepositoryMultiCycleReplanError,
+    build_replan_planner_prompt,
+    validate_replan_envelope,
+)
+from run_codex import run_codex
 
 
 GIT_TIMEOUT_SECONDS = 20
 _ACCEPTED_HEAD_PATTERN = re.compile(r"[0-9a-f]{40}")
 GitRunner = Callable[..., subprocess.CompletedProcess[bytes]]
+PlannerRunner = Callable[..., Mapping[str, Any]]
 
 
 class AcceptedHeadSnapshotError(RuntimeError):
@@ -28,6 +41,27 @@ class AcceptedHeadSnapshotError(RuntimeError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+@dataclass(frozen=True)
+class ReplanPlannerRequest:
+    """Inputs required for one isolated planner protocol exchange."""
+
+    evidence: ReplanFailureEvidence
+    source_repository_root: str | Path
+    accepted_head_sha: str
+    replan_attempt_number: int
+
+
+@dataclass(frozen=True)
+class ReplanPlannerResult:
+    """In-memory outcome; successor construction is intentionally deferred."""
+
+    status: str
+    reason_code: str
+    replan_attempt_number: int
+    validated_envelope: ReplanEnvelope | None
+    planner_call_count: int
 
 
 def _run_git(
@@ -154,9 +188,136 @@ def accepted_head_snapshot(
         yield snapshot_root
 
 
+def _parse_and_validate_planner_output(output: str) -> ReplanEnvelope:
+    try:
+        value = json.loads(output.strip())
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise RepositoryMultiCycleReplanError("replan.planner.json_invalid") from exc
+    if type(value) is not dict:
+        raise RepositoryMultiCycleReplanError("replan.planner.json_object_required")
+    return validate_replan_envelope(value)
+
+
+def _correction_prompt(original_prompt: str, reason_code: str) -> str:
+    return (
+        original_prompt
+        + "\n\nFORMAT CORRECTION: the previous response failed strict validation ("
+        + reason_code
+        + "). Return exactly one JSON object and nothing else."
+    )
+
+
+def run_replan_planner(
+    request: ReplanPlannerRequest,
+    *,
+    planner: PlannerRunner = run_codex,
+) -> ReplanPlannerResult:
+    """Run the R6 planner protocol within an accepted-head snapshot."""
+
+    call_count = 0
+    if (
+        not isinstance(request.replan_attempt_number, int)
+        or isinstance(request.replan_attempt_number, bool)
+        or not 1 <= request.replan_attempt_number <= 99
+    ):
+        return ReplanPlannerResult(
+            "blocked",
+            "replan.attempt.invalid",
+            request.replan_attempt_number,
+            None,
+            call_count,
+        )
+
+    original_prompt = build_replan_planner_prompt(request.evidence)
+    prompt = original_prompt
+    try:
+        with accepted_head_snapshot(
+            request.source_repository_root, request.accepted_head_sha
+        ) as snapshot:
+            for attempt in range(2):
+                call_count += 1
+                try:
+                    execution = planner(
+                        {"repo_path": str(snapshot)},
+                        prompt,
+                        work_root=str(snapshot / ".planner-runs"),
+                        persist_prompt=False,
+                        return_transient_stdout=True,
+                    )
+                except Exception:
+                    return ReplanPlannerResult(
+                        "blocked",
+                        "replan.planner.execution_failed",
+                        request.replan_attempt_number,
+                        None,
+                        call_count,
+                    )
+                if (
+                    execution.get("status") != "completed"
+                    or execution.get("success") is not True
+                ):
+                    return ReplanPlannerResult(
+                        "blocked",
+                        "replan.planner.execution_failed",
+                        request.replan_attempt_number,
+                        None,
+                        call_count,
+                    )
+                output = execution.get("transient_stdout")
+                if not isinstance(output, str) or not output.strip():
+                    return ReplanPlannerResult(
+                        "blocked",
+                        "replan.planner.output_missing",
+                        request.replan_attempt_number,
+                        None,
+                        call_count,
+                    )
+                try:
+                    envelope = _parse_and_validate_planner_output(output)
+                except RepositoryMultiCycleReplanError as exc:
+                    if attempt == 1:
+                        return ReplanPlannerResult(
+                            "blocked",
+                            "replan.planner.protocol_invalid",
+                            request.replan_attempt_number,
+                            None,
+                            call_count,
+                        )
+                    prompt = _correction_prompt(original_prompt, str(exc))
+                    continue
+                if envelope.decision == "stop":
+                    return ReplanPlannerResult(
+                        "stop",
+                        "replan.planner.stop",
+                        request.replan_attempt_number,
+                        None,
+                        call_count,
+                    )
+                return ReplanPlannerResult(
+                    "replacement_envelope_ready",
+                    "replan.planner.replacement_envelope_ready",
+                    request.replan_attempt_number,
+                    envelope,
+                    call_count,
+                )
+    except AcceptedHeadSnapshotError as exc:
+        return ReplanPlannerResult(
+            "blocked",
+            exc.reason,
+            request.replan_attempt_number,
+            None,
+            call_count,
+        )
+
+    raise AssertionError("bounded planner protocol exhausted without a result")
+
+
 __all__ = [
     "AcceptedHeadSnapshotError",
+    "ReplanPlannerRequest",
+    "ReplanPlannerResult",
     "accepted_head_snapshot",
+    "run_replan_planner",
     "validate_accepted_head",
     "validate_archive_members",
 ]
