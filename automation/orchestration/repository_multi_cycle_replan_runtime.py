@@ -1,0 +1,162 @@
+"""Disposable, read-only snapshots of an accepted repository commit.
+
+Planner execution is intentionally outside this module. The snapshot is built
+solely with local, read-only Git commands and is removed when its context exits.
+"""
+
+from __future__ import annotations
+
+import io
+import re
+import shutil
+import subprocess
+import tarfile
+import tempfile
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from pathlib import Path, PurePosixPath
+
+
+GIT_TIMEOUT_SECONDS = 20
+_ACCEPTED_HEAD_PATTERN = re.compile(r"[0-9a-f]{40}")
+GitRunner = Callable[..., subprocess.CompletedProcess[bytes]]
+
+
+class AcceptedHeadSnapshotError(RuntimeError):
+    """Fail-closed snapshot error with a stable, non-sensitive reason code."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _run_git(
+    source_repository_root: Path,
+    arguments: Sequence[str],
+    *,
+    git_runner: GitRunner,
+    timeout: int,
+) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return git_runner(
+            ["git", "-C", str(source_repository_root), *arguments],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise AcceptedHeadSnapshotError("replan.snapshot.git_failed") from exc
+
+
+def validate_accepted_head(
+    source_repository_root: str | Path,
+    accepted_head_sha: str,
+    *,
+    git_runner: GitRunner = subprocess.run,
+    timeout: int = GIT_TIMEOUT_SECONDS,
+) -> Path:
+    """Validate that *accepted_head_sha* is a locally available commit."""
+
+    root = Path(source_repository_root)
+    if not root.is_dir():
+        raise AcceptedHeadSnapshotError("replan.snapshot.source_not_directory")
+    if not isinstance(accepted_head_sha, str) or not _ACCEPTED_HEAD_PATTERN.fullmatch(
+        accepted_head_sha
+    ):
+        raise AcceptedHeadSnapshotError("replan.snapshot.accepted_head_invalid")
+
+    result = _run_git(
+        root,
+        ("cat-file", "-e", f"{accepted_head_sha}^{{commit}}"),
+        git_runner=git_runner,
+        timeout=timeout,
+    )
+    if result.returncode != 0:
+        raise AcceptedHeadSnapshotError("replan.snapshot.accepted_head_not_found")
+    return root
+
+
+def validate_archive_members(
+    members: Sequence[tarfile.TarInfo], snapshot_root: str | Path
+) -> None:
+    """Validate every tar member before any member is extracted."""
+
+    root = Path(snapshot_root).resolve()
+    for member in members:
+        name = member.name
+        path = PurePosixPath(name)
+        if not name:
+            raise AcceptedHeadSnapshotError("replan.snapshot.unsafe_archive")
+        if path.is_absolute() or ".." in path.parts:
+            raise AcceptedHeadSnapshotError("replan.snapshot.unsafe_archive")
+        try:
+            root.joinpath(*path.parts).resolve().relative_to(root)
+        except ValueError as exc:
+            raise AcceptedHeadSnapshotError("replan.snapshot.unsafe_archive") from exc
+        if member.issym() or member.islnk():
+            raise AcceptedHeadSnapshotError("replan.snapshot.unsafe_archive")
+        if not (member.isdir() or member.isreg()):
+            raise AcceptedHeadSnapshotError("replan.snapshot.unsafe_archive")
+
+
+def _extract_archive(archive_payload: bytes, snapshot_root: Path) -> None:
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive_payload), mode="r:") as archive:
+            members = archive.getmembers()
+            validate_archive_members(members, snapshot_root)
+            for member in members:
+                destination = snapshot_root.joinpath(*PurePosixPath(member.name).parts)
+                if member.isdir():
+                    destination.mkdir(parents=True, exist_ok=True)
+                    continue
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                source = archive.extractfile(member)
+                if source is None:
+                    raise AcceptedHeadSnapshotError("replan.snapshot.invalid_archive")
+                with source, destination.open("wb") as target:
+                    shutil.copyfileobj(source, target)
+    except AcceptedHeadSnapshotError:
+        raise
+    except (OSError, tarfile.TarError) as exc:
+        raise AcceptedHeadSnapshotError("replan.snapshot.invalid_archive") from exc
+
+
+@contextmanager
+def accepted_head_snapshot(
+    source_repository_root: str | Path,
+    accepted_head_sha: str,
+    *,
+    git_runner: GitRunner = subprocess.run,
+    timeout: int = GIT_TIMEOUT_SECONDS,
+) -> Iterator[Path]:
+    """Yield an exact disposable snapshot of *accepted_head_sha*."""
+
+    root = validate_accepted_head(
+        source_repository_root,
+        accepted_head_sha,
+        git_runner=git_runner,
+        timeout=timeout,
+    )
+    with tempfile.TemporaryDirectory(prefix="accepted-head-snapshot-") as temporary:
+        result = _run_git(
+            root,
+            ("archive", "--format=tar", accepted_head_sha),
+            git_runner=git_runner,
+            timeout=timeout,
+        )
+        if result.returncode != 0:
+            raise AcceptedHeadSnapshotError("replan.snapshot.archive_failed")
+        snapshot_root = Path(temporary)
+        _extract_archive(result.stdout, snapshot_root)
+        yield snapshot_root
+
+
+__all__ = [
+    "AcceptedHeadSnapshotError",
+    "accepted_head_snapshot",
+    "validate_accepted_head",
+    "validate_archive_members",
+]
