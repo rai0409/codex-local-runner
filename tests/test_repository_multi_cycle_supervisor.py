@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from automation.orchestration.repository_multi_cycle_state import write_checkpoint
 from automation.orchestration.repository_multi_cycle_supervisor import RepositoryMultiCycleSupervisor
+from automation.orchestration.repository_multi_cycle_status import inspect_repository_multi_cycle_status
 from automation.orchestration.repository_multi_cycle_task_executor import _child_run_id, _runtime_single_task_spec, run_repository_multi_cycle
 from tests.test_repository_multi_cycle_task_executor import ExecutorTests, git
 
@@ -14,6 +15,9 @@ def supervisor_cli_module():
 
 def worker_cli_module():
  spec=importlib.util.spec_from_file_location("worker_cli",Path(__file__).resolve().parents[1]/"scripts/run_repository_multi_cycle.py"); value=importlib.util.module_from_spec(spec); spec.loader.exec_module(value); return value
+
+def status_cli_module():
+ spec=importlib.util.spec_from_file_location("status_cli",Path(__file__).resolve().parents[1]/"scripts/show_repository_multi_cycle_status.py"); value=importlib.util.module_from_spec(spec); spec.loader.exec_module(value); return value
 
 class Worker:
  def __init__(self, code=0): self.pid=123; self.code=code
@@ -29,6 +33,8 @@ class SupervisorTests(unittest.TestCase):
   return directory
  def terminal(self,name,status="completed"):
   directory=self.cycles/name; directory.mkdir(parents=True); sha=hashlib.sha256(self.queue.read_bytes()).hexdigest(); value={"schema_version":"1","cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"status":status,"task_count":1,"completed_count":0,"executed_task_results":[],"source_anchor_sha":"a"*40,"final_accepted_head_sha":"a"*40}; payload=json.dumps(value,sort_keys=True,separators=(",",":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); return directory
+ def observe(self, pid_exists=lambda pid: False):
+  return inspect_repository_multi_cycle_status("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,pid_exists=pid_exists)
  def test_kernel_lock_blocks_then_reacquires_and_ignores_stale_metadata(self):
   first=self.make(); second=self.make(); self.assertTrue(first.acquire_lock()); (first._directory/"status.json").write_text('{"pid":999}'); self.assertFalse(second.acquire_lock()); first.release_lock(); self.assertTrue(second.acquire_lock()); second.release_lock()
  def test_unseen_queue_launches_once_terminal_suppresses_and_change_launches(self):
@@ -138,3 +144,49 @@ class SupervisorTests(unittest.TestCase):
    with redirect_stdout(output): code=cli.main(["--repository-id","repo","--queue-spec",str(fixture.queue),"--resume-cycle-run-id",run_id,"--registry-path",str(fixture.registry),"--bindings-path",str(fixture.bindings),"--providers-path",str(Path("config/providers.yaml").resolve()),"--output-root",str(fixture.output),"--single-task-output-root",str(fixture.base/"child")])
    self.assertEqual(code,2); self.assertIn("reason_code=multi_cycle.resume.child_incomplete",output.getvalue()); self.assertTrue(child_dir.is_dir()); self.assertFalse((child_dir/"receipt.json").exists()); self.assertEqual(git(fixture.source,"rev-parse","HEAD").stdout.strip(),fixture.a); self.assertEqual(git(fixture.source,"status","--porcelain").stdout,"")
   finally: fixture.tearDown()
+
+ def test_heartbeat_and_worker_exit_publish_terminal_status(self):
+  supervisor=self.make(); snapshots=[]; writes=[]; original=supervisor._atomic_status
+  supervisor._atomic_status=lambda value: writes.append(dict(value)) or original(value)
+  class HeartbeatWorker:
+   pid=456
+   def poll(inner): return None
+   def wait(inner): self.terminal("cycle-00000000000000000031"); return 0
+  supervisor.worker_factory=lambda resume: HeartbeatWorker()
+  def sleep(_):
+   snapshots.append(json.loads((supervisor._directory/"status.json").read_text()))
+   supervisor.request_shutdown()
+  supervisor.sleep=sleep; supervisor.poll_seconds=0
+  with patch("automation.orchestration.repository_multi_cycle_supervisor.time.time",side_effect=iter(range(100,120))): self.assertEqual(supervisor.run_forever().reason_code,"supervisor.shutdown")
+  self.assertEqual(snapshots[-1]["state"],"worker_active"); self.assertTrue(snapshots[-1]["worker_alive"]); self.assertIn("last_heartbeat_at",snapshots[-1])
+  active=[value for value in writes if value["state"]=="worker_active"]; self.assertGreater(active[-1]["updated_at"],active[0]["updated_at"])
+  final=json.loads((supervisor._directory/"status.json").read_text())
+  self.assertEqual(final["state"],"terminal"); self.assertEqual(final["terminal_status"],"completed"); self.assertFalse(final["worker_alive"])
+
+ def test_read_only_observer_prefers_verified_terminal_and_reports_terminal_actions(self):
+  directory=self.terminal("cycle-00000000000000000032","completed")
+  status_dir=self.state/hashlib.sha256(b"repo").hexdigest(); status_dir.mkdir(parents=True); (status_dir/"status.json").write_text(json.dumps({"repository_id":"repo","state":"worker_active","worker_pid":999999,"cycle_run_id":directory.name}))
+  completed=self.observe(); self.assertEqual(completed["state"],"terminal"); self.assertEqual(completed["terminal_status"],"completed"); self.assertFalse(completed["action_required"])
+  self.temp.cleanup(); self.setUp(); self.terminal("cycle-00000000000000000033","blocked"); blocked=self.observe(); self.assertEqual(blocked["state"],"terminal"); self.assertTrue(blocked["action_required"])
+  self.temp.cleanup(); self.setUp(); self.terminal("cycle-00000000000000000034","failed"); failed=self.observe(); self.assertEqual(failed["state"],"terminal"); self.assertTrue(failed["action_required"])
+
+ def test_read_only_observer_reports_checkpoint_or_corruption_without_recovery(self):
+  directory=self.cycles/"cycle-00000000000000000035"; directory.mkdir(parents=True); sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
+  write_checkpoint(directory/"state",{"cycle_run_id":directory.name,"repository_id":"repo","queue_spec_sha256":sha,"lifecycle_status":"active_task","task_count":2,"completed_count":1,"active_task":{"task_index":1,"task_id":"two"},"source_anchor_sha":"a"*40,"accepted_head_sha":"b"*40,"updated_at":"2026-08-23T00:00:00Z"})
+  status_dir=self.state/hashlib.sha256(b"repo").hexdigest(); status_dir.mkdir(parents=True); (status_dir/"status.json").write_text(json.dumps({"repository_id":"repo","state":"worker_active","worker_pid":456,"cycle_run_id":directory.name}))
+  active=self.observe(lambda pid: pid==456); self.assertEqual(active["state"],"worker_active"); self.assertFalse(active["action_required"])
+  (status_dir/"status.json").unlink()
+  observed=self.observe(); self.assertEqual(observed["state"],"interrupted_or_stale"); self.assertTrue(observed["action_required"]); self.assertEqual(observed["current_task_index"],1); self.assertEqual(observed["current_task_id"],"two"); self.assertEqual(observed["phase"],"active_task")
+  payload=directory/"state"/"checkpoint-000000.json"; sidecar=directory/"state"/"checkpoint-000000.sha256"; before=(payload.read_bytes(),sidecar.read_bytes(),payload.stat().st_mtime_ns,sidecar.stat().st_mtime_ns)
+  self.assertEqual(self.observe()["state"],"interrupted_or_stale"); self.assertEqual(self.observe()["state"],"interrupted_or_stale"); after=(payload.read_bytes(),sidecar.read_bytes(),payload.stat().st_mtime_ns,sidecar.stat().st_mtime_ns); self.assertEqual(before,after)
+  sidecar.write_text("0"*64+"  checkpoint-000000.json\n"); corrupt=self.observe(); self.assertEqual(corrupt["state"],"blocked_observation"); self.assertTrue(corrupt["action_required"])
+
+ def test_status_cli_is_read_only_and_returns_zero_for_runtime_states(self):
+  directory=self.terminal("cycle-00000000000000000036","failed"); state_dir=self.state/hashlib.sha256(b"repo").hexdigest(); state_dir.mkdir(parents=True); (state_dir/"status.json").write_text(json.dumps({"repository_id":"repo","state":"worker_active","worker_pid":999999,"cycle_run_id":directory.name}))
+  files=[self.queue,directory/"receipt.json",directory/"receipt.sha256",state_dir/"status.json"]; before={path:(path.read_bytes(),path.stat().st_mtime_ns) for path in files}; cli=status_cli_module(); output=io.StringIO()
+  with redirect_stdout(output),patch("automation.orchestration.repository_multi_cycle_status.subprocess",create=True) as subprocess_mock:
+   self.assertEqual(cli.main(["--repository-id","repo","--queue-spec",str(self.queue),"--state-root",str(self.state),"--output-root",str(self.cycles)]),0)
+   self.assertEqual(cli.main(["--repository-id","repo","--queue-spec",str(self.queue),"--state-root",str(self.state),"--output-root",str(self.cycles)]),0)
+   subprocess_mock.assert_not_called()
+  self.assertIn("state=terminal",output.getvalue()); self.assertIn("action_required=true",output.getvalue())
+  self.assertEqual(before,{path:(path.read_bytes(),path.stat().st_mtime_ns) for path in files})
