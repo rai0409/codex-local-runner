@@ -308,6 +308,7 @@ def _result_from_persistence(
 def coordinate_verified_terminal_replan(
     value: VerifiedTerminalReplanInput,
     *,
+    max_auto_replans: int | None = None,
     planner_pipeline: PlannerPipeline = run_replan_planner,
     persistence_pipeline: PersistencePipeline = persist_replan_result,
 ) -> RepositoryMultiCycleReplanCoordinatorResult:
@@ -327,6 +328,15 @@ def coordinate_verified_terminal_replan(
                 None,
                 0,
             )
+        if (
+            max_auto_replans is not None
+            and (
+                isinstance(max_auto_replans, bool)
+                or not isinstance(max_auto_replans, int)
+                or not 1 <= max_auto_replans <= 8
+            )
+        ):
+            return _blocked("replan.coordinator.budget_invalid")
         if not _SHA256.fullmatch(value.root_queue_spec_sha256) or not _SHA256.fullmatch(
             value.predecessor_queue_spec_sha256
         ):
@@ -364,6 +374,18 @@ def coordinate_verified_terminal_replan(
             )
 
         attempt_number = attempts[-1][0] + 1 if attempts else 1
+        if max_auto_replans is not None and attempt_number > max_auto_replans:
+            return RepositoryMultiCycleReplanCoordinatorResult(
+                "blocked",
+                "replan.budget_exhausted",
+                attempt_number,
+                event.failed_task_id,
+                event.accepted_head_sha,
+                None,
+                None,
+                None,
+                0,
+            )
         evidence = ReplanFailureEvidence(
             predecessor,
             event.failed_task_index,
