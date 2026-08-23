@@ -57,6 +57,8 @@ def test_cli_default_and_max_without_auto_leave_coordinator_disabled() -> None:
 
     assert default.get("replan_coordinator") is None
     assert max_only.get("replan_coordinator") is None
+    assert default.get("auto_replan_launch") is None
+    assert max_only.get("auto_replan_launch") is None
 
 
 @pytest.mark.parametrize(("arguments", "expected"), [(["--auto-replan"], 2), (["--auto-replan", "--max-auto-replans", "1"], 1)])
@@ -69,6 +71,7 @@ def test_cli_auto_replan_forwards_budget(arguments: list[str], expected: int) ->
         assert callable(wrapper)
         assert wrapper(sentinel) == "ready"
     coordinator.assert_called_once_with(sentinel, max_auto_replans=expected)
+    assert kwargs["auto_replan_launch"] is True
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "9"])
