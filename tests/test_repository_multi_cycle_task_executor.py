@@ -1,7 +1,7 @@
 from __future__ import annotations
 import hashlib, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
-from automation.orchestration.repository_multi_cycle_task_executor import _child_run_id, _runtime_single_task_spec, run_repository_multi_cycle
+from automation.orchestration.repository_multi_cycle_task_executor import _child_run_id, _discover_verified_continuation_base, _runtime_single_task_spec, run_repository_multi_cycle
 from automation.orchestration.repository_multi_cycle_state import load_latest_checkpoint, write_checkpoint
 from automation.orchestration.repository_profile import APPROVAL_ACTIONS, FORBIDDEN_GIT_OPERATION_IDS
 from automation.orchestration.repository_resolved_single_task_controller import run_repository_single_task
@@ -31,6 +31,10 @@ class ExecutorTests(unittest.TestCase):
   path=Path(kwargs["work_root"])/"x"; path.mkdir(parents=True); out=path/"out"; out.write_text('TASK_COMPLETION_EVALUATION_JSON_BEGIN\n{"status":"completed","reason_code":"done","satisfied_criteria":[],"unsatisfied_criteria":[],"evidence_refs":[]}\nTASK_COMPLETION_EVALUATION_JSON_END'); return {"status":"completed","stdout_path":str(out)}
  def blocked_evaluator(self,**kwargs):
   path=Path(kwargs["work_root"])/"blocked"; path.mkdir(parents=True); out=path/"out"; out.write_text('TASK_COMPLETION_EVALUATION_JSON_BEGIN\n{"status":"blocked","reason_code":"test.blocked","satisfied_criteria":[],"unsatisfied_criteria":["blocked"],"evidence_refs":[]}\nTASK_COMPLETION_EVALUATION_JSON_END'); return {"status":"completed","stdout_path":str(out)}
+ def one_task_queue(self, task_id, prompt):
+  path=self.base/f"queue-{task_id}.json"; path.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":task_id,"prompt":prompt,"allowed_changed_paths":[f"{task_id}.txt"],"commit_message":task_id.upper()}]})); return path
+ def terminal_status(self, result, status):
+  receipt=Path(result.receipt_path); value=json.loads(receipt.read_text()); value["status"]=status; value["reason_code"]=f"multi_cycle.child.{status}"; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); receipt.write_bytes(payload); Path(result.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
  def test_real_git_chain_and_receipts(self):
   result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
   self.assertEqual(result.status,"completed",result); self.assertEqual(result.completed_count,3); self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
@@ -39,6 +43,33 @@ class ExecutorTests(unittest.TestCase):
    child=Path(item["child_receipt_path"]); child_value=json.loads(child.read_text()); self.assertEqual((child.parent/"receipt.sha256").read_text(),f"{hashlib.sha256(child.read_bytes()).hexdigest()}  receipt.json\n"); self.assertEqual(child_value["source_state_before"]["head_sha"],self.a); self.assertEqual(child_value["source_state_after"]["head_sha"],self.a)
   self.assertNotIn("PROMPT_SECRET_ONE",Path(result.receipt_path).read_text())
   persisted="\n".join(path.read_text(encoding="utf-8",errors="ignore") for path in (self.output/result.cycle_run_id).rglob("*") if path.is_file()); self.assertNotIn("PROMPT_SECRET_ONE",persisted); self.assertFalse(any(path.name.endswith(".runtime.json") for path in (self.output/result.cycle_run_id).rglob("*")))
+
+ def test_cross_cycle_continuation_uses_real_git_chain_without_moving_source(self):
+  q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two"); q3=self.one_task_queue("three","three")
+  self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
+  r1=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); b=r1.accepted_head_sha; self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),b,self.output),b)
+  r2=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); c=r2.accepted_head_sha
+  r3=run_repository_multi_cycle("repo",q3,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); d=r3.accepted_head_sha
+  self.assertEqual(git(self.source,"rev-parse",f"{b}^").stdout.strip(),self.a); self.assertEqual(git(self.source,"rev-parse",f"{c}^").stdout.strip(),b); self.assertEqual(git(self.source,"rev-parse",f"{d}^").stdout.strip(),c)
+  self.assertEqual(json.loads(Path(r2.receipt_path).read_text())["continuation_base_sha"],b); self.assertEqual(json.loads(Path(r3.receipt_path).read_text())["continuation_base_sha"],c); self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a); self.assertEqual(git(self.source,"status","--porcelain").stdout,"")
+
+ def test_partial_terminal_and_resume_use_verified_continuation_base(self):
+  q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two"); q3=self.one_task_queue("three","three"); first=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); b=first.accepted_head_sha; self.terminal_status(first,"blocked")
+  fresh=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); c=fresh.accepted_head_sha; self.assertEqual(git(self.source,"rev-parse",f"{c}^").stdout.strip(),b)
+  resumed_id="cycle-20260823000000000002"; directory=self.output/resumed_id; directory.mkdir(); state={"cycle_run_id":resumed_id,"repository_id":"repo","queue_spec_sha256":hashlib.sha256(q3.read_bytes()).hexdigest(),"registry_sha256":hashlib.sha256(self.registry.read_bytes()).hexdigest(),"bindings_sha256":hashlib.sha256(self.bindings.read_bytes()).hexdigest(),"providers_sha256":hashlib.sha256(Path("config/providers.yaml").read_bytes()).hexdigest(),"source_repository_root":str(self.source),"source_anchor_sha":self.a,"continuation_base_sha":c,"accepted_head_sha":c,"task_count":1,"next_task_index":0,"completed_task_results":[],"active_task":None,"terminal_task_result":None,"lifecycle_status":"accepted_task","terminal_status":None,"terminal_reason_code":None,"terminal_finished_at":None,"stopped_task_id":None,"started_at":"2026-08-23T00:00:00Z","updated_at":"2026-08-23T00:00:00Z"}; write_checkpoint(directory/"state",state)
+  result=run_repository_multi_cycle("repo",q3,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator,resume_cycle_run_id=resumed_id); self.assertEqual(result.status,"completed"); self.assertEqual(git(self.source,"rev-parse",f"{result.accepted_head_sha}^").stdout.strip(),c); self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
+
+ def test_terminal_prefixes_discover_and_reject_ambiguous_or_corrupt_evidence(self):
+  q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); first=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); b=first.accepted_head_sha
+  for status in ("blocked","failed"):
+   self.terminal_status(first,status); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
+  value=json.loads(Path(first.receipt_path).read_text()); value["completed_count"]=0; value["executed_task_results"]=[]; value["final_accepted_head_sha"]=self.a; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); Path(first.receipt_path).write_bytes(payload); Path(first.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
+  value["completed_count"]=1; value["executed_task_results"]=[{"task_id":"one","status":"completed","commit_sha":b,"parent_sha":self.a}]; value["final_accepted_head_sha"]=b; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); Path(first.receipt_path).write_bytes(payload); Path(first.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  duplicate=self.output/"cycle-20260823000000000000"; duplicate.mkdir(); same=dict(value); same["cycle_run_id"]=duplicate.name; payload=json.dumps(same,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); (duplicate/"receipt.json").write_bytes(payload); (duplicate/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
+  fork=self.output/"cycle-20260823000000000001"; fork.mkdir(); tree=git(self.source,"show","-s","--format=%T",b).stdout.strip(); x=subprocess.run(["git","-C",str(self.source),"commit-tree",tree,"-p",self.a],input="X\n",text=True,capture_output=True,check=True).stdout.strip(); other=dict(value); other["cycle_run_id"]=fork.name; other["final_accepted_head_sha"]=x; other["executed_task_results"]=[{"task_id":"other","status":"completed","commit_sha":x,"parent_sha":self.a}]; payload=json.dumps(other,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); (fork/"receipt.json").write_bytes(payload); (fork/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.ambiguous"): _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
+  (fork/"receipt.sha256").write_text("0"*64+"  receipt.json\n")
+  with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.evidence_invalid"): _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
 
  def _state(self, run_id, *, anchor, active, completed=None, accepted=None, **override):
   completed=[] if completed is None else completed

@@ -35,7 +35,7 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def read_verified_terminal_receipt(directory: str | Path, repository_id: str, queue_sha256: str) -> dict[str, Any] | None:
+def read_verified_terminal_receipt(directory: str | Path, repository_id: str, queue_sha256: str | None) -> dict[str, Any] | None:
     """Return a verified terminal receipt, or ``None`` when no receipt exists.
 
     This function reads only.  It intentionally has no recovery path: a receipt
@@ -52,7 +52,7 @@ def read_verified_terminal_receipt(directory: str | Path, repository_id: str, qu
             raise RepositoryMultiCycleStatusError("observation.receipt_invariant")
         # Historical receipts for another repository/queue do not participate in
         # this observation, even if their own sidecar has aged badly.
-        if value.get("repository_id") != repository_id or value.get("queue_spec_sha256") != queue_sha256:
+        if value.get("repository_id") != repository_id or (queue_sha256 is not None and value.get("queue_spec_sha256") != queue_sha256):
             return None
         expected = f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"
         if sidecar.read_text(encoding="utf-8") != expected:
@@ -61,7 +61,7 @@ def read_verified_terminal_receipt(directory: str | Path, repository_id: str, qu
         raise RepositoryMultiCycleStatusError("observation.receipt_invalid") from exc
     if value.get("schema_version") != "1" or value.get("cycle_run_id") != directory.name:
         raise RepositoryMultiCycleStatusError("observation.receipt_invariant")
-    if value.get("status") not in _TERMINAL_STATUSES or not isinstance(value.get("task_count"), int) or not isinstance(value.get("completed_count"), int):
+    if not isinstance(value.get("queue_spec_sha256"), str) or value.get("status") not in _TERMINAL_STATUSES or not isinstance(value.get("task_count"), int) or not isinstance(value.get("completed_count"), int):
         raise RepositoryMultiCycleStatusError("observation.receipt_invariant")
     if not 0 <= value["completed_count"] <= value["task_count"] or not isinstance(value.get("executed_task_results"), list):
         raise RepositoryMultiCycleStatusError("observation.receipt_invariant")
