@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tarfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from automation.orchestration.repository_multi_cycle_replan_runtime import (
     AcceptedHeadSnapshotError,
+    ReplanPlannerRequest,
     accepted_head_snapshot,
+    run_replan_planner,
     validate_accepted_head,
     validate_archive_members,
+)
+from automation.orchestration.repository_multi_cycle_replan import ReplanFailureEvidence
+from automation.orchestration.repository_multi_cycle_task_spec import (
+    validate_repository_multi_cycle_task_spec,
 )
 
 
@@ -181,3 +189,215 @@ def test_snapshot_runs_only_cat_file_and_archive(
         "update-ref",
     }
     assert not any(forbidden.intersection(command[3:]) for command in invocations)
+
+
+def _evidence() -> ReplanFailureEvidence:
+    queue = validate_repository_multi_cycle_task_spec(
+        {
+            "schema_version": "1",
+            "tasks": [
+                {
+                    "task_id": "failed",
+                    "prompt": "original",
+                    "allowed_changed_paths": ["marker.txt"],
+                    "commit_message": "Original",
+                }
+            ],
+        }
+    )
+    return ReplanFailureEvidence(
+        queue,
+        0,
+        "single_task.task_completion.rework_exhausted",
+        "contract.missing",
+        {"reason_code": "contract.missing", "raw_log": "SECRET"},
+    )
+
+
+def _request(
+    repository: tuple[Path, str, str, bytes]
+) -> ReplanPlannerRequest:
+    root, _, commit_b, _ = repository
+    return ReplanPlannerRequest(_evidence(), root, commit_b, 1)
+
+
+def _replacement(**extra: Any) -> str:
+    value = {
+        "schema_version": "1",
+        "decision": "replace_failed_task",
+        "prompt": "repair the failure",
+        "allowed_changed_paths": ["marker.txt"],
+        "commit_message": "Repair failure",
+        **extra,
+    }
+    return json.dumps(value)
+
+
+class _Planner:
+    def __init__(self, outputs: list[dict[str, Any]]) -> None:
+        self.outputs = outputs
+        self.calls: list[tuple[dict[str, Any], str, dict[str, Any]]] = []
+
+    def __call__(
+        self, task: dict[str, Any], prompt: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        self.calls.append((task, prompt, kwargs))
+        return self.outputs[len(self.calls) - 1]
+
+
+def _completed(output: str) -> dict[str, Any]:
+    return {"status": "completed", "success": True, "transient_stdout": output}
+
+
+def test_planner_uses_disposable_snapshot_and_r3_options(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    root, _, _, _ = repository
+    planner = _Planner([_completed(_replacement())])
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    task, _, options = planner.calls[0]
+    planner_path = Path(task["repo_path"])
+    assert result.status == "replacement_envelope_ready"
+    assert result.planner_call_count == 1
+    assert result.validated_envelope is not None
+    assert result.validated_envelope.decision == "replace_failed_task"
+    assert planner_path != root
+    assert not planner_path.exists()
+    assert options["persist_prompt"] is False
+    assert options["return_transient_stdout"] is True
+    assert Path(options["work_root"]).is_relative_to(planner_path)
+
+
+def test_valid_stop_returns_without_envelope(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    planner = _Planner([_completed('{"schema_version":"1","decision":"stop"}')])
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    assert result.status == "stop"
+    assert result.validated_envelope is None
+    assert result.planner_call_count == 1
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        'Here is the result:\n{"schema_version":"1","decision":"stop"}',
+        '```json\n{"schema_version":"1","decision":"stop"}\n```',
+    ],
+    ids=["prose", "fenced"],
+)
+def test_non_whole_json_requires_one_correction_retry(
+    repository: tuple[Path, str, str, bytes], invalid: str
+) -> None:
+    planner = _Planner(
+        [_completed(invalid), _completed('{"schema_version":"1","decision":"stop"}')]
+    )
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    assert result.status == "stop"
+    assert result.planner_call_count == 2
+    assert "Return exactly one JSON object and nothing else" in planner.calls[1][1]
+    assert invalid not in planner.calls[1][1]
+
+
+def test_malformed_twice_is_blocked_after_two_calls(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    planner = _Planner([_completed("not json"), _completed("still not json")])
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    assert result.status == "blocked"
+    assert result.reason_code == "replan.planner.protocol_invalid"
+    assert result.planner_call_count == 2
+
+
+def test_r6a_unknown_authority_field_is_rejected(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    planner = _Planner([_completed(_replacement(task_id="model")), _completed("invalid")])
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    assert result.status == "blocked"
+    assert result.planner_call_count == 2
+
+
+@pytest.mark.parametrize("status", ["failed", "timed_out", "not_started"])
+def test_unsuccessful_execution_has_no_retry(
+    repository: tuple[Path, str, str, bytes], status: str
+) -> None:
+    planner = _Planner([{"status": status, "success": False}])
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    assert result.status == "blocked"
+    assert result.reason_code == "replan.planner.execution_failed"
+    assert result.planner_call_count == 1
+    assert len(planner.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "execution",
+    [
+        {"status": "completed", "success": True},
+        {"status": "completed", "success": True, "transient_stdout": "   "},
+        {"status": "completed", "success": True, "transient_stdout": None},
+    ],
+)
+def test_missing_transient_stdout_has_no_retry(
+    repository: tuple[Path, str, str, bytes], execution: dict[str, Any]
+) -> None:
+    planner = _Planner([execution])
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    assert result.status == "blocked"
+    assert result.reason_code == "replan.planner.output_missing"
+    assert result.planner_call_count == 1
+
+
+def test_invalid_envelope_then_valid_replacement_succeeds(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    invalid = json.dumps({"schema_version": "1", "decision": "replace_failed_task"})
+    planner = _Planner([_completed(invalid), _completed(_replacement())])
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    assert result.status == "replacement_envelope_ready"
+    assert result.validated_envelope is not None
+    assert result.planner_call_count == 2
+
+
+def test_planner_writes_are_discarded_and_source_is_immutable(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    root, _, _, _ = repository
+    branch_before = _git(root, "branch", "--show-current").stdout
+    head_before = _git(root, "rev-parse", "HEAD").stdout
+    status_before = _git(root, "status", "--porcelain").stdout
+    snapshot_paths: list[Path] = []
+
+    def writing_planner(
+        task: dict[str, Any], prompt: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        del prompt, kwargs
+        snapshot = Path(task["repo_path"])
+        snapshot_paths.append(snapshot)
+        (snapshot / "planner-created.txt").write_text("temporary", encoding="utf-8")
+        return _completed(_replacement())
+
+    result = run_replan_planner(_request(repository), planner=writing_planner)
+
+    assert result.status == "replacement_envelope_ready"
+    assert snapshot_paths and not snapshot_paths[0].exists()
+    assert not (root / "planner-created.txt").exists()
+    assert _git(root, "branch", "--show-current").stdout == branch_before
+    assert _git(root, "rev-parse", "HEAD").stdout == head_before
+    assert _git(root, "status", "--porcelain").stdout == status_before
