@@ -4,6 +4,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from automation.orchestration.repository_multi_cycle_replan_coordinator import RepositoryMultiCycleReplanCoordinatorResult
 from automation.orchestration.repository_multi_cycle_state import write_checkpoint
 from automation.orchestration.repository_multi_cycle_supervisor import RepositoryMultiCycleSupervisor
 from automation.orchestration.repository_multi_cycle_status import inspect_repository_multi_cycle_status
@@ -33,6 +34,9 @@ class SupervisorTests(unittest.TestCase):
   return directory
  def terminal(self,name,status="completed"):
   directory=self.cycles/name; directory.mkdir(parents=True); sha=hashlib.sha256(self.queue.read_bytes()).hexdigest(); value={"schema_version":"1","cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"status":status,"task_count":1,"completed_count":0,"executed_task_results":[],"source_anchor_sha":"a"*40,"final_accepted_head_sha":"a"*40}; payload=json.dumps(value,sort_keys=True,separators=(",",":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); return directory
+ def replan_terminal(self,name="cycle-20260823000000000001",reason="single_task.task_completion.rework_exhausted"):
+  directory=self.cycles/name; directory.mkdir(parents=True); sha=hashlib.sha256(self.queue.read_bytes()).hexdigest(); receipt={"schema_version":"1","cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"status":"blocked","reason_code":"multi_cycle.child.blocked","task_count":1,"completed_count":0,"stopped_task_id":"one","executed_task_results":[],"source_anchor_sha":"a"*40,"final_accepted_head_sha":"a"*40}; payload=json.dumps(receipt,sort_keys=True,separators=(",",":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  write_checkpoint(directory/"state",{"cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"source_repository_root":str(self.root/"source"),"lifecycle_status":"finalizing","terminal_status":"blocked","terminal_reason_code":"multi_cycle.child.blocked","accepted_head_sha":"a"*40,"task_count":1,"next_task_index":0,"completed_task_results":[],"stopped_task_id":"one","terminal_task_result":{"task_index":0,"task_id":"one","status":"blocked","reason_code":reason}}); return directory
  def observe(self, pid_exists=lambda pid: False):
   return inspect_repository_multi_cycle_status("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,pid_exists=pid_exists)
  def test_kernel_lock_blocks_then_reacquires_and_ignores_stale_metadata(self):
@@ -45,6 +49,40 @@ class SupervisorTests(unittest.TestCase):
     self.terminal(f"cycle-0000000000000000000{len(status)}",status); self.assertEqual(self.make().run_once().reason_code,"supervisor.queue.terminal_suppressed")
     self.temp.cleanup(); self.setUp()
   directory=self.terminal("cycle-00000000000000000009"); (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n"); self.assertEqual(self.make().run_once().reason_code,"supervisor.discovery.invalid"); self.assertEqual(self.calls,[])
+ def test_replan_hook_defaults_disabled_and_existing_terminal_behavior_is_unchanged(self):
+  self.replan_terminal(); supervisor=self.make(); result=supervisor.run_once()
+  self.assertEqual((result.status,result.reason_code),("idle","supervisor.queue.terminal_suppressed")); self.assertIsNone(result.replan_result); self.assertEqual(self.calls,[])
+ def test_verified_terminal_invokes_optional_replan_hook_after_reconciliation(self):
+  directory=self.replan_terminal(); calls=[]
+  expected=RepositoryMultiCycleReplanCoordinatorResult("successor_ready","ready",1,"one","a"*40,self.root/"successor.json","b"*64,"c"*64,1)
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:self.fail("worker launched"),replan_coordinator=lambda value:calls.append(value) or expected)
+  result=supervisor.run_once(); self.assertEqual(result.replan_result,expected); self.assertEqual(len(calls),1); value=calls[0]
+  self.assertEqual(value.verified_terminal_result["cycle_run_id"],directory.name); self.assertEqual(value.verified_terminal_result["terminal_task_result"]["reason_code"],"single_task.task_completion.rework_exhausted"); self.assertEqual(value.verified_terminal_result["final_accepted_head_sha"],"a"*40); self.assertEqual(value.predecessor_queue_spec_sha256,hashlib.sha256(self.queue.read_bytes()).hexdigest())
+ def test_replan_hook_never_receives_invalid_receipt_or_raw_worker_exit(self):
+  directory=self.replan_terminal(); calls=[]; (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n")
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,replan_coordinator=lambda value:calls.append(value))
+  self.assertEqual(supervisor.run_once().reason_code,"supervisor.discovery.invalid"); self.assertEqual(calls,[])
+  self.temp.cleanup(); self.setUp(); supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:Worker(0),poll_seconds=0,replan_coordinator=lambda value:calls.append(value))
+  self.assertEqual(supervisor.run_forever().reason_code,"supervisor.worker.evidence_missing"); self.assertEqual(calls,[])
+ def test_replan_hook_requires_verified_checkpoint_reconciliation(self):
+  directory=self.replan_terminal(); calls=[]; checkpoint=directory/"state"/"checkpoint-000000.sha256"; checkpoint.write_text("0"*64+"  checkpoint-000000.json\n")
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,replan_coordinator=lambda value:calls.append(value))
+  result=supervisor.run_once(); self.assertEqual(result.reason_code,"supervisor.queue.terminal_suppressed"); self.assertEqual(calls,[]); self.assertIsNone(result.replan_result)
+ def test_replan_outcomes_never_launch_or_rewrite_predecessor_terminal(self):
+  for status in ("successor_ready","not_eligible","stopped","blocked"):
+   with self.subTest(status=status):
+    directory=self.replan_terminal(); receipt=directory/"receipt.json"; before=(receipt.read_bytes(),receipt.stat().st_mtime_ns); calls=[]
+    outcome=RepositoryMultiCycleReplanCoordinatorResult(status,status,1,"one","a"*40,None,None,None,0)
+    supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:self.fail("worker launched"),replan_coordinator=lambda value:calls.append(value) or outcome)
+    result=supervisor.run_once(); self.assertEqual(result.replan_result,outcome); self.assertEqual(len(calls),1); self.assertEqual(self.calls,[]); self.assertEqual((receipt.read_bytes(),receipt.stat().st_mtime_ns),before); persisted=json.loads(receipt.read_text()); self.assertEqual((persisted["status"],persisted["reason_code"]),("blocked","multi_cycle.child.blocked"))
+    self.temp.cleanup(); self.setUp()
+ def test_repeated_terminal_polling_delegates_idempotency_without_launch(self):
+  self.replan_terminal(); calls=[]; outcome=RepositoryMultiCycleReplanCoordinatorResult("successor_ready","ready",1,"one","a"*40,None,"b"*64,"c"*64,0)
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:self.fail("worker launched"),replan_coordinator=lambda value:calls.append(value) or outcome)
+  first=supervisor.run_once(); second=supervisor.run_once(); self.assertEqual(first.replan_result,outcome); self.assertEqual(second.replan_result,outcome); self.assertEqual(len(calls),2); self.assertEqual(self.calls,[])
+ def test_supervisor_has_no_direct_r6b_or_r3_dependency(self):
+  import automation.orchestration.repository_multi_cycle_supervisor as module
+  for name in ("run_codex","run_replan_planner","persist_replan_result"): self.assertFalse(hasattr(module,name))
  def test_active_and_finalizing_discovery_resume_and_ambiguous_blocks(self):
   self.checkpoint("cycle-00000000000000000001","active_task"); supervisor=self.make(); result=supervisor.run_once(); self.assertEqual(result.cycle_run_id,"cycle-00000000000000000001"); self.assertEqual(self.calls,["cycle-00000000000000000001"])
   self.temp.cleanup(); self.setUp(); self.checkpoint("cycle-00000000000000000001","finalizing"); supervisor=self.make(); self.assertEqual(supervisor.run_once().cycle_run_id,"cycle-00000000000000000001")
