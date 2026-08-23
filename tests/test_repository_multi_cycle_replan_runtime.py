@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import tarfile
@@ -259,7 +260,7 @@ def test_planner_uses_disposable_snapshot_and_r3_options(
 
     task, _, options = planner.calls[0]
     planner_path = Path(task["repo_path"])
-    assert result.status == "replacement_envelope_ready"
+    assert result.status == "successor_ready"
     assert result.planner_call_count == 1
     assert result.validated_envelope is not None
     assert result.validated_envelope.decision == "replace_failed_task"
@@ -370,7 +371,7 @@ def test_invalid_envelope_then_valid_replacement_succeeds(
 
     result = run_replan_planner(_request(repository), planner=planner)
 
-    assert result.status == "replacement_envelope_ready"
+    assert result.status == "successor_ready"
     assert result.validated_envelope is not None
     assert result.planner_call_count == 2
 
@@ -395,9 +396,225 @@ def test_planner_writes_are_discarded_and_source_is_immutable(
 
     result = run_replan_planner(_request(repository), planner=writing_planner)
 
-    assert result.status == "replacement_envelope_ready"
+    assert result.status == "successor_ready"
     assert snapshot_paths and not snapshot_paths[0].exists()
     assert not (root / "planner-created.txt").exists()
     assert _git(root, "branch", "--show-current").stdout == branch_before
     assert _git(root, "rev-parse", "HEAD").stdout == head_before
     assert _git(root, "status", "--porcelain").stdout == status_before
+
+
+def _queue_task(task_id: str, *, timeouts: bool = False) -> dict[str, Any]:
+    task: dict[str, Any] = {
+        "task_id": task_id,
+        "prompt": f"prompt {task_id}",
+        "allowed_changed_paths": [f"{task_id}.py"],
+        "commit_message": f"Implement {task_id}",
+    }
+    if timeouts:
+        task.update(
+            execution_timeout_seconds=1200,
+            validation_timeout_seconds=1300,
+            completion_evaluator_timeout_seconds=1400,
+            completion_rework_timeout_seconds=1500,
+        )
+    return task
+
+
+def _successor_request(
+    repository: tuple[Path, str, str, bytes],
+    *,
+    failed_index: int,
+    attempt: int = 1,
+    task_count: int = 4,
+    failed_timeouts: bool = False,
+) -> ReplanPlannerRequest:
+    root, _, commit_b, _ = repository
+    tasks = [
+        _queue_task(f"t{index}", timeouts=failed_timeouts and index == failed_index)
+        for index in range(task_count)
+    ]
+    queue = validate_repository_multi_cycle_task_spec(
+        {"schema_version": "1", "tasks": tasks}
+    )
+    evidence = ReplanFailureEvidence(
+        queue,
+        failed_index,
+        "single_task.task_completion.rework_exhausted",
+        "contract.missing",
+    )
+    return ReplanPlannerRequest(evidence, root, commit_b, attempt)
+
+
+def _run_successor(
+    request: ReplanPlannerRequest, outputs: list[dict[str, Any]] | None = None
+):
+    planner = _Planner(outputs or [_completed(_replacement())])
+    return run_replan_planner(request, planner=planner), planner
+
+
+def test_successor_removes_prefix_replaces_failed_and_preserves_suffix(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    request = _successor_request(repository, failed_index=2)
+
+    result, _ = _run_successor(request)
+
+    assert result.status == "successor_ready"
+    assert result.replacement_task_id == "t2-replan-1"
+    assert result.successor_queue is not None
+    assert [task.task_id for task in result.successor_queue.tasks] == [
+        "t2-replan-1",
+        "t3",
+    ]
+    assert result.successor_queue.tasks[1] == request.evidence.predecessor_queue.tasks[3]
+    assert all(
+        task.task_id not in {"t0", "t1", "t2"}
+        for task in result.successor_queue.tasks
+    )
+
+
+def test_simple_successor_contains_replacement_then_pending_suffix(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    request = _successor_request(repository, failed_index=1, task_count=3)
+
+    result, _ = _run_successor(request)
+
+    assert result.status == "successor_ready"
+    assert result.successor_queue is not None
+    assert [task.task_id for task in result.successor_queue.tasks] == [
+        "t1-replan-1",
+        "t2",
+    ]
+
+
+def test_replacement_inherits_all_failed_task_timeouts(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    request = _successor_request(
+        repository, failed_index=1, task_count=3, failed_timeouts=True
+    )
+
+    result, _ = _run_successor(request)
+
+    assert result.successor_queue is not None
+    replacement = result.successor_queue.tasks[0]
+    assert replacement.execution_timeout_seconds == 1200
+    assert replacement.validation_timeout_seconds == 1300
+    assert replacement.completion_evaluator_timeout_seconds == 1400
+    assert replacement.completion_rework_timeout_seconds == 1500
+
+
+def test_model_timeout_field_is_rejected_before_successor(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    planner = _Planner(
+        [_completed(_replacement(execution_timeout_seconds=1)), _completed("invalid")]
+    )
+
+    result = run_replan_planner(_request(repository), planner=planner)
+
+    assert result.status == "blocked"
+    assert result.successor_queue is None
+    assert result.planner_call_count == 2
+
+
+def test_successor_uses_real_queue_contract_and_exact_sha(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    result, _ = _run_successor(_successor_request(repository, failed_index=1))
+
+    assert result.serialized_successor_queue is not None
+    validated = validate_repository_multi_cycle_task_spec(
+        json.loads(result.serialized_successor_queue)
+    )
+    assert validated == result.successor_queue
+    assert result.successor_queue_sha256 == hashlib.sha256(
+        result.serialized_successor_queue.encode("utf-8")
+    ).hexdigest()
+
+
+def test_successor_serialization_is_deterministic_and_attempt_specific(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    attempt_one = _successor_request(repository, failed_index=1, attempt=1)
+    first, _ = _run_successor(attempt_one)
+    repeated, _ = _run_successor(attempt_one)
+    second_attempt, _ = _run_successor(
+        _successor_request(repository, failed_index=1, attempt=2)
+    )
+
+    assert first.serialized_successor_queue == repeated.serialized_successor_queue
+    assert first.successor_queue_sha256 == repeated.successor_queue_sha256
+    assert first.replacement_task_id == "t1-replan-1"
+    assert second_attempt.replacement_task_id == "t1-replan-2"
+    assert first.serialized_successor_queue != second_attempt.serialized_successor_queue
+    assert first.successor_queue_sha256 != second_attempt.successor_queue_sha256
+
+
+@pytest.mark.parametrize(
+    ("failed_index", "expected_ids"),
+    [(0, ["t0-replan-1", "t1", "t2"]), (2, ["t2-replan-1"])],
+    ids=["first", "last"],
+)
+def test_failed_index_boundary_successors(
+    repository: tuple[Path, str, str, bytes],
+    failed_index: int,
+    expected_ids: list[str],
+) -> None:
+    result, _ = _run_successor(
+        _successor_request(repository, failed_index=failed_index, task_count=3)
+    )
+
+    assert result.successor_queue is not None
+    assert [task.task_id for task in result.successor_queue.tasks] == expected_ids
+
+
+@pytest.mark.parametrize("failed_index", [-1, 3])
+def test_invalid_failed_index_fails_closed(
+    repository: tuple[Path, str, str, bytes], failed_index: int
+) -> None:
+    result, _ = _run_successor(
+        _successor_request(repository, failed_index=failed_index, task_count=3)
+    )
+
+    assert result.status == "blocked"
+    assert result.reason_code == "replan.successor.build_failed"
+    assert result.successor_queue is None
+    assert result.serialized_successor_queue is None
+    assert result.successor_queue_sha256 is None
+
+
+def test_successor_preserves_planner_call_count_after_correction(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    request = _successor_request(repository, failed_index=1)
+    one_call, _ = _run_successor(request)
+    two_calls, _ = _run_successor(
+        request, [_completed("invalid"), _completed(_replacement())]
+    )
+
+    assert one_call.status == two_calls.status == "successor_ready"
+    assert one_call.planner_call_count == 1
+    assert two_calls.planner_call_count == 2
+
+
+def test_stop_and_blocked_results_have_no_successor_payload(
+    repository: tuple[Path, str, str, bytes],
+) -> None:
+    request = _successor_request(repository, failed_index=1)
+    stopped, _ = _run_successor(
+        request, [_completed('{"schema_version":"1","decision":"stop"}')]
+    )
+    blocked, _ = _run_successor(
+        request, [_completed("invalid"), _completed("invalid again")]
+    )
+
+    assert stopped.status == "stop"
+    assert blocked.status == "blocked"
+    for result in (stopped, blocked):
+        assert result.replacement_task_id is None
+        assert result.successor_queue is None
+        assert result.serialized_successor_queue is None
+        assert result.successor_queue_sha256 is None

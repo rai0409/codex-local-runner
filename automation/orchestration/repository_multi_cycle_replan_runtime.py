@@ -24,7 +24,11 @@ from automation.orchestration.repository_multi_cycle_replan import (
     ReplanFailureEvidence,
     RepositoryMultiCycleReplanError,
     build_replan_planner_prompt,
+    build_successor_queue,
     validate_replan_envelope,
+)
+from automation.orchestration.repository_multi_cycle_task_spec import (
+    RepositoryMultiCycleTaskSpec,
 )
 from run_codex import run_codex
 
@@ -55,13 +59,17 @@ class ReplanPlannerRequest:
 
 @dataclass(frozen=True)
 class ReplanPlannerResult:
-    """In-memory outcome; successor construction is intentionally deferred."""
+    """In-memory planner and deterministic successor-construction outcome."""
 
     status: str
     reason_code: str
     replan_attempt_number: int
     validated_envelope: ReplanEnvelope | None
     planner_call_count: int
+    replacement_task_id: str | None = None
+    successor_queue: RepositoryMultiCycleTaskSpec | None = None
+    serialized_successor_queue: str | None = None
+    successor_queue_sha256: str | None = None
 
 
 def _run_git(
@@ -293,12 +301,44 @@ def run_replan_planner(
                         None,
                         call_count,
                     )
+                try:
+                    plan = build_successor_queue(
+                        request.evidence,
+                        envelope,
+                        request.replan_attempt_number,
+                    )
+                except ValueError:
+                    return ReplanPlannerResult(
+                        "blocked",
+                        "replan.successor.build_failed",
+                        request.replan_attempt_number,
+                        None,
+                        call_count,
+                    )
+                if (
+                    plan.status != "replace_failed_task"
+                    or plan.replacement_task is None
+                    or plan.successor_queue is None
+                    or plan.serialized_successor_queue is None
+                    or plan.successor_queue_sha256 is None
+                ):
+                    return ReplanPlannerResult(
+                        "blocked",
+                        "replan.successor.build_failed",
+                        request.replan_attempt_number,
+                        None,
+                        call_count,
+                    )
                 return ReplanPlannerResult(
-                    "replacement_envelope_ready",
-                    "replan.planner.replacement_envelope_ready",
+                    "successor_ready",
+                    "replan.successor.ready",
                     request.replan_attempt_number,
                     envelope,
                     call_count,
+                    plan.replacement_task.task_id,
+                    plan.successor_queue,
+                    plan.serialized_successor_queue,
+                    plan.successor_queue_sha256,
                 )
     except AcceptedHeadSnapshotError as exc:
         return ReplanPlannerResult(
