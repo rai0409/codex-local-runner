@@ -274,6 +274,162 @@ def test_distinct_later_event_increments_attempt_without_budget_policy(tmp_path:
     assert planner.calls[0].replan_attempt_number == 2
 
 
+def test_first_and_second_attempt_are_allowed_with_budget_two(tmp_path: Path) -> None:
+    first_input = _input(tmp_path)
+    first_planner = _Planner()
+    first = coordinate_verified_terminal_replan(
+        first_input, max_auto_replans=2, planner_pipeline=first_planner
+    )
+    second_input = _input(
+        tmp_path,
+        terminal=_terminal(
+            queue_sha=first_input.predecessor_queue_spec_sha256,
+            cycle_run_id="cycle-20260823000000000002",
+        ),
+    )
+    second_planner = _Planner()
+    second = coordinate_verified_terminal_replan(
+        second_input, max_auto_replans=2, planner_pipeline=second_planner
+    )
+
+    assert first.replan_attempt_number == 1
+    assert second.replan_attempt_number == 2
+    assert len(first_planner.calls) == len(second_planner.calls) == 1
+
+
+def test_third_attempt_is_rejected_before_planner_or_persistence(tmp_path: Path) -> None:
+    first_input = _input(tmp_path)
+    coordinate_verified_terminal_replan(first_input, planner_pipeline=_Planner())
+    second_input = _input(
+        tmp_path,
+        terminal=_terminal(
+            queue_sha=first_input.predecessor_queue_spec_sha256,
+            cycle_run_id="cycle-20260823000000000002",
+        ),
+    )
+    coordinate_verified_terminal_replan(second_input, planner_pipeline=_Planner())
+    campaign_before = {
+        path: (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in (tmp_path / "replans").rglob("*")
+        if path.is_file()
+    }
+    third_input = _input(
+        tmp_path,
+        terminal=_terminal(
+            queue_sha=first_input.predecessor_queue_spec_sha256,
+            cycle_run_id="cycle-20260823000000000003",
+        ),
+    )
+    planner, persistence = _Planner(), mock.Mock()
+
+    result = coordinate_verified_terminal_replan(
+        third_input,
+        max_auto_replans=2,
+        planner_pipeline=planner,
+        persistence_pipeline=persistence,
+    )
+
+    assert result.status == "blocked"
+    assert result.reason_code == "replan.budget_exhausted"
+    assert result.replan_attempt_number == 3
+    assert result.planner_call_count == 0
+    assert planner.calls == []
+    persistence.assert_not_called()
+    assert campaign_before == {
+        path: (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in (tmp_path / "replans").rglob("*")
+        if path.is_file()
+    }
+
+
+def test_same_event_at_budget_limit_is_reused(tmp_path: Path) -> None:
+    first_input = _input(tmp_path)
+    coordinate_verified_terminal_replan(first_input, planner_pipeline=_Planner())
+    second_input = _input(
+        tmp_path,
+        terminal=_terminal(
+            queue_sha=first_input.predecessor_queue_spec_sha256,
+            cycle_run_id="cycle-20260823000000000002",
+        ),
+    )
+    coordinate_verified_terminal_replan(second_input, planner_pipeline=_Planner())
+    planner = _Planner()
+
+    result = coordinate_verified_terminal_replan(
+        second_input, max_auto_replans=2, planner_pipeline=planner
+    )
+
+    assert result.status == "successor_ready"
+    assert result.replan_attempt_number == 2
+    assert result.reason_code != "replan.budget_exhausted"
+    assert result.planner_call_count == 0
+    assert planner.calls == []
+
+
+@pytest.mark.parametrize("budget", [0, -1, 9, True])
+def test_invalid_internal_budget_blocks_before_planner(
+    tmp_path: Path, budget: Any
+) -> None:
+    planner, persistence = _Planner(), mock.Mock()
+
+    result = coordinate_verified_terminal_replan(
+        _input(tmp_path),
+        max_auto_replans=budget,
+        planner_pipeline=planner,
+        persistence_pipeline=persistence,
+    )
+
+    assert result.status == "blocked"
+    assert result.reason_code == "replan.coordinator.budget_invalid"
+    assert planner.calls == []
+    persistence.assert_not_called()
+
+
+def test_noneligible_terminal_ignores_budget(tmp_path: Path) -> None:
+    value = _input(tmp_path)
+    terminal = _terminal(
+        reason="single_task.source.dirty",
+        queue_sha=value.predecessor_queue_spec_sha256,
+    )
+    planner = _Planner()
+
+    result = coordinate_verified_terminal_replan(
+        _input(tmp_path, terminal=terminal),
+        max_auto_replans=0,
+        planner_pipeline=planner,
+    )
+
+    assert result.status == "not_eligible"
+    assert planner.calls == []
+
+
+def test_planner_correction_call_count_does_not_consume_campaign_attempt(
+    tmp_path: Path,
+) -> None:
+    class TwoCallPlanner(_Planner):
+        def __call__(self, request: ReplanPlannerRequest) -> ReplanPlannerResult:
+            result = super().__call__(request)
+            return ReplanPlannerResult(
+                result.status,
+                result.reason_code,
+                result.replan_attempt_number,
+                result.validated_envelope,
+                2,
+                result.replacement_task_id,
+                result.successor_queue,
+                result.serialized_successor_queue,
+                result.successor_queue_sha256,
+            )
+
+    result = coordinate_verified_terminal_replan(
+        _input(tmp_path), max_auto_replans=1, planner_pipeline=TwoCallPlanner()
+    )
+
+    assert result.status == "successor_ready"
+    assert result.replan_attempt_number == 1
+    assert result.planner_call_count == 2
+
+
 def test_corrupt_campaign_blocks_without_planner(tmp_path: Path) -> None:
     value = _input(tmp_path)
     first = coordinate_verified_terminal_replan(value, planner_pipeline=_Planner())
