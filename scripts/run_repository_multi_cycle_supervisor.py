@@ -20,6 +20,7 @@ def main(argv: list[str] | None=None) -> int:
         if getattr(args,argument) is not None: kwargs[keyword]=getattr(args,argument)
     if args.auto_replan:
         kwargs["replan_coordinator"]=partial(coordinate_verified_terminal_replan,max_auto_replans=args.max_auto_replans)
+        kwargs["auto_replan_launch"]=True
     supervisor=RepositoryMultiCycleSupervisor(args.repository_id,args.queue_spec,**kwargs)
     signal.signal(signal.SIGTERM,supervisor.request_shutdown); signal.signal(signal.SIGINT,supervisor.request_shutdown); result=supervisor.run_forever()
     for key in ("status","reason_code","repository_id","queue_sha256","cycle_run_id","crash_restart_count"): print(f"{key}={getattr(result,key) or ''}")
