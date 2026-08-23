@@ -9,6 +9,7 @@ import unittest
 
 from automation.execution.codex_executor_adapter import (
     NO_CONFIRMATION_APPROVAL_POLICY,
+    NO_CONFIRMATION_APPROVAL_CONFIG,
     NO_CONFIRMATION_PROFILE_NAME,
     NO_CONFIRMATION_SANDBOX,
     build_no_confirmation_codex_command,
@@ -92,8 +93,7 @@ class CodexNoConfirmationExecutionProfileTests(unittest.TestCase):
         self.assertEqual(command[:2], ["codex", "exec"])
         self.assertIn("--sandbox", command)
         self.assertEqual(command[command.index("--sandbox") + 1], NO_CONFIRMATION_SANDBOX)
-        self.assertIn("--ask-for-approval", command)
-        self.assertEqual(command[command.index("--ask-for-approval") + 1], NO_CONFIRMATION_APPROVAL_POLICY)
+        self.assertEqual(command[command.index("--config") + 1], NO_CONFIRMATION_APPROVAL_CONFIG)
         self.assertEqual(command[-1], "-")
         self.assertNotIn("--yolo", command)
         self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", command)
@@ -105,9 +105,10 @@ class CodexNoConfirmationExecutionProfileTests(unittest.TestCase):
         command = build_no_confirmation_codex_command()
         self.assertEqual(validate_no_confirmation_codex_command(command), [])
         self.assertIn("sandbox bypass flags rejected", validate_no_confirmation_codex_command([*command[:-1], "--yolo", "-"]))
+        self.assertIn("sandbox bypass flags rejected", validate_no_confirmation_codex_command([*command[:-1], "--approve-for-me", "-"]))
         self.assertIn(
             "workspace-write sandbox required",
-            validate_no_confirmation_codex_command(["codex", "exec", "--sandbox", "danger-full-access", "--ask-for-approval", "never", "-"]),
+            validate_no_confirmation_codex_command(["codex", "exec", "--sandbox", "danger-full-access", "--config", NO_CONFIRMATION_APPROVAL_CONFIG, "-"]),
         )
         self.assertIn(
             "sandbox bypass flags rejected",

@@ -9,7 +9,44 @@ from unittest import mock
 from run_codex import run_codex
 
 
+class _CapturingSubprocess:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def __call__(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args=args[0], returncode=0, stdout=kwargs["input"], stderr=kwargs["input"])
+
+
 class RunCodexContractTests(unittest.TestCase):
+    def test_production_path_uses_no_confirmation_stdin_contract(self) -> None:
+        prompt = "PROMPT_SECRET_MARKER_7A19"
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
+            runner = _CapturingSubprocess()
+            with mock.patch("run_codex.shutil.which", return_value="/usr/bin/codex"), mock.patch(
+                "run_codex.subprocess.run", side_effect=runner
+            ):
+                result = run_codex(task={"repo_path": repo_dir}, prompt=prompt, work_root=work_root, persist_prompt=False)
+            args, kwargs = runner.calls[0]
+            command = args[0]
+            self.assertEqual(result["status"], "completed")
+            self.assertNotIn(prompt, command)
+            self.assertEqual(command[command.index("--sandbox") + 1], "workspace-write")
+            self.assertEqual(command[command.index("--config") + 1], 'approval_policy="never"')
+            self.assertEqual(command[-1], "-")
+            self.assertNotIn("--approve-for-me", command)
+            self.assertNotIn("--yolo", command)
+            self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", command)
+            self.assertNotIn("danger-full-access", command)
+            self.assertIn(prompt, kwargs["input"])
+            self.assertTrue(kwargs["text"])
+            self.assertTrue(kwargs["capture_output"])
+            self.assertEqual(kwargs["cwd"], repo_dir)
+            self.assertEqual(kwargs["timeout"], 3600)
+            self.assertEqual(result["prompt_path"], "")
+            self.assertNotIn(prompt, Path(result["meta_path"]).read_text(encoding="utf-8"))
+            self.assertNotIn(prompt, Path(result["stdout_path"]).read_text(encoding="utf-8"))
+            self.assertNotIn(prompt, Path(result["stderr_path"]).read_text(encoding="utf-8"))
     def test_not_started_when_codex_is_missing(self) -> None:
         with mock.patch("run_codex.shutil.which", return_value=None):
             result = run_codex(task={"repo_path": "."}, prompt="test")
