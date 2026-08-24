@@ -15,6 +15,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repository-id", required=True)
     parser.add_argument("--queue-spec", required=True)
     parser.add_argument("--resume-cycle-run-id")
+    parser.add_argument("--resume-terminal-cycle-run-id")
     parser.add_argument("--registry-path")
     parser.add_argument("--bindings-path")
     parser.add_argument("--providers-path")
@@ -32,7 +33,7 @@ def _emit(result: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
-        kwargs = {"repository_id": arguments.repository_id, "queue_spec_path": arguments.queue_spec, "resume_cycle_run_id": arguments.resume_cycle_run_id}
+        kwargs = {"repository_id": arguments.repository_id, "queue_spec_path": arguments.queue_spec, "resume_cycle_run_id": arguments.resume_cycle_run_id, "terminal_resume_cycle_run_id": arguments.resume_terminal_cycle_run_id}
         for argument, keyword in (("registry_path","registry_path"),("bindings_path","bindings_path"),("providers_path","providers_path"),("output_root","output_root"),("single_task_output_root","single_task_output_root")):
             value = getattr(arguments, argument)
             if value is not None: kwargs[keyword] = value

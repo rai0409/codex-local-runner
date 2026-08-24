@@ -147,7 +147,20 @@ def _verified_continuation_edge(receipt: Mapping[str, Any], *, source_root: str,
     if not isinstance(completed_count, int) or not isinstance(results, list) or len(results) != completed_count or not _sha(final):
         raise ValueError("multi_cycle.continuation.evidence_invalid")
     if completed_count == 0:
-        if final != source_anchor:
+        # A terminal attempt may start at a previously verified continuation
+        # tip and fail before accepting another queue task.  It creates no new
+        # edge; the discovery pass verifies that its base is already reachable.
+        base = receipt.get("continuation_base_sha", source_anchor)
+        if not _sha(base) or final != base or results:
+            raise ValueError("multi_cycle.continuation.evidence_invalid")
+        try:
+            valid = (
+                _git(source_root, "cat-file", "-e", f"{base}^{{commit}}").returncode == 0
+                and _git(source_root, "merge-base", "--is-ancestor", source_anchor, base).returncode == 0
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            valid = False
+        if not valid:
             raise ValueError("multi_cycle.continuation.evidence_invalid")
         return None
     first = results[0] if results else None
@@ -179,10 +192,68 @@ def _verified_continuation_edge(receipt: Mapping[str, Any], *, source_root: str,
     return base, final
 
 
+def _terminal_zero_completion_noop_is_verified(directory: Path, receipt: Mapping[str, Any], *, repository_id: str, source_root: str, source_anchor: str, reachable_heads: set[str]) -> bool:
+    """Check that a zero-completion terminal is a no-op, not forged progress."""
+    base = receipt.get("continuation_base_sha")
+    if not (_sha(base) and receipt.get("final_accepted_head_sha") == base and base in reachable_heads):
+        return False
+    try:
+        state, _ = load_latest_checkpoint(directory / "state")
+    except (OSError, RepositoryMultiCycleStateError):
+        return False
+    terminal = state.get("terminal_task_result")
+    child_valid = False
+    if isinstance(terminal, dict):
+        try:
+            child_path = Path(str(terminal.get("child_receipt_path", "")))
+            payload = child_path.read_bytes()
+            child = json.loads(payload)
+            sidecar = child_path.with_name("receipt.sha256").read_text(encoding="utf-8")
+            child_valid = (
+                child_path.name == "receipt.json"
+                and terminal.get("child_receipt_sha256") == hashlib.sha256(payload).hexdigest()
+                and sidecar == f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"
+                and isinstance(child, dict)
+                and child.get("repository_id") == repository_id
+                and child.get("task_id") == terminal.get("task_id")
+                and child.get("status") == terminal.get("status")
+                and child.get("commit_created") is False
+                and child.get("commit_sha") is None
+                and child.get("commit_parent_sha") is None
+            )
+        except (OSError, ValueError, json.JSONDecodeError):
+            child_valid = False
+    valid = (
+        state.get("cycle_run_id") == directory.name == receipt.get("cycle_run_id")
+        and state.get("repository_id") == receipt.get("repository_id") == repository_id
+        and state.get("queue_spec_sha256") == receipt.get("queue_spec_sha256")
+        and state.get("source_repository_root") == source_root
+        and state.get("source_anchor_sha") == receipt.get("source_anchor_sha") == source_anchor
+        and state.get("continuation_base_sha") == base
+        and state.get("accepted_head_sha") == base
+        and state.get("next_task_index") == 0
+        and state.get("completed_task_results") == []
+        and state.get("lifecycle_status") == "finalizing"
+        and state.get("terminal_status") == receipt.get("status") in {"blocked", "failed"}
+        and state.get("terminal_reason_code") == receipt.get("reason_code")
+        and state.get("stopped_task_id") == receipt.get("stopped_task_id")
+        and isinstance(terminal, dict)
+        and terminal.get("task_index") == 0
+        and terminal.get("task_id") == receipt.get("stopped_task_id")
+        and terminal.get("status") == receipt.get("status")
+        and terminal.get("commit_created") is False
+        and terminal.get("commit_sha") is None
+        and terminal.get("commit_parent_sha") is None
+        and child_valid
+    )
+    return bool(valid)
+
+
 def _discover_verified_continuation_base(repository_id: str, source_root: str, source_anchor: str, cycle_output_root: str | os.PathLike[str], *, exclude_cycle_run_id: str | None = None) -> str:
     """Follow only uniquely verified terminal accepted-chain edges from anchor."""
     root = Path(cycle_output_root).expanduser()
     edges: dict[str, set[str]] = {}
+    zero_completion: list[tuple[Path, Mapping[str, Any]]] = []
     if not root.exists():
         return source_anchor
     try:
@@ -210,22 +281,133 @@ def _discover_verified_continuation_base(repository_id: str, source_root: str, s
         edge = _verified_continuation_edge(receipt, source_root=source_root, source_anchor=source_anchor)
         if edge is not None:
             edges.setdefault(edge[0], set()).add(edge[1])
+        elif receipt.get("completed_count") == 0:
+            zero_completion.append((directory, receipt))
     tip, seen = source_anchor, {source_anchor}
     while tip in edges:
         targets = edges[tip]
-        if len(targets) != 1:
-            raise ValueError("multi_cycle.continuation.ambiguous")
-        tip = next(iter(targets))
+        if len(targets) == 1:
+            selected = next(iter(targets))
+        else:
+            # Terminal-resume receipts carry a cumulative verified prefix.
+            # Consequently A→B and a later A→C (where B is an ancestor of C)
+            # are equivalent observations, not a fork.  Only a unique deepest
+            # descendant is safe; sibling targets remain ambiguous.
+            deepest = []
+            for candidate in targets:
+                try:
+                    if all(_git(source_root, "merge-base", "--is-ancestor", other, candidate).returncode == 0 for other in targets):
+                        deepest.append(candidate)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            if len(deepest) != 1:
+                raise ValueError("multi_cycle.continuation.ambiguous")
+            selected = deepest[0]
+        tip = selected
         if tip in seen:
             raise ValueError("multi_cycle.continuation.evidence_invalid")
         seen.add(tip)
+    # A zero-new-completion terminal must prove that it began at an already
+    # verified accepted tip.  It contributes no edge and therefore cannot
+    # replace or poison that prior evidence.
+    for directory, receipt in zero_completion:
+        if not _terminal_zero_completion_noop_is_verified(
+            directory, receipt, repository_id=repository_id, source_root=source_root,
+            source_anchor=source_anchor, reachable_heads=seen,
+        ):
+            raise ValueError("multi_cycle.continuation.evidence_invalid")
     return tip
 
 
-def run_repository_multi_cycle(repository_id: str, queue_spec_path: str | os.PathLike[str], *, registry_path: str | os.PathLike[str] = "config/repos.yaml", bindings_path: str | os.PathLike[str] | None = DEFAULT_REPOSITORY_BINDINGS_PATH, providers_path: str | os.PathLike[str] = "config/providers.yaml", output_root: str | os.PathLike[str] = DEFAULT_REPOSITORY_MULTI_CYCLE_OUTPUT_ROOT, single_task_output_root: str | os.PathLike[str] = DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT, adapter_resolver: Callable[[], Any] | None = None, evaluator_runner: Callable[..., Any] | None = None, single_task_runner: Callable[..., RepositorySingleTaskRunResult] = run_repository_single_task, resume_cycle_run_id: str | None = None) -> RepositoryMultiCycleRunResult:
+def _load_verified_terminal_resume_seed(*, predecessor_cycle_run_id: str, repository_id: str, queue_sha256: str, queue: Any, source_root: str, source_branch: str, source_anchor: str, cycle_output_root: Path, single_task_output_root: Path) -> tuple[str, str, list[dict[str, Any]]]:
+    """Return a verified contiguous accepted prefix from one terminal cycle."""
+    if not isinstance(predecessor_cycle_run_id, str) or not re.fullmatch(r"cycle-[0-9]{20}", predecessor_cycle_run_id):
+        raise ValueError("multi_cycle.terminal_resume.run_id.invalid")
+    directory = cycle_output_root / predecessor_cycle_run_id
+    try:
+        receipt = read_verified_terminal_receipt(directory, repository_id, queue_sha256)
+        state, _ = load_latest_checkpoint(directory / "state")
+    except (OSError, RepositoryMultiCycleStatusError, RepositoryMultiCycleStateError) as exc:
+        raise ValueError("multi_cycle.terminal_resume.evidence_invalid") from exc
+    if receipt is None or receipt.get("status") == "completed":
+        raise ValueError("multi_cycle.terminal_resume.not_resumable")
+    completed = receipt.get("executed_task_results")
+    count = receipt.get("completed_count")
+    base, accepted = receipt.get("continuation_base_sha"), receipt.get("final_accepted_head_sha")
+    if not (
+        receipt.get("cycle_run_id") == predecessor_cycle_run_id
+        and receipt.get("repository_id") == repository_id
+        and receipt.get("queue_spec_sha256") == queue_sha256
+        and receipt.get("source_anchor_sha") == source_anchor
+        and isinstance(count, int) and not isinstance(count, bool) and 0 <= count < len(queue.tasks)
+        and isinstance(completed, list) and len(completed) == count
+        and _sha(base) and _sha(accepted)
+        and receipt.get("stopped_task_id") == queue.tasks[count].task_id
+        and state.get("cycle_run_id") == predecessor_cycle_run_id
+        and state.get("repository_id") == repository_id
+        and state.get("queue_spec_sha256") == queue_sha256
+        and state.get("source_repository_root") == source_root
+        and state.get("source_anchor_sha") == source_anchor
+        and state.get("continuation_base_sha") == base
+        and state.get("accepted_head_sha") == accepted
+        and state.get("next_task_index") == count
+        and state.get("completed_task_results") == completed
+        and state.get("lifecycle_status") == "finalizing"
+        and state.get("terminal_status") == receipt.get("status")
+        and state.get("terminal_reason_code") == receipt.get("reason_code")
+        and state.get("stopped_task_id") == receipt.get("stopped_task_id")
+        and isinstance(state.get("terminal_task_result"), dict)
+    ):
+        raise ValueError("multi_cycle.terminal_resume.evidence_invalid")
+    parent = base
+    seeded: list[dict[str, Any]] = []
+    for index, item in enumerate(completed):
+        task = queue.tasks[index]
+        spec, spec_sha = _runtime_single_task_spec(task, source_anchor)
+        if not isinstance(item, Mapping) or item.get("task_id") != task.task_id or item.get("status") != "completed" or item.get("parent_sha") != parent or not _sha(item.get("commit_sha")):
+            raise ValueError("multi_cycle.terminal_resume.prefix_invalid")
+        receipt_path = Path(str(item.get("child_receipt_path", "")))
+        try:
+            if receipt_path.name != "receipt.json" or not receipt_path.is_relative_to(single_task_output_root):
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError("multi_cycle.terminal_resume.prefix_invalid") from exc
+        child_id = receipt_path.parent.name
+        verified = _load_verified_completed_child_receipt(
+            receipt_path=receipt_path, expected_run_id=child_id, repository_id=repository_id,
+            task_id=task.task_id, task_spec_sha256=spec_sha, source_root=source_root,
+            source_branch=source_branch, source_anchor=source_anchor, expected_parent=parent,
+        )
+        if not verified or verified.get("commit_sha") != item.get("commit_sha"):
+            raise ValueError("multi_cycle.terminal_resume.prefix_invalid")
+        seeded.append(dict(item)); parent = item["commit_sha"]
+    terminal = state["terminal_task_result"]
+    task = queue.tasks[count]; spec, spec_sha = _runtime_single_task_spec(task, source_anchor)
+    child_id = _child_run_id(predecessor_cycle_run_id, count, task.task_id)
+    child_path = single_task_output_root / child_id / "receipt.json"
+    terminal_receipt = _load_verified_child_receipt(
+        receipt_path=child_path, expected_run_id=child_id, repository_id=repository_id,
+        task_id=task.task_id, task_spec_sha256=spec_sha, source_root=source_root,
+        source_branch=source_branch, source_anchor=source_anchor, expected_parent=parent,
+        expected_status=receipt["status"],
+    )
+    if not (
+        terminal_receipt and terminal.get("task_index") == count and terminal.get("task_id") == task.task_id
+        and terminal.get("status") == receipt["status"] and terminal.get("child_run_id") == child_id
+        and terminal.get("task_spec_sha256") == spec_sha and terminal.get("child_receipt_path") == str(child_path)
+        and terminal.get("commit_created") is False and terminal.get("commit_sha") is None
+        and terminal.get("commit_parent_sha") is None and parent == accepted
+    ):
+        raise ValueError("multi_cycle.terminal_resume.evidence_invalid")
+    return base, accepted, seeded
+
+
+def run_repository_multi_cycle(repository_id: str, queue_spec_path: str | os.PathLike[str], *, registry_path: str | os.PathLike[str] = "config/repos.yaml", bindings_path: str | os.PathLike[str] | None = DEFAULT_REPOSITORY_BINDINGS_PATH, providers_path: str | os.PathLike[str] = "config/providers.yaml", output_root: str | os.PathLike[str] = DEFAULT_REPOSITORY_MULTI_CYCLE_OUTPUT_ROOT, single_task_output_root: str | os.PathLike[str] = DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT, adapter_resolver: Callable[[], Any] | None = None, evaluator_runner: Callable[..., Any] | None = None, single_task_runner: Callable[..., RepositorySingleTaskRunResult] = run_repository_single_task, resume_cycle_run_id: str | None = None, terminal_resume_cycle_run_id: str | None = None) -> RepositoryMultiCycleRunResult:
     """Execute or resume an ordered queue; only verified receipts advance it."""
     started = _utc_now(); generated = "cycle-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     root = Path(output_root).expanduser()
+    if resume_cycle_run_id is not None and terminal_resume_cycle_run_id is not None:
+        raise ValueError("multi_cycle.resume.mode_conflict")
     if resume_cycle_run_id is not None:
         if not isinstance(resume_cycle_run_id, str) or not re.fullmatch(r"cycle-[0-9]{20}", resume_cycle_run_id): raise ValueError("multi_cycle.resume.run_id.invalid")
         run_id, directory = resume_cycle_run_id, root / resume_cycle_run_id
@@ -256,13 +438,26 @@ def run_repository_multi_cycle(repository_id: str, queue_spec_path: str | os.Pat
             continuation_base = source_anchor
             try: continuation_base = _discover_verified_continuation_base(repository_id, source_root, source_anchor, root, exclude_cycle_run_id=run_id)
             except ValueError as exc: return record("blocked", str(exc))
+            if terminal_resume_cycle_run_id is not None:
+                continuation_base, accepted_head, completed = _load_verified_terminal_resume_seed(
+                    predecessor_cycle_run_id=terminal_resume_cycle_run_id, repository_id=repository_id,
+                    queue_sha256=queue_sha, queue=queue, source_root=source_root,
+                    source_branch=source_branch, source_anchor=source_anchor,
+                    cycle_output_root=root, single_task_output_root=Path(single_task_output_root).expanduser(),
+                )
         else:
             continuation_base = source_anchor
-        accepted_head = continuation_base
+        if accepted_head is None:
+            accepted_head = continuation_base
     except (OSError, ValueError): return record("blocked", "multi_cycle.preflight.invalid")
 
+    terminal_resume_start_index = len(completed) if terminal_resume_cycle_run_id is not None else None
+
     def checkpoint(lifecycle: str, active: dict[str, Any] | None = None, *, terminal_status: str | None = None, terminal_reason_code: str | None = None, terminal_finished_at: str | None = None, stopped_task: str | None = None, terminal_task_result: dict[str, Any] | None = None) -> None:
-        write_checkpoint(directory / "state", {"cycle_run_id":run_id,"repository_id":repository_id,"queue_spec_sha256":queue_sha,"registry_sha256":registry_sha,"bindings_sha256":bindings_sha,"providers_sha256":providers_sha,"source_repository_root":source_root,"source_anchor_sha":source_anchor,"continuation_base_sha":continuation_base,"accepted_head_sha":accepted_head,"task_count":task_count,"next_task_index":len(completed),"completed_task_results":completed,"active_task":active,"terminal_task_result":terminal_task_result,"lifecycle_status":lifecycle,"terminal_status":terminal_status,"terminal_reason_code":terminal_reason_code,"terminal_finished_at":terminal_finished_at,"stopped_task_id":stopped_task,"started_at":started,"updated_at":_utc_now()})
+        state = {"cycle_run_id":run_id,"repository_id":repository_id,"queue_spec_sha256":queue_sha,"registry_sha256":registry_sha,"bindings_sha256":bindings_sha,"providers_sha256":providers_sha,"source_repository_root":source_root,"source_anchor_sha":source_anchor,"continuation_base_sha":continuation_base,"accepted_head_sha":accepted_head,"task_count":task_count,"next_task_index":len(completed),"completed_task_results":completed,"active_task":active,"terminal_task_result":terminal_task_result,"lifecycle_status":lifecycle,"terminal_status":terminal_status,"terminal_reason_code":terminal_reason_code,"terminal_finished_at":terminal_finished_at,"stopped_task_id":stopped_task,"started_at":started,"updated_at":_utc_now()}
+        if terminal_resume_cycle_run_id is not None:
+            state.update({"terminal_resume_requested":True,"terminal_resume_predecessor_cycle_run_id":terminal_resume_cycle_run_id,"terminal_resume_task_index":terminal_resume_start_index,"terminal_resume_accepted_head_sha":continuation_base if terminal_resume_start_index == 0 else completed[terminal_resume_start_index - 1]["commit_sha"],"terminal_resume_accepted_task_ids":[item["task_id"] for item in completed[:terminal_resume_start_index]]})
+        write_checkpoint(directory / "state", state)
 
     def terminalize(status: str, reason: str, task: Any, index: int, child_id: str, spec_sha: str, receipt: Mapping[str, Any]) -> RepositoryMultiCycleRunResult:
         nonlocal stopped_task_id

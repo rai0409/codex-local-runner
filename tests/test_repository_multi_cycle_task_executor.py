@@ -13,8 +13,8 @@ class Adapter:
     def __init__(self): self.prompts=[]
     def execute_prepared_worktree(self,payload):
         prompt=payload["prompt"]; self.prompts.append(prompt); root=Path(payload["worktree_path"])
-        target={"PROMPT_SECRET_ONE":"one.txt","two":"two.txt","three":"three.txt"}[prompt]
-        prior={"two":"one.txt","three":"two.txt"}.get(prompt)
+        target={"PROMPT_SECRET_ONE":"one.txt","two":"two.txt","three":"three.txt","four":"four.txt"}[prompt]
+        prior={"two":"one.txt","three":"two.txt","four":"three.txt"}.get(prompt)
         if prior: assert (root/prior).is_file()
         (root/target).write_text(prompt+"\n",encoding="utf-8")
         return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
@@ -22,6 +22,12 @@ class FailingAdapter:
     name="codex_cli"
     def __init__(self): self.prompts=[]
     def execute_prepared_worktree(self,payload): self.prompts.append(payload["prompt"]); raise RuntimeError("execution failure")
+class SelectiveFailAdapter(Adapter):
+ def __init__(self, fail_prompt): super().__init__(); self.fail_prompt=fail_prompt
+ def execute_prepared_worktree(self,payload):
+  if payload["prompt"] == self.fail_prompt:
+   self.prompts.append(payload["prompt"]); raise RuntimeError("execution failure")
+  return super().execute_prepared_worktree(payload)
 class ScopeRecoveryAdapter:
  name="codex_cli"
  def __init__(self): self.prompts=[]; self.scope_repairs=0
@@ -91,13 +97,49 @@ class ExecutorTests(unittest.TestCase):
   q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); first=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); b=first.accepted_head_sha
   for status in ("blocked","failed"):
    self.terminal_status(first,status); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
-  value=json.loads(Path(first.receipt_path).read_text()); value["completed_count"]=0; value["executed_task_results"]=[]; value["final_accepted_head_sha"]=self.a; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); Path(first.receipt_path).write_bytes(payload); Path(first.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
+  value=json.loads(Path(first.receipt_path).read_text()); value["completed_count"]=0; value["executed_task_results"]=[]; value["final_accepted_head_sha"]=self.a; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); Path(first.receipt_path).write_bytes(payload); Path(first.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n");
+  with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.evidence_invalid"): _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
   value["completed_count"]=1; value["executed_task_results"]=[{"task_id":"one","status":"completed","commit_sha":b,"parent_sha":self.a}]; value["final_accepted_head_sha"]=b; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); Path(first.receipt_path).write_bytes(payload); Path(first.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
   duplicate=self.output/"cycle-20260823000000000000"; duplicate.mkdir(); same=dict(value); same["cycle_run_id"]=duplicate.name; payload=json.dumps(same,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); (duplicate/"receipt.json").write_bytes(payload); (duplicate/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
   fork=self.output/"cycle-20260823000000000001"; fork.mkdir(); tree=git(self.source,"show","-s","--format=%T",b).stdout.strip(); x=subprocess.run(["git","-C",str(self.source),"commit-tree",tree,"-p",self.a],input="X\n",text=True,capture_output=True,check=True).stdout.strip(); other=dict(value); other["cycle_run_id"]=fork.name; other["final_accepted_head_sha"]=x; other["executed_task_results"]=[{"task_id":"other","status":"completed","commit_sha":x,"parent_sha":self.a}]; payload=json.dumps(other,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); (fork/"receipt.json").write_bytes(payload); (fork/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
   with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.ambiguous"): _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
   (fork/"receipt.sha256").write_text("0"*64+"  receipt.json\n")
   with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.evidence_invalid"): _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
+
+ def test_terminal_resume_reuses_verified_zero_completion_base_without_mutating_predecessor(self):
+  q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two")
+  first=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  b=first.accepted_head_sha
+  blocked=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.blocked_evaluator)
+  self.assertEqual((blocked.status,blocked.completed_count,blocked.accepted_head_sha),("blocked",0,b))
+  before=(Path(blocked.receipt_path).read_bytes(), tuple(sorted((p.name,p.read_bytes()) for p in (self.output/blocked.cycle_run_id/"state").iterdir())))
+  self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
+  resumed=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=blocked.cycle_run_id)
+  self.assertEqual(resumed.status,"completed"); self.assertNotEqual(resumed.cycle_run_id,blocked.cycle_run_id)
+  self.assertEqual(git(self.source,"rev-parse",f"{resumed.accepted_head_sha}^").stdout.strip(),b)
+  state,_=load_latest_checkpoint(self.output/resumed.cycle_run_id/"state")
+  self.assertTrue(state["terminal_resume_requested"]); self.assertEqual(state["terminal_resume_predecessor_cycle_run_id"],blocked.cycle_run_id); self.assertEqual(state["terminal_resume_task_index"],0)
+  self.assertEqual((Path(blocked.receipt_path).read_bytes(), tuple(sorted((p.name,p.read_bytes()) for p in (self.output/blocked.cycle_run_id/"state").iterdir()))),before)
+  self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
+
+ def test_terminal_resumes_only_first_unfinished_task_across_a_contiguous_four_task_prefix(self):
+  queue=self.base/"four.json"; queue.write_text(json.dumps({"schema_version":"1","tasks":[
+   {"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"},
+   {"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},
+   {"task_id":"three","prompt":"three","allowed_changed_paths":["three.txt"],"commit_message":"D"},
+   {"task_id":"four","prompt":"four","allowed_changed_paths":["four.txt"],"commit_message":"E"},
+  ]}))
+  first=run_repository_multi_cycle("repo",queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:SelectiveFailAdapter("two"),evaluator_runner=self.evaluator)
+  self.assertEqual((first.status,first.completed_count,first.stopped_task_id),("failed",1,"two")); b=first.accepted_head_sha
+  second=run_repository_multi_cycle("repo",queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:SelectiveFailAdapter("three"),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=first.cycle_run_id)
+  self.assertEqual((second.status,second.completed_count,second.stopped_task_id),("failed",2,"three")); c=second.accepted_head_sha
+  third=run_repository_multi_cycle("repo",queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:SelectiveFailAdapter("four"),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=second.cycle_run_id)
+  self.assertEqual((third.status,third.completed_count,third.stopped_task_id),("failed",3,"four"),third.reason_code); d=third.accepted_head_sha
+  final=run_repository_multi_cycle("repo",queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=third.cycle_run_id)
+  self.assertEqual((final.status,final.completed_count),("completed",4)); e=final.accepted_head_sha
+  self.assertEqual(git(self.source,"rev-parse",f"{c}^").stdout.strip(),b); self.assertEqual(git(self.source,"rev-parse",f"{d}^").stdout.strip(),c); self.assertEqual(git(self.source,"rev-parse",f"{e}^").stdout.strip(),d)
+  self.assertEqual(git(self.source,"rev-list","--all","--count","--","one.txt").stdout.strip(),"1")
+  self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
 
  def _state(self, run_id, *, anchor, active, completed=None, accepted=None, **override):
   completed=[] if completed is None else completed

@@ -14,13 +14,14 @@ def _max_auto_replans(value: str) -> int:
     return parsed
 
 def main(argv: list[str] | None=None) -> int:
-    parser=argparse.ArgumentParser(); parser.add_argument("--repository-id",required=True); parser.add_argument("--queue-spec",required=True); parser.add_argument("--poll-seconds",type=float,default=1.0); parser.add_argument("--max-crash-restarts",type=int,default=3); parser.add_argument("--max-backoff-seconds",type=float,default=30.0); parser.add_argument("--registry-path"); parser.add_argument("--bindings-path"); parser.add_argument("--providers-path"); parser.add_argument("--output-root"); parser.add_argument("--single-task-output-root"); parser.add_argument("--auto-replan",action="store_true"); parser.add_argument("--max-auto-replans",type=_max_auto_replans,default=2)
+    parser=argparse.ArgumentParser(); parser.add_argument("--repository-id",required=True); parser.add_argument("--queue-spec",required=True); parser.add_argument("--poll-seconds",type=float,default=1.0); parser.add_argument("--max-crash-restarts",type=int,default=3); parser.add_argument("--max-backoff-seconds",type=float,default=30.0); parser.add_argument("--registry-path"); parser.add_argument("--bindings-path"); parser.add_argument("--providers-path"); parser.add_argument("--output-root"); parser.add_argument("--single-task-output-root"); parser.add_argument("--auto-replan",action="store_true"); parser.add_argument("--max-auto-replans",type=_max_auto_replans,default=2); parser.add_argument("--resume-terminal",action="store_true")
     args=parser.parse_args(argv); kwargs={"poll_seconds":args.poll_seconds,"max_crash_restarts":args.max_crash_restarts,"max_backoff_seconds":args.max_backoff_seconds}
     for argument,keyword in (("registry_path","registry_path"),("bindings_path","bindings_path"),("providers_path","providers_path"),("output_root","cycle_output_root"),("single_task_output_root","single_task_output_root")):
         if getattr(args,argument) is not None: kwargs[keyword]=getattr(args,argument)
     if args.auto_replan:
         kwargs["replan_coordinator"]=partial(coordinate_verified_terminal_replan,max_auto_replans=args.max_auto_replans)
         kwargs["auto_replan_launch"]=True
+    if args.resume_terminal: kwargs["resume_terminal"]=True
     supervisor=RepositoryMultiCycleSupervisor(args.repository_id,args.queue_spec,**kwargs)
     signal.signal(signal.SIGTERM,supervisor.request_shutdown); signal.signal(signal.SIGINT,supervisor.request_shutdown); result=supervisor.run_forever()
     for key in ("status","reason_code","repository_id","queue_sha256","cycle_run_id","crash_restart_count"): print(f"{key}={getattr(result,key) or ''}")
