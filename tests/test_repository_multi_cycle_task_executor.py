@@ -22,6 +22,21 @@ class FailingAdapter:
     name="codex_cli"
     def __init__(self): self.prompts=[]
     def execute_prepared_worktree(self,payload): self.prompts.append(payload["prompt"]); raise RuntimeError("execution failure")
+class ScopeRecoveryAdapter:
+    name="codex_cli"
+    def __init__(self): self.prompts=[]; self.scope_repairs=0
+    def execute_prepared_worktree(self,payload):
+        prompt=payload["prompt"]; self.prompts.append(prompt); root=Path(payload["worktree_path"])
+        if prompt=="PROMPT_SECRET_ONE":
+            (root/"one.txt").write_text("one\n",encoding="utf-8")
+            for path in ("tests/test_one.py","docs/recovery.md"):
+                target=root/path; target.parent.mkdir(parents=True,exist_ok=True); target.write_text("x\n",encoding="utf-8")
+        elif prompt.startswith("Mode: Repair\nGoal: remove only runner-identified out-of-scope changes"):
+            self.scope_repairs+=1; (root/"docs/recovery.md").unlink()
+        elif prompt=="two":
+            assert (root/"one.txt").is_file(); (root/"two.txt").write_text("two\n",encoding="utf-8")
+        else: raise AssertionError(prompt)
+        return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
 class ExecutorTests(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory(); self.base=Path(self.t.name); self.source=self.base/"source"; self.source.mkdir(); git(self.source,"init","-b","main"); git(self.source,"config","user.name","T"); git(self.source,"config","user.email","t@example.invalid"); (self.source/"base.txt").write_text("A\n"); git(self.source,"add","--","base.txt"); git(self.source,"commit","-m","A"); self.a=git(self.source,"rev-parse","HEAD").stdout.strip()
@@ -43,6 +58,21 @@ class ExecutorTests(unittest.TestCase):
    child=Path(item["child_receipt_path"]); child_value=json.loads(child.read_text()); self.assertEqual((child.parent/"receipt.sha256").read_text(),f"{hashlib.sha256(child.read_bytes()).hexdigest()}  receipt.json\n"); self.assertEqual(child_value["source_state_before"]["head_sha"],self.a); self.assertEqual(child_value["source_state_after"]["head_sha"],self.a)
   self.assertNotIn("PROMPT_SECRET_ONE",Path(result.receipt_path).read_text())
   persisted="\n".join(path.read_text(encoding="utf-8",errors="ignore") for path in (self.output/result.cycle_run_id).rglob("*") if path.is_file()); self.assertNotIn("PROMPT_SECRET_ONE",persisted); self.assertFalse(any(path.name.endswith(".runtime.json") for path in (self.output/result.cycle_run_id).rglob("*")))
+
+ def test_recovered_task_is_accepted_and_next_task_continues(self):
+  profile=json.loads(self.profile.read_text()); profile["max_changed_files"]=3; self.profile.write_text(json.dumps(profile))
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[
+   {"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt","tests/test_existing.py"],"commit_message":"B"},
+   {"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},
+  ]}))
+  adapter=ScopeRecoveryAdapter()
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:adapter,evaluator_runner=self.evaluator)
+  self.assertEqual((result.status,result.completed_count),("completed",2)); self.assertEqual(adapter.scope_repairs,1)
+  receipt=json.loads(Path(result.receipt_path).read_text()); first,second=receipt["executed_task_results"]
+  first_child=json.loads(Path(first["child_receipt_path"]).read_text())
+  self.assertEqual(first_child["scope_recovery_status"],"repair_succeeded")
+  self.assertEqual(first_child["unresolved_unexpected_changed_files"],[])
+  self.assertEqual(git(self.source,"rev-parse",f"{second['commit_sha']}^").stdout.strip(),first["commit_sha"])
 
  def test_cross_cycle_continuation_uses_real_git_chain_without_moving_source(self):
   q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two"); q3=self.one_task_queue("three","three")
