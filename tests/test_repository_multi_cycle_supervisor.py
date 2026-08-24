@@ -51,6 +51,17 @@ class SupervisorTests(unittest.TestCase):
     self.terminal(f"cycle-0000000000000000000{len(status)}",status); self.assertEqual(self.make().run_once().reason_code,"supervisor.queue.terminal_suppressed")
     self.temp.cleanup(); self.setUp()
   directory=self.terminal("cycle-00000000000000000009"); (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n"); self.assertEqual(self.make().run_once().reason_code,"supervisor.discovery.invalid"); self.assertEqual(self.calls,[])
+ def test_explicit_terminal_resume_launches_one_fresh_attempt_but_completed_stays_suppressed(self):
+  predecessor=self.terminal("cycle-00000000000000000010","blocked"); calls=[]
+  supervisor=self.make(); supervisor.resume_terminal=True
+  def launch(resume, *, queue_spec_path=None, terminal_resume_cycle_run_id=None):
+   calls.append((resume,terminal_resume_cycle_run_id)); return Worker()
+  supervisor._launch=launch
+  first=supervisor.run_once(); second=supervisor.run_once()
+  self.assertEqual(first.reason_code,"supervisor.terminal_resume.started"); self.assertEqual(calls,[(None,predecessor.name)])
+  self.assertEqual(second.reason_code,"supervisor.queue.terminal_suppressed"); self.assertEqual(calls,[(None,predecessor.name)])
+  self.temp.cleanup(); self.setUp(); self.terminal("cycle-00000000000000000011","completed"); supervisor=self.make(); supervisor.resume_terminal=True
+  self.assertEqual(supervisor.run_once().reason_code,"supervisor.queue.terminal_suppressed"); self.assertEqual(self.calls,[])
  def test_replan_hook_defaults_disabled_and_existing_terminal_behavior_is_unchanged(self):
   self.replan_terminal(); supervisor=self.make(); result=supervisor.run_once()
   self.assertEqual((result.status,result.reason_code),("idle","supervisor.queue.terminal_suppressed")); self.assertIsNone(result.replan_result); self.assertEqual(self.calls,[])
@@ -195,10 +206,12 @@ class SupervisorTests(unittest.TestCase):
   with patch("automation.orchestration.repository_multi_cycle_supervisor.subprocess.Popen") as popen:
    supervisor._launch(None); fresh=popopen= list(popen.call_args.args[0])
    supervisor._launch("cycle-20260811123456789012"); resumed=list(popen.call_args.args[0])
+   supervisor._launch(None,terminal_resume_cycle_run_id="cycle-20260811123456789013"); terminal_resume=list(popen.call_args.args[0])
   for command in (fresh,resumed):
    for flag,value in (("--registry-path","/tmp/registry.json"),("--bindings-path","/tmp/bindings.json"),("--providers-path","/tmp/providers.yaml"),("--output-root","/tmp/cycles"),("--single-task-output-root","/tmp/children")):
     self.assertEqual(command[command.index(flag)+1],value)
   self.assertNotIn("--resume-cycle-run-id",fresh); self.assertEqual(resumed[resumed.index("--resume-cycle-run-id")+1],"cycle-20260811123456789012")
+  self.assertEqual(terminal_resume[terminal_resume.index("--resume-terminal-cycle-run-id")+1],"cycle-20260811123456789013")
  def test_custom_cycle_output_root_controls_discovery_and_worker_command(self):
   default=self.root/"default-cycles"; custom=self.cycles; sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
   (default/"cycle-20260811123456789013").mkdir(parents=True)
