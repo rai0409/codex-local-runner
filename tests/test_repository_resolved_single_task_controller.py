@@ -20,7 +20,7 @@ from automation.orchestration.repository_resolved_single_task_controller import 
 from automation.orchestration.repository_single_task_spec import RepositorySingleTaskSpec, serialize_repository_single_task_spec
 
 
-PYTHON = str(Path(sys.executable).resolve())
+PYTHON = sys.executable
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -79,7 +79,15 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         git(self.source, "config", "user.name", "Controller Test")
         git(self.source, "config", "user.email", "controller-test@example.invalid")
         (self.source / "allowed.txt").write_text("before\n", encoding="utf-8")
-        git(self.source, "add", "--", "allowed.txt")
+        validation_test = self.source / "tests/test_allowed.py"
+        validation_test.parent.mkdir()
+        validation_test.write_text(
+            "from pathlib import Path\n\n"
+            "def test_allowed_value():\n"
+            "    assert Path('allowed.txt').read_text(encoding='utf-8') == 'after\\n'\n",
+            encoding="utf-8",
+        )
+        git(self.source, "add", "--", "allowed.txt", "tests/test_allowed.py")
         git(self.source, "commit", "-m", "Initial")
         self.head = git(self.source, "rev-parse", "HEAD").stdout.strip()
         self.registry = self.base / "repos.yaml"
@@ -98,7 +106,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
             boundary.update(approvals)
         commands = []
         for command_id, kind in (("focused", "focused"), ("related", "related_regression"), ("full", "full"), ("compile", "compile")):
-            commands.append({"command_id": command_id, "kind": kind, "argv": [PYTHON, "-m", "py_compile", "allowed.txt"], "cwd": ".", "timeout_seconds": 30, "required": True, "stop_on_failure": True})
+            commands.append({"command_id": command_id, "kind": kind, "argv": ["git", "diff", "--check"], "cwd": ".", "timeout_seconds": 30, "required": True, "stop_on_failure": True})
         commands.append({"command_id": "diff", "kind": "diff_check", "argv": ["git", "diff", "--check"], "cwd": ".", "timeout_seconds": 30, "required": True, "stop_on_failure": True})
         profile = {"schema_version": "1", "profile_id": "repo", "repository_root": str(self.source), "base_branch": "main", "python_executable": PYTHON, "validation_commands": commands, "artifact_requirements": [], "forbidden_git_operations": list(FORBIDDEN_GIT_OPERATION_IDS), "max_changed_files": maximum, "approval_boundary": boundary, "environment_allowlist": []}
         self.profile.write_text(json.dumps(profile), encoding="utf-8")
@@ -169,7 +177,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.assertNotIn(("add", "-A"), invocations)
         self.assertNotIn(("add", "--all"), invocations)
         receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
-        self.assertEqual(set(receipt), {"schema_version", "run_id", "status", "reason_code", "detail_reason_code", "repository_id", "task_id", "task_spec_sha256", "source_repository_root", "profile_id", "profile_base_branch", "profile_max_changed_files", "approvals", "source_state_before", "source_state_after", "expected_head_sha", "worktree_path", "worktree_preserved", "task_branch", "adapter_name", "execution_status", "validation_status", "validation_reason", "retry_attempted", "retry_outcome", "changed_files", "allowed_changed_paths", "declared_allowed_changed_paths", "actual_changed_files", "original_unexpected_changed_files", "scope_recovery_attempted", "scope_recovery_status", "auto_expanded_paths", "effective_allowed_changed_paths", "unresolved_unexpected_changed_files", "scope_repair_attempted", "scope_repair_target_paths", "scope_repair_status", "commit_created", "commit_sha", "commit_parent_sha", "commit_message", "worktree_cleanup_status", "artifact_paths", "started_at", "finished_at"})
+        self.assertEqual(set(receipt), {"schema_version", "run_id", "status", "reason_code", "detail_reason_code", "repository_id", "task_id", "task_spec_sha256", "source_repository_root", "profile_id", "profile_base_branch", "profile_max_changed_files", "approvals", "source_state_before", "source_state_after", "expected_head_sha", "worktree_path", "worktree_preserved", "task_branch", "adapter_name", "execution_status", "validation_status", "validation_reason", "retry_attempted", "retry_outcome", "changed_files", "allowed_changed_paths", "declared_allowed_changed_paths", "actual_changed_files", "original_unexpected_changed_files", "scope_recovery_attempted", "scope_recovery_status", "auto_expanded_paths", "effective_allowed_changed_paths", "unresolved_unexpected_changed_files", "scope_repair_attempted", "scope_repair_target_paths", "scope_repair_status", "scope_trim_attempted", "scope_trimmed_paths", "scope_trim_status", "post_trim_validation_status", "scope_constrained_rework_attempted", "scope_constrained_rework_status", "commit_created", "commit_sha", "commit_parent_sha", "commit_message", "worktree_cleanup_status", "artifact_paths", "started_at", "finished_at"})
         digest = hashlib.sha256(Path(result.receipt_path).read_bytes()).hexdigest()
         self.assertEqual(Path(result.receipt_sha256_path).read_text(encoding="utf-8"), f"{digest}  receipt.json\n")
         self.assertFalse(list(Path(result.receipt_path).parent.glob(".receipt-*.tmp")))
@@ -332,7 +340,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
 
     def test_scope_no_change_and_failures_do_not_commit(self):
         scenarios = [
-            ("scope", FakePreparedAdapter(lambda worktree: self._modify(worktree, "outside.txt")), "single_task.changed_files.out_of_scope", True),
+            ("scope", FakePreparedAdapter(lambda worktree: self._modify(worktree, "outside.txt")), "single_task.changed_files.none", False),
             ("limit", FakePreparedAdapter(lambda worktree: (self._modify(worktree), self._modify(worktree, "other.txt"))), "single_task.changed_files.limit_exceeded", True),
             ("none", FakePreparedAdapter(), "single_task.changed_files.none", False),
         ]
@@ -346,14 +354,14 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
                 self.assertEqual(git(self.source, "rev-list", "--count", "main").stdout.strip(), "1")
                 if not preserved: self.assertFalse(Path(result.worktree_path).exists())
 
-    def test_real_topix_scope_recovery_auto_expands_only_safe_paths_then_repairs_docs(self):
+    def test_real_topix_scope_recovery_auto_expands_then_trims_nonessential_paths(self):
         source_docs = self.source / "docs/disclosure_gold_readiness.md"
         source_docs.parent.mkdir()
         source_docs.write_text("baseline\n", encoding="utf-8")
         git(self.source, "add", "--", "docs/disclosure_gold_readiness.md")
         git(self.source, "commit", "-m", "Document baseline")
         self.head = git(self.source, "rev-parse", "HEAD").stdout.strip()
-        self._write_configuration(maximum=4)
+        self._write_configuration(maximum=5)
         self.spec.write_text(json.dumps({
             "schema_version": "1", "task_id": "edinet-fetch-attempt-ledger",
             "expected_head_sha": self.head, "prompt": "ledger task",
@@ -374,6 +382,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
                     "alembic/versions/20260824_0008_edinet_fetch_attempt_ledger.py",
                     "packages/common/tests/test_edinet_fetch_attempt_ledger.py",
                     "docs/disclosure_gold_readiness.md",
+                    "PLANS.md",
                 ):
                     candidate = worktree / path
                     candidate.parent.mkdir(parents=True, exist_ok=True)
@@ -381,8 +390,6 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
                         "supplementary\n" if path == "docs/disclosure_gold_readiness.md" else "x\n",
                         encoding="utf-8",
                     )
-            else:
-                (worktree / "docs/disclosure_gold_readiness.md").write_text("baseline\n", encoding="utf-8")
 
         def evaluator_runner(*, task, prompt, work_root, persist_prompt):
             captured["prompt"] = prompt
@@ -391,14 +398,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         adapter = FakePreparedAdapter(create_paths)
         result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: adapter, evaluator_runner=evaluator_runner)
         self.assertEqual(result.status, "completed")
-        self.assertEqual(adapter.calls, 2)
-        self.assertEqual(adapter.payloads[1]["allowed_changed_paths"], (
-            "alembic/versions/20260823_0008_edinet_fetch_attempt_ledger.py",
-            "alembic/versions/20260824_0008_edinet_fetch_attempt_ledger.py",
-            "allowed.txt",
-            "packages/common/tests/test_edinet_fetch_attempt_ledger.py",
-            "packages/common/tests/test_existing_ledger.py",
-        ))
+        self.assertEqual(adapter.calls, 1)
         self.assertIn("test_edinet_fetch_attempt_ledger.py", captured["prompt"])
         receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
         self.assertEqual(receipt["declared_allowed_changed_paths"], [
@@ -406,67 +406,185 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
             "allowed.txt", "packages/common/tests/test_existing_ledger.py",
         ])
         self.assertEqual(receipt["original_unexpected_changed_files"], [
+            "PLANS.md",
             "alembic/versions/20260824_0008_edinet_fetch_attempt_ledger.py",
             "docs/disclosure_gold_readiness.md",
             "packages/common/tests/test_edinet_fetch_attempt_ledger.py",
         ])
         self.assertTrue(receipt["scope_recovery_attempted"])
-        self.assertEqual(receipt["scope_recovery_status"], "repair_succeeded")
+        self.assertEqual(receipt["scope_recovery_status"], "trim_succeeded")
         self.assertEqual(receipt["auto_expanded_paths"], [
             "alembic/versions/20260824_0008_edinet_fetch_attempt_ledger.py",
             "packages/common/tests/test_edinet_fetch_attempt_ledger.py",
         ])
         self.assertNotIn("docs/disclosure_gold_readiness.md", receipt["effective_allowed_changed_paths"])
         self.assertEqual(receipt["unresolved_unexpected_changed_files"], [])
-        self.assertTrue(receipt["scope_repair_attempted"])
-        self.assertEqual(receipt["scope_repair_target_paths"], ["docs/disclosure_gold_readiness.md"])
-        self.assertEqual(receipt["scope_repair_status"], "succeeded")
+        self.assertFalse(receipt["scope_repair_attempted"])
+        self.assertTrue(receipt["scope_trim_attempted"])
+        self.assertEqual(receipt["scope_trimmed_paths"], ["PLANS.md", "docs/disclosure_gold_readiness.md"])
+        self.assertEqual(receipt["scope_trim_status"], "succeeded")
+        self.assertEqual(receipt["post_trim_validation_status"], "passed")
+        self.assertFalse(receipt["scope_constrained_rework_attempted"])
         self.assertEqual(git(self.source, "diff-tree", "--no-commit-id", "--name-only", "-r", result.commit_sha).stdout.splitlines(), [
             "alembic/versions/20260824_0008_edinet_fetch_attempt_ledger.py",
             "allowed.txt", "packages/common/tests/test_edinet_fetch_attempt_ledger.py",
         ])
 
     def test_unsafe_scope_recovery_blocks_before_completion_evaluator(self):
-        def unexpected_source(worktree):
+        def unexpected_authority(worktree):
             self._modify(worktree)
-            (worktree / "src").mkdir()
-            (worktree / "src" / "unsafe.py").write_text("x\n", encoding="utf-8")
+            candidate = worktree / ".github/workflows/ci.yml"
+            candidate.parent.mkdir(parents=True)
+            candidate.write_text("name: unsafe\n", encoding="utf-8")
 
         def evaluator_runner(**_kwargs):
             self.fail("unsafe scope must block before evaluator execution")
 
-        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(unexpected_source), evaluator_runner=evaluator_runner)
+        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(unexpected_authority), evaluator_runner=evaluator_runner)
         self.assertEqual(result.reason_code, "single_task.changed_files.out_of_scope")
         receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
         self.assertEqual(receipt["scope_recovery_status"], "blocked")
         self.assertEqual(receipt["auto_expanded_paths"], [])
-        self.assertEqual(receipt["unresolved_unexpected_changed_files"], ["src/unsafe.py"])
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], [".github/workflows/ci.yml"])
 
-    def test_scope_repair_cannot_authorize_or_leave_unexpected_paths(self):
-        for label, repair in (
-            ("adds_path", lambda worktree: (worktree / "src").mkdir(exist_ok=True) or (worktree / "src/new.py").write_text("x\n")),
-            ("leaves_docs", lambda worktree: None),
-        ):
-            with self.subTest(label=label):
+    def test_nonessential_unexpected_file_is_trimmed_before_completion(self):
+        def action(worktree):
+            self._modify(worktree)
+            (worktree / "notes.txt").write_text("incidental\n", encoding="utf-8")
+
+        result = self._run(FakePreparedAdapter(action))
+        self.assertEqual(result.status, "completed")
+        receipt = json.loads(Path(result.receipt_path).read_text())
+        self.assertEqual(receipt["original_unexpected_changed_files"], ["notes.txt"])
+        self.assertEqual(receipt["scope_trimmed_paths"], ["notes.txt"])
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], [])
+        self.assertEqual(receipt["effective_allowed_changed_paths"], ["allowed.txt"])
+
+    def test_trimming_restores_tracked_modification_and_deletion_exactly(self):
+        for action_name in ("modify", "delete"):
+            with self.subTest(action_name=action_name):
                 self.tearDown(); self.setUp()
-                calls = []
+                tracked = self.source / "outside.txt"
+                tracked.write_text("baseline\n", encoding="utf-8")
+                git(self.source, "add", "--", "outside.txt")
+                git(self.source, "commit", "-m", "Tracked baseline")
+                self.head = git(self.source, "rev-parse", "HEAD").stdout.strip()
+                self._write_configuration()
+
                 def action(worktree):
-                    calls.append(worktree)
-                    if len(calls) == 1:
-                        self._modify(worktree)
-                        docs = worktree / "docs/recovery.md"; docs.parent.mkdir(); docs.write_text("x\n")
+                    self._modify(worktree)
+                    target = worktree / "outside.txt"
+                    if action_name == "modify":
+                        target.write_text("changed\n", encoding="utf-8")
                     else:
-                        repair(worktree)
-                adapter = FakePreparedAdapter(action)
-                result = self._run(adapter)
-                self.assertEqual(result.reason_code, "single_task.changed_files.out_of_scope")
-                self.assertEqual(adapter.calls, 2)
-                self.assertEqual(adapter.payloads[1]["allowed_changed_paths"], ("allowed.txt",))
-                receipt = json.loads(Path(result.receipt_path).read_text())
-                self.assertTrue(receipt["scope_repair_attempted"])
-                self.assertEqual(receipt["scope_repair_target_paths"], ["docs/recovery.md"])
-                self.assertEqual(receipt["scope_repair_status"], "failed")
-                self.assertEqual(receipt["original_unexpected_changed_files"], ["docs/recovery.md"])
+                        target.unlink()
+
+                result = self._run(FakePreparedAdapter(action))
+                self.assertEqual(result.status, "completed")
+                receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+                self.assertEqual(receipt["scope_trimmed_paths"], ["outside.txt"])
+                self.assertEqual(receipt["unresolved_unexpected_changed_files"], [])
+                self.assertEqual(
+                    git(self.source, "show", f"{result.commit_sha}:outside.txt").stdout,
+                    "baseline\n",
+                )
+
+    def test_required_unauthorized_source_uses_one_scope_constrained_rework(self):
+        profile = json.loads(self.profile.read_text(encoding="utf-8"))
+        for command in profile["validation_commands"]:
+            if command["kind"] != "diff_check":
+                command["argv"] = [
+                    PYTHON, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                    "tests/test_allowed.py",
+                ]
+        self.profile.write_text(json.dumps(profile), encoding="utf-8")
+        calls = []
+
+        def action(worktree):
+            calls.append(worktree)
+            if len(calls) == 1:
+                (worktree / "src.py").write_text("unapproved\n", encoding="utf-8")
+            else:
+                self._modify(worktree)
+                (worktree / "src.py").write_text("still unapproved\n", encoding="utf-8")
+
+        adapter = FakePreparedAdapter(action)
+        result = self._run(adapter)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(adapter.calls, 2)
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertTrue(receipt["scope_constrained_rework_attempted"])
+        self.assertEqual(receipt["scope_constrained_rework_status"], "succeeded")
+        self.assertEqual(receipt["scope_trimmed_paths"], ["src.py"])
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], [])
+        self.assertEqual(git(self.source, "diff-tree", "--no-commit-id", "--name-only", "-r", result.commit_sha).stdout.splitlines(), ["allowed.txt"])
+
+    def test_scope_constrained_rework_is_bounded_and_fails_when_still_invalid(self):
+        profile = json.loads(self.profile.read_text(encoding="utf-8"))
+        for command in profile["validation_commands"]:
+            if command["kind"] != "diff_check":
+                command["argv"] = [
+                    PYTHON, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                    "tests/test_allowed.py",
+                ]
+        self.profile.write_text(json.dumps(profile), encoding="utf-8")
+        calls = []
+
+        def action(worktree):
+            calls.append(worktree)
+            (worktree / "src.py").write_text("unapproved\n", encoding="utf-8")
+
+        adapter = FakePreparedAdapter(action)
+        result = self._run(adapter)
+        self.assertEqual(result.status, "blocked")
+        self.assertEqual(adapter.calls, 2)
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertTrue(receipt["scope_constrained_rework_attempted"])
+        self.assertEqual(receipt["scope_constrained_rework_status"], "failed")
+        self.assertEqual(receipt["effective_allowed_changed_paths"], ["allowed.txt"])
+
+    def test_completion_deficiency_after_trimming_uses_one_scope_constrained_rework(self):
+        calls = []
+
+        def action(worktree):
+            calls.append(worktree)
+            self._modify(worktree)
+            if len(calls) == 1:
+                (worktree / "notes.txt").write_text("incidental\n", encoding="utf-8")
+
+        statuses = iter(("needs_rework", "completed"))
+
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            status = next(statuses)
+            directory = Path(work_root) / status
+            directory.mkdir(parents=True, exist_ok=True)
+            output = directory / "stdout.txt"
+            output.write_text(
+                "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+                + json.dumps({
+                    "status": status,
+                    "reason_code": "task.more" if status == "needs_rework" else "task.done",
+                    "satisfied_criteria": [],
+                    "unsatisfied_criteria": ["more"] if status == "needs_rework" else [],
+                    "evidence_refs": [],
+                })
+                + "\nTASK_COMPLETION_EVALUATION_JSON_END",
+                encoding="utf-8",
+            )
+            return {"status": "completed", "stdout_path": str(output)}
+
+        adapter = FakePreparedAdapter(action)
+        result = run_repository_single_task(
+            "repo", self.spec, registry_path=self.registry, bindings_path=self.bindings,
+            output_root=self.output, adapter_resolver=lambda: adapter,
+            evaluator_runner=evaluator_runner,
+        )
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(adapter.calls, 2)
+        self.assertTrue(adapter.payloads[1]["prompt"].startswith("Mode: Repair\nGoal: satisfy"))
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertTrue(receipt["scope_constrained_rework_attempted"])
+        self.assertEqual(receipt["scope_constrained_rework_status"], "succeeded")
 
     def test_commit_scope_still_blocks_unresolved_path_added_by_rework(self):
         calls = []
@@ -543,7 +661,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
                 evaluator_runner=self._evaluator_runner,
             )
 
-        self.assertEqual(PYTHON, str(Path(sys.executable).resolve()))
+        self.assertEqual(PYTHON, sys.executable)
         self.assertTrue(Path(PYTHON).is_file())
         self.assertEqual(result.status, "completed")
         self.assertEqual(adapter.calls, 1)

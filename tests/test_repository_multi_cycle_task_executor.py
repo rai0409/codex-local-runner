@@ -23,24 +23,22 @@ class FailingAdapter:
     def __init__(self): self.prompts=[]
     def execute_prepared_worktree(self,payload): self.prompts.append(payload["prompt"]); raise RuntimeError("execution failure")
 class ScopeRecoveryAdapter:
-    name="codex_cli"
-    def __init__(self): self.prompts=[]; self.scope_repairs=0
-    def execute_prepared_worktree(self,payload):
-        prompt=payload["prompt"]; self.prompts.append(prompt); root=Path(payload["worktree_path"])
-        if prompt=="PROMPT_SECRET_ONE":
-            (root/"one.txt").write_text("one\n",encoding="utf-8")
-            for path in ("tests/test_one.py","docs/recovery.md"):
-                target=root/path; target.parent.mkdir(parents=True,exist_ok=True); target.write_text("x\n",encoding="utf-8")
-        elif prompt.startswith("Mode: Repair\nGoal: remove only runner-identified out-of-scope changes"):
-            self.scope_repairs+=1; (root/"docs/recovery.md").unlink()
-        elif prompt=="two":
-            assert (root/"one.txt").is_file(); (root/"two.txt").write_text("two\n",encoding="utf-8")
-        else: raise AssertionError(prompt)
-        return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
+ name="codex_cli"
+ def __init__(self): self.prompts=[]; self.scope_repairs=0
+ def execute_prepared_worktree(self,payload):
+  prompt=payload["prompt"]; self.prompts.append(prompt); root=Path(payload["worktree_path"])
+  if prompt=="PROMPT_SECRET_ONE":
+   (root/"one.txt").write_text("one\n",encoding="utf-8")
+   for path in ("tests/test_one.py","docs/recovery.md"):
+    target=root/path; target.parent.mkdir(parents=True,exist_ok=True); target.write_text("x\n",encoding="utf-8")
+  elif prompt=="two":
+   assert (root/"one.txt").is_file(); (root/"two.txt").write_text("two\n",encoding="utf-8")
+  else: raise AssertionError(prompt)
+  return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
 class ExecutorTests(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory(); self.base=Path(self.t.name); self.source=self.base/"source"; self.source.mkdir(); git(self.source,"init","-b","main"); git(self.source,"config","user.name","T"); git(self.source,"config","user.email","t@example.invalid"); (self.source/"base.txt").write_text("A\n"); git(self.source,"add","--","base.txt"); git(self.source,"commit","-m","A"); self.a=git(self.source,"rev-parse","HEAD").stdout.strip()
-  commands=[{"command_id":kind,"kind":kind,"argv":[PYTHON,"-m","py_compile","base.txt"],"cwd":".","timeout_seconds":30,"required":True,"stop_on_failure":True} for kind in ("focused","related_regression","full","compile")]+[{"command_id":"diff","kind":"diff_check","argv":["git","diff","--check"],"cwd":".","timeout_seconds":30,"required":True,"stop_on_failure":True}]; profile={"schema_version":"1","profile_id":"repo","repository_root":str(self.source),"base_branch":"main","python_executable":PYTHON,"validation_commands":commands,"artifact_requirements":[],"forbidden_git_operations":list(FORBIDDEN_GIT_OPERATION_IDS),"max_changed_files":1,"approval_boundary":{x:"automatic" for x in APPROVAL_ACTIONS},"environment_allowlist":[]}; self.profile=self.base/"profile.json"; self.profile.write_text(json.dumps(profile)); self.registry=self.base/"repos.json"; self.registry.write_text(json.dumps({"version":1,"repos":[{"name":"repo","logical_role":"test"}]})); self.bindings=self.base/"bindings.json"; self.bindings.write_text(json.dumps({"version":1,"bindings":[{"repository_id":"repo","profile_path":str(self.profile)}]})); self.queue=self.base/"queue.json"; self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"},{"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},{"task_id":"three","prompt":"three","allowed_changed_paths":["three.txt"],"commit_message":"D"}]})); self.output=self.base/"out"
+  commands=[{"command_id":kind,"kind":kind,"argv":["git","diff","--check"],"cwd":".","timeout_seconds":30,"required":True,"stop_on_failure":True} for kind in ("focused","related_regression","full","compile")]+[{"command_id":"diff","kind":"diff_check","argv":["git","diff","--check"],"cwd":".","timeout_seconds":30,"required":True,"stop_on_failure":True}]; profile={"schema_version":"1","profile_id":"repo","repository_root":str(self.source),"base_branch":"main","python_executable":PYTHON,"validation_commands":commands,"artifact_requirements":[],"forbidden_git_operations":list(FORBIDDEN_GIT_OPERATION_IDS),"max_changed_files":1,"approval_boundary":{x:"automatic" for x in APPROVAL_ACTIONS},"environment_allowlist":[]}; self.profile=self.base/"profile.json"; self.profile.write_text(json.dumps(profile)); self.registry=self.base/"repos.json"; self.registry.write_text(json.dumps({"version":1,"repos":[{"name":"repo","logical_role":"test"}]})); self.bindings=self.base/"bindings.json"; self.bindings.write_text(json.dumps({"version":1,"bindings":[{"repository_id":"repo","profile_path":str(self.profile)}]})); self.queue=self.base/"queue.json"; self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"},{"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},{"task_id":"three","prompt":"three","allowed_changed_paths":["three.txt"],"commit_message":"D"}]})); self.output=self.base/"out"
  def tearDown(self): self.t.cleanup()
  def evaluator(self,**kwargs):
   path=Path(kwargs["work_root"])/"x"; path.mkdir(parents=True); out=path/"out"; out.write_text('TASK_COMPLETION_EVALUATION_JSON_BEGIN\n{"status":"completed","reason_code":"done","satisfied_criteria":[],"unsatisfied_criteria":[],"evidence_refs":[]}\nTASK_COMPLETION_EVALUATION_JSON_END'); return {"status":"completed","stdout_path":str(out)}
@@ -67,10 +65,10 @@ class ExecutorTests(unittest.TestCase):
   ]}))
   adapter=ScopeRecoveryAdapter()
   result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:adapter,evaluator_runner=self.evaluator)
-  self.assertEqual((result.status,result.completed_count),("completed",2)); self.assertEqual(adapter.scope_repairs,1)
+  self.assertEqual((result.status,result.completed_count),("completed",2)); self.assertEqual(adapter.scope_repairs,0)
   receipt=json.loads(Path(result.receipt_path).read_text()); first,second=receipt["executed_task_results"]
   first_child=json.loads(Path(first["child_receipt_path"]).read_text())
-  self.assertEqual(first_child["scope_recovery_status"],"repair_succeeded")
+  self.assertEqual(first_child["scope_recovery_status"],"trim_succeeded")
   self.assertEqual(first_child["unresolved_unexpected_changed_files"],[])
   self.assertEqual(git(self.source,"rev-parse",f"{second['commit_sha']}^").stdout.strip(),first["commit_sha"])
 

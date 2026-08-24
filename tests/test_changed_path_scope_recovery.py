@@ -48,7 +48,7 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
             "packages/common/tests/test_edinet_fetch_attempt_ledger.py",
         )
         result = self._recover(declared, actual)
-        self.assertEqual(result.scope_recovery_status, "repair_required")
+        self.assertEqual(result.scope_recovery_status, "trim_required")
         self.assertEqual(result.auto_expanded_paths, (
             "alembic/versions/20260824_0008_edinet_fetch_attempt_ledger.py",
             "packages/common/tests/test_edinet_fetch_attempt_ledger.py",
@@ -57,7 +57,7 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
         self.assertNotIn("docs/disclosure_gold_readiness.md", result.effective_allowed_changed_paths)
         self.assertEqual(result.declared_allowed_changed_paths, tuple(sorted(declared)))
 
-    def test_unrelated_new_test_and_existing_test_modification_are_blocked(self):
+    def test_unrelated_new_test_and_existing_test_modification_require_trimming(self):
         declared = ("packages/common/tests/test_existing_ledger.py",)
         for actual, untracked in (
             ("packages/common/tests/test_unrelated.py", ("packages/common/tests/test_unrelated.py",)),
@@ -65,22 +65,22 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
         ):
             with self.subTest(actual=actual):
                 result = self._recover(declared, (actual,), untracked=untracked)
-                self.assertEqual(result.scope_recovery_status, "blocked")
+                self.assertEqual(result.scope_recovery_status, "trim_required")
                 self.assertEqual(result.auto_expanded_paths, ())
 
-    def test_unrelated_migration_and_deletion_are_blocked(self):
+    def test_unrelated_migration_and_deletion_require_trimming(self):
         declared = ("alembic/versions/20260823_0008_edinet_fetch_attempt_ledger.py",)
         unrelated = self._recover(declared, ("alembic/versions/20260824_0009_other.py",))
-        self.assertEqual(unrelated.scope_recovery_status, "blocked")
+        self.assertEqual(unrelated.scope_recovery_status, "trim_required")
         deletion = _recover_safe_changed_path_scope(
             self.root, ("src/feature.py",), ("src/deleted.py",),
             task_id="task", untracked_files=(),
         )
-        self.assertEqual(deletion.scope_recovery_status, "blocked")
+        self.assertEqual(deletion.scope_recovery_status, "trim_required")
 
     def test_high_authority_escape_and_absolute_paths_are_blocked(self):
         for path in (
-            ".github/workflows/ci.yml", "src/unsafe.py", "../tests/test_feature.py",
+            ".github/workflows/ci.yml", "credentials/token.txt", "../tests/test_feature.py",
             "/tmp/outside.py", "tests\\test_feature.py", "docs/escape\npath.md",
         ):
             with self.subTest(path=path):
