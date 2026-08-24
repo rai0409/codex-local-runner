@@ -49,7 +49,7 @@ DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT = (
     "repository-single-task-runs"
 )
 MAX_TASK_REWORK_ATTEMPTS = 2
-MAX_SAFE_SCOPE_AUTO_EXPANSIONS = 4
+MAX_SAFE_SCOPE_AUTO_EXPANSIONS = 3
 
 _SCOPE_HARD_BLOCK_COMPONENTS = frozenset({
     ".git", ".github", "__pycache__", "alembic", "build", "ci", "credentials",
@@ -79,6 +79,7 @@ class _ScopeRecovery:
     scope_recovery_status: str
     auto_expanded_paths: tuple[str, ...]
     effective_allowed_changed_paths: tuple[str, ...]
+    unresolved_unexpected_changed_files: tuple[str, ...]
 
 
 def _phase_timeout(task_value: int | None, profile_value: int | None, default: int) -> int:
@@ -246,6 +247,8 @@ def _normalized_repository_relative_path(root: Path, value: Any) -> str | None:
     normalized = value.replace("\\", "/")
     if normalized != value:
         return None
+    if any(ord(character) < 32 for character in normalized):
+        return None
     if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
         return None
     parts = PurePosixPath(normalized).parts
@@ -264,53 +267,157 @@ def _normalized_repository_relative_path(root: Path, value: Any) -> str | None:
     return canonical
 
 
-def _is_safe_support_path(root: Path, value: Any) -> str | None:
-    """Allow only normalized tests/docs support files outside hard-block sets."""
-    path = _normalized_repository_relative_path(root, value)
-    if path is None:
-        return None
-    parts = PurePosixPath(path).parts
-    lowered = tuple(part.casefold() for part in parts)
-    basename = lowered[-1]
-    if (
-        any(part in _SCOPE_HARD_BLOCK_COMPONENTS for part in lowered)
-        or any(part in _SCOPE_HARD_BLOCK_DIRECTORY_COMPONENTS for part in lowered[:-1])
+def _is_scope_high_authority_path(path: str) -> bool:
+    """Reject paths whose ownership cannot be delegated to bounded recovery."""
+    parts = tuple(part.casefold() for part in PurePosixPath(path).parts)
+    basename = parts[-1]
+    return bool(
+        any(part in _SCOPE_HARD_BLOCK_COMPONENTS - {"alembic", "migrations"} for part in parts)
+        or any(part in _SCOPE_HARD_BLOCK_DIRECTORY_COMPONENTS for part in parts[:-1])
         or basename in _SCOPE_HARD_BLOCK_BASENAMES
         or basename.startswith(".env")
-        or basename.startswith("requirements") and basename.endswith(".txt")
+        or (basename.startswith("requirements") and basename.endswith(".txt"))
         or basename.endswith(".lock")
         or "environment" in basename
         or "secret" in basename
         or "credential" in basename
         or basename.endswith(_SCOPE_HARD_BLOCK_SUFFIXES)
-    ):
+    )
+
+
+def _is_new_regular_file(root: Path, path: str, untracked_files: frozenset[str]) -> bool:
+    """Only untracked regular files can receive deterministic new-file scope."""
+    if path not in untracked_files:
+        return False
+    candidate = root / path
+    try:
+        return candidate.exists() and candidate.is_file() and not candidate.is_symlink()
+    except OSError:
+        return False
+
+
+_MIGRATION_FILENAME = re.compile(r"^(?:\d{8}_)?(\d{4,}_[a-z0-9_]+)\.py$")
+
+
+def _migration_identity(path: str) -> tuple[str, str] | None:
+    value = PurePosixPath(path)
+    match = _MIGRATION_FILENAME.fullmatch(value.name)
+    if match is None:
         return None
-    if not any(part in {"tests", "docs"} for part in lowered[:-1]):
-        return None
-    return path
+    return value.parent.as_posix(), match.group(1)
+
+
+def _is_safe_generated_migration(
+    root: Path,
+    path: str,
+    declared: tuple[str, ...],
+    untracked_files: frozenset[str],
+) -> bool:
+    """Allow one declared migration identity whose generated date changed only."""
+    if not _is_new_regular_file(root, path, untracked_files):
+        return False
+    identity = _migration_identity(path)
+    if identity is None:
+        return False
+    directory, suffix = identity
+    return any(
+        declared_identity is not None
+        and declared_identity[0] == directory
+        and declared_identity[1] == suffix
+        and declared_path != path
+        for declared_path in declared
+        for declared_identity in (_migration_identity(declared_path),)
+    )
+
+
+def _task_identifier(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
+
+
+def _is_safe_task_specific_test(
+    root: Path,
+    path: str,
+    declared: tuple[str, ...],
+    task_id: str | None,
+    untracked_files: frozenset[str],
+) -> bool:
+    """Allow only a new test named exactly for the runner-owned task ID."""
+    if not isinstance(task_id, str) or not task_id or not _is_new_regular_file(root, path, untracked_files):
+        return False
+    value = PurePosixPath(path)
+    if "tests" not in tuple(part.casefold() for part in value.parts[:-1]):
+        return False
+    if not re.fullmatch(r"test_[a-z0-9_]+\.py", value.name.casefold()):
+        return False
+    if value.stem.casefold() != "test_" + _task_identifier(task_id):
+        return False
+    # The same direct test area must already be authorized by the task spec.
+    return any(PurePosixPath(item).parent == value.parent and "tests" in tuple(part.casefold() for part in PurePosixPath(item).parts[:-1]) for item in declared)
+
+
+def _is_scope_repairable_documentation(root: Path, path: str) -> bool:
+    """A repair may only remove a bounded, non-authority documentation edit."""
+    value = PurePosixPath(path)
+    if not value.parts or value.parts[0].casefold() != "docs" or value.suffix.casefold() not in {".md", ".rst", ".txt"}:
+        return False
+    candidate = root / path
+    try:
+        return candidate.exists() and candidate.is_file() and not candidate.is_symlink()
+    except OSError:
+        return False
 
 
 def _recover_safe_changed_path_scope(
     root: Path,
     declared_allowed_changed_paths: tuple[str, ...],
     actual_changed_files: tuple[str, ...],
+    *,
+    task_id: str | None = None,
+    untracked_files: tuple[str, ...] = (),
 ) -> _ScopeRecovery:
-    """Deterministically expand one all-safe support-file set, or block it all."""
+    """Classify bounded new-file drift; only runner code can expand scope."""
     declared = tuple(sorted(set(declared_allowed_changed_paths)))
     actual = tuple(sorted(set(actual_changed_files)))
     declared_set = set(declared)
     unexpected = tuple(path for path in actual if path not in declared_set)
     if not unexpected:
-        return _ScopeRecovery(declared, actual, unexpected, False, "not_needed", (), declared)
-    safe_paths = tuple(_is_safe_support_path(root, path) for path in unexpected)
-    if len(unexpected) > MAX_SAFE_SCOPE_AUTO_EXPANSIONS or any(path is None for path in safe_paths):
-        return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared)
-    auto_expanded = tuple(sorted(set(path for path in safe_paths if path is not None)))
-    if len(auto_expanded) != len(unexpected):
-        return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared)
+        return _ScopeRecovery(declared, actual, unexpected, False, "not_needed", (), declared, ())
+    untracked = frozenset(untracked_files)
+    normalized: dict[str, str] = {}
+    for raw in unexpected:
+        path = _normalized_repository_relative_path(root, raw)
+        if path is None or path != raw or _is_scope_high_authority_path(path):
+            return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared, unexpected)
+        normalized[raw] = path
+    auto_expanded = tuple(sorted(
+        path for path in normalized.values()
+        if _is_safe_generated_migration(root, path, declared, untracked)
+        or _is_safe_task_specific_test(root, path, declared, task_id, untracked)
+    ))
+    if len(auto_expanded) > MAX_SAFE_SCOPE_AUTO_EXPANSIONS:
+        return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared, unexpected)
+    effective = tuple(sorted(set(declared) | set(auto_expanded)))
+    unresolved = tuple(path for path in unexpected if path not in set(auto_expanded))
+    if any(not _is_scope_repairable_documentation(root, path) for path in unresolved):
+        return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared, unresolved)
     return _ScopeRecovery(
-        declared, actual, unexpected, True, "accepted", auto_expanded,
-        tuple(sorted(set(declared) | set(auto_expanded))),
+        declared, actual, unexpected, True,
+        "repair_required" if unresolved else "accepted", auto_expanded, effective, unresolved,
+    )
+
+
+def _build_scope_repair_prompt(original_task: str, unresolved_paths: tuple[str, ...]) -> str:
+    """A bounded prompt which can only remove runner-identified paths."""
+    return (
+        "Mode: Repair\n"
+        "Goal: remove only runner-identified out-of-scope changes after implementation and validation passed.\n"
+        "Allowed files: remove or revert only these paths: " + ", ".join(unresolved_paths) + ".\n"
+        "Forbidden files/actions: do not create or modify any other path; do not authorize paths; do not redesign "
+        "the task or broaden architecture; do not stage, commit, push, merge, or tag.\n"
+        "Expected result: the listed paths no longer have Git changes and the legitimate in-scope implementation remains.\n"
+        "Validation: the runner will run its existing validation contract; run no unrelated validation.\n"
+        "Out of scope: all implementation changes other than removing or reverting the listed paths.\n\n"
+        "Original task for context:\n" + original_task
     )
 
 
@@ -400,6 +507,9 @@ def run_repository_single_task(
     scope_recovery_status = "not_needed"
     auto_expanded_paths: tuple[str, ...] = ()
     effective_allowed_changed_paths: tuple[str, ...] = ()
+    scope_repair_attempted = False
+    scope_repair_target_paths: tuple[str, ...] = ()
+    scope_repair_status = "not_needed"
 
     def record(status: str, reason: str, detail: str | None = None) -> RepositorySingleTaskRunResult:
         nonlocal source_after, worktree_state, changed_files
@@ -455,6 +565,9 @@ def run_repository_single_task(
             "auto_expanded_paths": list(auto_expanded_paths),
             "effective_allowed_changed_paths": list(effective_allowed_changed_paths),
             "unresolved_unexpected_changed_files": sorted(set(changed_files) - set(effective_allowed_changed_paths)),
+            "scope_repair_attempted": scope_repair_attempted,
+            "scope_repair_target_paths": list(scope_repair_target_paths),
+            "scope_repair_status": scope_repair_status,
             "commit_created": commit_sha is not None, "commit_sha": commit_sha,
             "commit_parent_sha": commit_parent,
             "commit_message": getattr(spec, "commit_message", None),
@@ -499,6 +612,9 @@ def run_repository_single_task(
                 "auto_expanded_paths": receipt["auto_expanded_paths"],
                 "effective_allowed_changed_paths": receipt["effective_allowed_changed_paths"],
                 "unresolved_unexpected_changed_files": receipt["unresolved_unexpected_changed_files"],
+                "scope_repair_attempted": receipt["scope_repair_attempted"],
+                "scope_repair_target_paths": receipt["scope_repair_target_paths"],
+                "scope_repair_status": receipt["scope_repair_status"],
                 "staged_files": list(getattr(worktree_state, "staged_files", ())),
                 "commit_changed_files": list(changed_files) if commit_sha else [],
             })
@@ -676,7 +792,11 @@ def run_repository_single_task(
             worktree_preserved = True
             return record("blocked", "single_task.changed_files.limit_exceeded")
         scope_recovery = _recover_safe_changed_path_scope(
-            worktree, declared_allowed_changed_paths, scope_changed_files,
+            worktree,
+            declared_allowed_changed_paths,
+            scope_changed_files,
+            task_id=task_id,
+            untracked_files=scope_snapshot.untracked_files,
         )
     except (OSError, ValueError):
         worktree_preserved = True
@@ -689,6 +809,69 @@ def run_repository_single_task(
     if scope_recovery_status == "blocked":
         worktree_preserved = True
         return record("blocked", "single_task.changed_files.out_of_scope")
+    if scope_recovery.unresolved_unexpected_changed_files:
+        scope_repair_attempted = True
+        scope_repair_target_paths = scope_recovery.unresolved_unexpected_changed_files
+        try:
+            response = adapter.execute_prepared_worktree({
+                "prompt": _build_scope_repair_prompt(spec.prompt, scope_repair_target_paths),
+                "worktree_path": str(worktree), "work_dir": str(output_directory),
+                "repository_profile": bound_profile,
+                "allowed_changed_paths": effective_allowed_changed_paths,
+                "execution_timeout_seconds": _phase_timeout(
+                    spec.completion_rework_timeout_seconds,
+                    bound_profile.completion_rework_timeout_seconds,
+                    DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS,
+                ),
+                **({"validation_timeout_seconds": spec.validation_timeout_seconds}
+                   if spec.validation_timeout_seconds is not None else {}),
+            })
+        except Exception:
+            scope_repair_status = "failed"
+            worktree_preserved = True
+            return record("blocked", "single_task.changed_files.out_of_scope")
+        if not isinstance(response, dict):
+            scope_repair_status = "failed"
+            worktree_preserved = True
+            return record("blocked", "single_task.changed_files.out_of_scope")
+        execution_status, verify, retry_data = response.get("status"), response.get("verify"), response.get("retry")
+        raw_validation_attempts = response.get("validation_attempts", [])
+        if not isinstance(verify, dict) or not isinstance(retry_data, dict):
+            scope_repair_status = "failed"
+            worktree_preserved = True
+            return record("blocked", "single_task.changed_files.out_of_scope")
+        validation_reason = verify.get("reason")
+        safe_validation = verify.get("safe_validation")
+        validation_status = safe_validation.get("status") if isinstance(safe_validation, dict) else None
+        retry_attempted, retry_outcome = bool(retry_data.get("attempted")), retry_data.get("outcome")
+        validation_attempts = _safe_validation_attempts(raw_validation_attempts)
+        if not (
+            execution_status == "completed"
+            and verify.get("status") == "passed"
+            and validation_reason == "validation_passed"
+            and validation_status == "passed"
+            and retry_outcome in {"not_attempted", "retry_succeeded"}
+        ):
+            scope_repair_status = "failed"
+            worktree_preserved = True
+            return record("blocked", "single_task.changed_files.out_of_scope")
+        try:
+            repaired_snapshot = analyze_repository_state(worktree)
+            repaired_changed_files = _actual_changed_paths(repaired_snapshot)
+        except (OSError, ValueError):
+            scope_repair_status = "failed"
+            worktree_preserved = True
+            return record("blocked", "single_task.changed_files.out_of_scope")
+        if (
+            len(repaired_changed_files) > profile.max_changed_files
+            or not set(repaired_changed_files).issubset(set(scope_changed_files))
+            or set(repaired_changed_files) - set(effective_allowed_changed_paths)
+        ):
+            scope_repair_status = "failed"
+            worktree_preserved = True
+            return record("blocked", "single_task.changed_files.out_of_scope")
+        scope_recovery_status = "repair_succeeded"
+        scope_repair_status = "succeeded"
 
     # Completion is intentionally independent from Safe Validation.  Each
     # rework uses the same prepared-worktree adapter surface, which owns the
