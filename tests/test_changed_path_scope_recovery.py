@@ -57,6 +57,26 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
         self.assertNotIn("docs/disclosure_gold_readiness.md", result.effective_allowed_changed_paths)
         self.assertEqual(result.declared_allowed_changed_paths, tuple(sorted(declared)))
 
+    def test_real_task_three_normal_db_init_and_metadata_test_reach_trimming(self):
+        declared = (
+            "alembic/versions/20260823_0009_edinet_fetch_attempt_artifacts.py",
+            "packages/common/src/common/db/models/edinet_api.py",
+        )
+        actual = (
+            "alembic/versions/20260825_0009_edinet_fetch_attempt_artifacts.py",
+            "packages/common/src/common/db/models/__init__.py",
+            "packages/common/tests/test_metadata.py",
+        )
+        result = self._recover(declared, actual, task_id="edinet-fetch-attempt-artifact-retention")
+        self.assertEqual(result.scope_recovery_status, "trim_required")
+        self.assertEqual(result.auto_expanded_paths, ("alembic/versions/20260825_0009_edinet_fetch_attempt_artifacts.py",))
+        self.assertEqual(result.unresolved_unexpected_changed_files, (
+            "packages/common/src/common/db/models/__init__.py",
+            "packages/common/tests/test_metadata.py",
+        ))
+        self.assertNotIn("packages/common/src/common/db/models/__init__.py", result.effective_allowed_changed_paths)
+        self.assertNotIn("packages/common/tests/test_metadata.py", result.effective_allowed_changed_paths)
+
     def test_unrelated_new_test_and_existing_test_modification_require_trimming(self):
         declared = ("packages/common/tests/test_existing_ledger.py",)
         for actual, untracked in (

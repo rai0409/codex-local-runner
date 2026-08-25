@@ -15,7 +15,10 @@ from automation.orchestration.repository_multi_cycle_task_spec import (
     validate_repository_multi_cycle_task_spec,
 )
 
-ELIGIBLE_AUTO_REPLAN_REASON_CODES = frozenset({"single_task.task_completion.rework_exhausted"})
+ELIGIBLE_AUTO_REPLAN_REASON_CODES = frozenset({
+    "single_task.task_completion.rework_exhausted",
+    "single_task.task_scope.recovery_exhausted",
+})
 REPLAN_ENVELOPE_SCHEMA_VERSION = "1"
 _ENVELOPE_FIELDS = frozenset({"schema_version", "decision", "prompt", "allowed_changed_paths", "commit_message"})
 
@@ -102,6 +105,19 @@ def build_successor_queue(evidence: ReplanFailureEvidence, envelope: ReplanEnvel
         raise RepositoryMultiCycleReplanError("replan.failed_task_index.invalid")
     if envelope.decision == "stop":
         return ReplanPlan("stop", None, None, None, None)
+    if evidence.terminal_reason_code == "single_task.task_scope.recovery_exhausted":
+        recovery = dict(evidence.completion_evidence or {})
+        effective = recovery.get("effective_allowed_changed_paths")
+        trimmed = recovery.get("scope_trimmed_paths")
+        if not (
+            isinstance(effective, (list, tuple)) and isinstance(trimmed, (list, tuple))
+            and all(isinstance(path, str) for path in (*effective, *trimmed))
+        ):
+            raise RepositoryMultiCycleReplanError("replan.scope_evidence.invalid")
+        permitted = set(effective) | set(trimmed)
+        selected = set(envelope.allowed_changed_paths)
+        if not set(effective).issubset(selected) or not selected.issubset(permitted):
+            raise RepositoryMultiCycleReplanError("replan.scope_paths.not_evidence_bounded")
     replacement = build_replacement_task(evidence.predecessor_queue.tasks[evidence.failed_task_index], envelope, replan_attempt_number)
     successor = validate_repository_multi_cycle_task_spec(RepositoryMultiCycleTaskSpec("1", (replacement, *evidence.predecessor_queue.tasks[evidence.failed_task_index + 1:])))
     serialized = serialize_repository_multi_cycle_task_spec(successor)
@@ -109,8 +125,9 @@ def build_successor_queue(evidence: ReplanFailureEvidence, envelope: ReplanEnvel
 
 
 def build_replan_planner_prompt(evidence: ReplanFailureEvidence) -> str:
-    safe = {key: value for key, value in dict(evidence.completion_evidence or {}).items() if key in {"status", "reason_code", "unsatisfied_criteria", "satisfied_criteria", "rework_attempted", "rework_validation_status", "rework_validation_reason"}}
-    return "PLANNING ONLY; do not implement or request Git operations. Return only JSON envelope schema_version=1 with decision replace_failed_task or stop. The model cannot set task_id, timeouts, queue metadata, or authority fields. Verified evidence: " + json.dumps({"reason_code":evidence.terminal_reason_code,"detail_reason_code":evidence.detail_reason_code,"completion_evidence":safe}, ensure_ascii=True, sort_keys=True, separators=(",",":"))
+    safe = {key: value for key, value in dict(evidence.completion_evidence or {}).items() if key in {"status", "reason_code", "unsatisfied_criteria", "satisfied_criteria", "rework_attempted", "rework_validation_status", "rework_validation_reason", "declared_allowed_changed_paths", "effective_allowed_changed_paths", "original_unexpected_changed_files", "auto_expanded_paths", "scope_trimmed_paths", "scope_constrained_rework_attempted", "scope_constrained_rework_status", "post_trim_validation_status"}}
+    scope_instruction = " For proven task-scope recovery exhaustion, preserve the objective and currently valid allowed paths; add only exact paths justified by verified recovery evidence, never directory/glob authority or unrelated files." if evidence.terminal_reason_code == "single_task.task_scope.recovery_exhausted" else ""
+    return "PLANNING ONLY; do not implement or request Git operations. Return only JSON envelope schema_version=1 with decision replace_failed_task or stop. The model cannot set task_id, timeouts, queue metadata, or authority fields." + scope_instruction + " Verified evidence: " + json.dumps({"reason_code":evidence.terminal_reason_code,"detail_reason_code":evidence.detail_reason_code,"completion_evidence":safe}, ensure_ascii=True, sort_keys=True, separators=(",",":"))
 
 
 __all__ = ["ELIGIBLE_AUTO_REPLAN_REASON_CODES", "ReplanEnvelope", "ReplanFailureEvidence", "ReplanPlan", "RepositoryMultiCycleReplanError", "build_replacement_task", "build_replan_planner_prompt", "build_successor_queue", "is_auto_replan_eligible", "replacement_task_id", "validate_replan_envelope"]

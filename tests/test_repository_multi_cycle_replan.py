@@ -9,7 +9,7 @@ def replace(): return {"schema_version":"1","decision":"replace_failed_task","pr
 
 class ReplanTests(unittest.TestCase):
  def test_eligibility_and_strict_envelope(self):
-  self.assertTrue(is_auto_replan_eligible("single_task.task_completion.rework_exhausted")); self.assertFalse(is_auto_replan_eligible("single_task.source.dirty")); self.assertEqual(validate_replan_envelope(replace()).decision,"replace_failed_task")
+  self.assertTrue(is_auto_replan_eligible("single_task.task_completion.rework_exhausted")); self.assertTrue(is_auto_replan_eligible("single_task.task_scope.recovery_exhausted")); self.assertFalse(is_auto_replan_eligible("single_task.changed_files.out_of_scope")); self.assertFalse(is_auto_replan_eligible("single_task.source.dirty")); self.assertEqual(validate_replan_envelope(replace()).decision,"replace_failed_task")
   for value in ({**replace(),"task_id":"model"},{**replace(),"execution_timeout_seconds":1},{**replace(),"extra":1},{**replace(),"schema_version":"2"},{**replace(),"decision":"bad"},{"schema_version":"1","decision":"stop","prompt":"no"}):
    with self.subTest(value=value), self.assertRaises(RepositoryMultiCycleReplanError): validate_replan_envelope(value)
   self.assertEqual(validate_replan_envelope({"schema_version":"1","decision":"stop"}).decision,"stop")
@@ -21,3 +21,11 @@ class ReplanTests(unittest.TestCase):
    value=replace(); value["allowed_changed_paths"]=paths
    with self.assertRaises(Exception): build_successor_queue(evidence(),validate_replan_envelope(value),1)
   prompt=build_replan_planner_prompt(evidence()); self.assertIn("planning",prompt.lower()); self.assertIn("contract.missing",prompt); self.assertNotIn("SECRET",prompt)
+
+ def test_scope_deficiency_prompt_exposes_only_bounded_scope_evidence(self):
+  item=ReplanFailureEvidence(queue(),1,"single_task.task_scope.recovery_exhausted",completion_evidence={"declared_allowed_changed_paths":["a.py"],"effective_allowed_changed_paths":["a.py"],"scope_trimmed_paths":["b.py"],"raw_log":"SECRET"})
+  prompt=build_replan_planner_prompt(item); self.assertIn("b.py",prompt); self.assertIn("exact paths",prompt); self.assertNotIn("SECRET",prompt)
+  plan=build_successor_queue(item,validate_replan_envelope({"schema_version":"1","decision":"replace_failed_task","prompt":"repair","allowed_changed_paths":["a.py","b.py"],"commit_message":"Repair"}),1)
+  self.assertEqual(plan.replacement_task.allowed_changed_paths,("a.py","b.py"))
+  with self.assertRaisesRegex(RepositoryMultiCycleReplanError,"evidence_bounded"):
+   build_successor_queue(item,validate_replan_envelope({"schema_version":"1","decision":"replace_failed_task","prompt":"repair","allowed_changed_paths":["a.py","unrelated.py"],"commit_message":"Repair"}),1)

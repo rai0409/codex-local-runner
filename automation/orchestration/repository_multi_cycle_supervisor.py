@@ -151,6 +151,46 @@ class RepositoryMultiCycleSupervisor:
             return None
         terminal = dict(receipt)
         terminal["terminal_task_result"] = dict(terminal_task)
+        # Scope-deficiency replan is permitted only after the controller's
+        # receipt proves the bounded trim/rework sequence.  This keeps the
+        # planner from treating a generic scope violation as authority.
+        if terminal_task.get("reason_code") == "single_task.task_scope.recovery_exhausted":
+            try:
+                child_path = Path(str(terminal_task.get("child_receipt_path", "")))
+                payload = child_path.read_bytes()
+                child = json.loads(payload)
+                sidecar = child_path.with_name("receipt.sha256").read_text(encoding="utf-8")
+                digest = hashlib.sha256(payload).hexdigest()
+            except (OSError, ValueError, json.JSONDecodeError):
+                return None
+            required = (
+                child_path.name == "receipt.json",
+                terminal_task.get("child_receipt_sha256") == digest,
+                sidecar == f"{digest}  receipt.json\n",
+                isinstance(child, dict),
+                child.get("repository_id") == self.repository_id,
+                child.get("task_id") == terminal_task.get("task_id"),
+                child.get("reason_code") == "single_task.task_scope.recovery_exhausted",
+                child.get("scope_trim_attempted") is True,
+                child.get("scope_constrained_rework_attempted") is True,
+                child.get("scope_constrained_rework_status") in {"failed", "succeeded"},
+                isinstance(child.get("declared_allowed_changed_paths"), list),
+                isinstance(child.get("effective_allowed_changed_paths"), list),
+                isinstance(child.get("original_unexpected_changed_files"), list),
+                isinstance(child.get("scope_trimmed_paths"), list),
+            )
+            if not all(required):
+                return None
+            terminal["completion_evaluation"] = {
+                key: child[key]
+                for key in (
+                    "declared_allowed_changed_paths", "effective_allowed_changed_paths",
+                    "original_unexpected_changed_files", "auto_expanded_paths",
+                    "scope_trimmed_paths", "scope_constrained_rework_attempted",
+                    "scope_constrained_rework_status", "post_trim_validation_status",
+                )
+                if key in child
+            }
         return VerifiedTerminalReplanInput(
             repository_id=self.repository_id,
             source_repository_root=state["source_repository_root"],

@@ -537,6 +537,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         adapter = FakePreparedAdapter(action)
         result = self._run(adapter)
         self.assertEqual(result.status, "blocked")
+        self.assertEqual(result.reason_code, "single_task.task_scope.recovery_exhausted")
         self.assertEqual(adapter.calls, 2)
         receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
         self.assertTrue(receipt["scope_constrained_rework_attempted"])
