@@ -7,7 +7,7 @@ from unittest.mock import patch
 from automation.orchestration.repository_multi_cycle_replan_coordinator import RepositoryMultiCycleReplanCoordinatorResult
 from automation.orchestration.repository_multi_cycle_replan_launch import ReplanLaunchClaimResult
 from automation.orchestration.repository_multi_cycle_replan_launch_execution import ReplanLaunchExecutionResult, WorkerLaunchRequest
-from automation.orchestration.repository_multi_cycle_state import write_checkpoint
+from automation.orchestration.repository_multi_cycle_state import load_latest_checkpoint, write_checkpoint
 from automation.orchestration.repository_multi_cycle_supervisor import RepositoryMultiCycleSupervisor
 from automation.orchestration.repository_multi_cycle_status import inspect_repository_multi_cycle_status
 from automation.orchestration.repository_multi_cycle_task_executor import _child_run_id, _runtime_single_task_spec, run_repository_multi_cycle
@@ -71,6 +71,13 @@ class SupervisorTests(unittest.TestCase):
   supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:self.fail("worker launched"),replan_coordinator=lambda value:calls.append(value) or expected)
   result=supervisor.run_once(); self.assertEqual(result.replan_result,expected); self.assertEqual(len(calls),1); value=calls[0]
   self.assertEqual(value.verified_terminal_result["cycle_run_id"],directory.name); self.assertEqual(value.verified_terminal_result["terminal_task_result"]["reason_code"],"single_task.task_completion.rework_exhausted"); self.assertEqual(value.verified_terminal_result["final_accepted_head_sha"],"a"*40); self.assertEqual(value.predecessor_queue_spec_sha256,hashlib.sha256(self.queue.read_bytes()).hexdigest())
+ def test_scope_deficiency_replan_requires_checksymmetric_controller_evidence(self):
+  directory=self.replan_terminal(reason="single_task.task_scope.recovery_exhausted"); state,_=load_latest_checkpoint(directory/"state")
+  child_path=self.root/"child"/"receipt.json"; child_path.parent.mkdir(); child={"repository_id":"repo","task_id":"one","reason_code":"single_task.task_scope.recovery_exhausted","scope_trim_attempted":True,"scope_constrained_rework_attempted":True,"scope_constrained_rework_status":"failed","declared_allowed_changed_paths":["one.py"],"effective_allowed_changed_paths":["one.py"],"original_unexpected_changed_files":["two.py"],"auto_expanded_paths":[],"scope_trimmed_paths":["two.py"],"post_trim_validation_status":"failed"}; payload=json.dumps(child,sort_keys=True,separators=(",",":")).encode(); child_path.write_bytes(payload); (child_path.parent/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  state["terminal_task_result"].update({"child_receipt_path":str(child_path),"child_receipt_sha256":hashlib.sha256(payload).hexdigest(),"commit_created":False,"commit_sha":None,"commit_parent_sha":None}); write_checkpoint(directory/"state",state); calls=[]
+  outcome=RepositoryMultiCycleReplanCoordinatorResult("not_eligible","test",None,"one","a"*40,None,None,None,0)
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,replan_coordinator=lambda value:calls.append(value) or outcome)
+  self.assertEqual(supervisor.run_once().replan_result,outcome); self.assertEqual(calls[0].verified_terminal_result["completion_evaluation"]["scope_trimmed_paths"],["two.py"])
  def test_replan_hook_never_receives_invalid_receipt_or_raw_worker_exit(self):
   directory=self.replan_terminal(); calls=[]; (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n")
   supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,replan_coordinator=lambda value:calls.append(value))

@@ -48,6 +48,14 @@ _SAFE_EVIDENCE_FIELDS = frozenset(
         "rework_attempted",
         "rework_validation_status",
         "rework_validation_reason",
+        "declared_allowed_changed_paths",
+        "effective_allowed_changed_paths",
+        "original_unexpected_changed_files",
+        "auto_expanded_paths",
+        "scope_trimmed_paths",
+        "scope_constrained_rework_attempted",
+        "scope_constrained_rework_status",
+        "post_trim_validation_status",
     }
 )
 

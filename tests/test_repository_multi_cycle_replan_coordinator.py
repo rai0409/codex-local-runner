@@ -198,6 +198,29 @@ def test_eligible_success_forwards_failed_task_and_authoritative_head(tmp_path: 
     assert request.evidence.predecessor_queue.tasks[1].task_id == "failed"
 
 
+def test_proven_scope_deficiency_is_eligible_but_generic_scope_failure_is_not(tmp_path: Path) -> None:
+    value = _input(tmp_path)
+    terminal = _terminal(
+        reason="single_task.task_scope.recovery_exhausted",
+        queue_sha=value.predecessor_queue_spec_sha256,
+    )
+    terminal["completion_evaluation"] = {
+        "declared_allowed_changed_paths": ["failed.py"],
+        "effective_allowed_changed_paths": ["failed.py"],
+        "original_unexpected_changed_files": ["required.py"],
+        "scope_trimmed_paths": ["required.py"],
+        "scope_constrained_rework_attempted": True,
+        "scope_constrained_rework_status": "failed",
+        "post_trim_validation_status": "failed",
+    }
+    planner = _Planner()
+    result = coordinate_verified_terminal_replan(_input(tmp_path, terminal=terminal), planner_pipeline=planner)
+    assert result.status == "successor_ready"
+    assert planner.calls[0].evidence.terminal_reason_code == "single_task.task_scope.recovery_exhausted"
+    generic = _terminal(reason="single_task.changed_files.out_of_scope", queue_sha=value.predecessor_queue_spec_sha256)
+    assert coordinate_verified_terminal_replan(_input(tmp_path, terminal=generic), planner_pipeline=_Planner()).status == "not_eligible"
+
+
 def test_safe_evidence_filter_excludes_logs_secrets_and_environment(tmp_path: Path) -> None:
     planner = _Planner()
 

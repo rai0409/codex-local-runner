@@ -304,6 +304,25 @@ def _is_scope_high_authority_path(path: str) -> bool:
     )
 
 
+def _is_scope_untrimmable_path(path: str) -> bool:
+    """Return only security-sensitive identities that cannot be auto-restored.
+
+    This is deliberately narrower than ``_is_scope_high_authority_path``.
+    The latter prevents a model change from becoming authorized; a normal,
+    repository-contained tracked file can still be restored exactly to the
+    execution-base blob without granting that authority.
+    """
+    parts = tuple(part.casefold() for part in PurePosixPath(path).parts)
+    basename = parts[-1]
+    return bool(
+        any(part in {".git", ".github", "__pycache__", "credentials", "secrets", "hooks", "deploy", "deployment", "terraform", "kubernetes", "workflows"} for part in parts)
+        or basename.startswith(".env")
+        or "secret" in basename
+        or "credential" in basename
+        or basename.endswith(".pyc")
+    )
+
+
 def _is_new_regular_file(root: Path, path: str, untracked_files: frozenset[str]) -> bool:
     """Only untracked regular files can receive deterministic new-file scope."""
     if path not in untracked_files:
@@ -394,14 +413,17 @@ def _recover_safe_changed_path_scope(
     hard_blocked = False
     for raw in unexpected:
         path = _normalized_repository_relative_path(root, raw)
-        if path is None or path != raw or _is_scope_high_authority_path(path):
+        if path is None or path != raw or _is_scope_untrimmable_path(path):
             hard_blocked = True
             continue
         normalized[raw] = path
     auto_expanded = tuple(sorted(
         path for path in normalized.values()
-        if _is_safe_generated_migration(root, path, declared, untracked)
-        or _is_safe_task_specific_test(root, path, declared, task_id, untracked)
+        if not _is_scope_high_authority_path(path)
+        and (
+            _is_safe_generated_migration(root, path, declared, untracked)
+            or _is_safe_task_specific_test(root, path, declared, task_id, untracked)
+        )
     ))
     if len(auto_expanded) > MAX_SAFE_SCOPE_AUTO_EXPANSIONS:
         return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared, unexpected)
@@ -466,7 +488,7 @@ def _trim_unexpected_changed_paths(
     trimmed: list[str] = []
     for raw in unexpected_paths:
         path = _normalized_repository_relative_path(root, raw)
-        if path is None or path != raw or _is_scope_high_authority_path(path):
+        if path is None or path != raw or _is_scope_untrimmable_path(path):
             raise OSError("trim target unsafe")
         candidate = root / path
         base = _execution_base_blob(root, execution_head, path)
@@ -1000,7 +1022,7 @@ def run_repository_single_task(
             if final_validation.status != "passed":
                 scope_constrained_rework_status = "failed"
                 worktree_preserved = True
-                return record("blocked", "single_task.changed_files.out_of_scope")
+                return record("blocked", "single_task.task_scope.recovery_exhausted")
             scope_constrained_rework_status = "succeeded"
 
     # Completion is intentionally independent from Safe Validation.  Each
@@ -1061,7 +1083,7 @@ def run_repository_single_task(
             return record("blocked", "single_task.task_completion.blocked", final_task_completion.reason_code)
         if scope_trim_attempted and scope_constrained_rework_attempted:
             worktree_preserved = True
-            return record("blocked", "single_task.task_completion.rework_exhausted")
+            return record("blocked", "single_task.task_scope.recovery_exhausted")
         if evaluation_number > MAX_TASK_REWORK_ATTEMPTS:
             worktree_preserved = True
             return record("blocked", "single_task.task_completion.rework_exhausted")
@@ -1161,7 +1183,7 @@ def run_repository_single_task(
             if final_validation.status != "passed":
                 scope_constrained_rework_status = "failed"
                 worktree_preserved = True
-                return record("blocked", "single_task.validation.failed")
+                return record("blocked", "single_task.task_scope.recovery_exhausted")
             scope_constrained_rework_status = "succeeded"
 
     worktree_state = analyze_repository_state(worktree)
