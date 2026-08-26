@@ -269,6 +269,40 @@ def _pre_task_terminal_is_noop(receipt: Mapping[str, Any]) -> bool:
     )
 
 
+def _source_anchor_no_progress_observation_is_verified(directory: Path, receipt: Mapping[str, Any], *, repository_id: str, source_root: str, source_anchor: str) -> bool:
+    """Verify a historical observation that cannot contribute an accepted edge.
+
+    A terminal receipt with no completed task and the source anchor as both its
+    base and final head cannot advance continuation.  It is still tied to an
+    immutable checkpoint so a receipt rewritten from a completed cycle is not
+    silently ignored.  The checkpoint may be ``active_task``: an old worker can
+    have emitted a terminal acceptance failure before finalizing its checkpoint,
+    but it has not accepted a child commit.
+    """
+    if not (
+        receipt.get("continuation_base_sha") == source_anchor
+        and receipt.get("final_accepted_head_sha") == source_anchor
+        and receipt.get("completed_count") == 0
+        and receipt.get("executed_task_results") == []
+    ):
+        return False
+    try:
+        state, _ = load_latest_checkpoint(directory / "state")
+    except (OSError, RepositoryMultiCycleStateError):
+        return False
+    return bool(
+        state.get("cycle_run_id") == directory.name == receipt.get("cycle_run_id")
+        and state.get("repository_id") == receipt.get("repository_id") == repository_id
+        and state.get("queue_spec_sha256") == receipt.get("queue_spec_sha256")
+        and state.get("source_repository_root") == source_root
+        and state.get("source_anchor_sha") == receipt.get("source_anchor_sha") == source_anchor
+        and state.get("continuation_base_sha") == source_anchor
+        and state.get("accepted_head_sha") == source_anchor
+        and state.get("next_task_index") == 0
+        and state.get("completed_task_results") == []
+    )
+
+
 def _legacy_source_anchor_pre_task_terminal_is_noop(directory: Path, raw: Mapping[str, Any], *, source_anchor: str) -> bool:
     """Recognize only the old producer bug as a no-edge historical receipt.
 
@@ -337,6 +371,11 @@ def _discover_verified_continuation_base(repository_id: str, source_root: str, s
         elif receipt.get("completed_count") == 0:
             if _pre_task_terminal_is_noop(receipt):
                 pre_task_terminal.append(receipt)
+            elif _source_anchor_no_progress_observation_is_verified(
+                directory, receipt, repository_id=repository_id, source_root=source_root,
+                source_anchor=source_anchor,
+            ):
+                continue
             else:
                 zero_completion.append((directory, receipt))
     tip, seen = source_anchor, {source_anchor}

@@ -57,6 +57,12 @@ class ExecutorTests(unittest.TestCase):
   path=self.base/f"queue-{task_id}.json"; path.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":task_id,"prompt":prompt,"allowed_changed_paths":[f"{task_id}.txt"],"commit_message":task_id.upper()}]})); return path
  def terminal_status(self, result, status):
   receipt=Path(result.receipt_path); value=json.loads(receipt.read_text()); value["status"]=status; value["reason_code"]=f"multi_cycle.child.{status}"; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); receipt.write_bytes(payload); Path(result.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+ def no_progress_terminal(self, name, queue_sha, *, status="blocked"):
+  directory=self.output/name; directory.mkdir(parents=True)
+  value={"schema_version":"1","cycle_run_id":name,"status":status,"reason_code":"multi_cycle.child.acceptance_invalid","repository_id":"repo","queue_spec_sha256":queue_sha,"source_anchor_sha":self.a,"continuation_base_sha":self.a,"final_accepted_head_sha":self.a,"task_count":3,"completed_count":0,"stopped_task_id":"one","executed_task_results":[],"started_at":"2026-08-27T00:00:00Z","finished_at":"2026-08-27T00:00:01Z"}
+  payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",", ":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  write_checkpoint(directory/"state",{"cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":queue_sha,"source_repository_root":str(self.source),"source_anchor_sha":self.a,"continuation_base_sha":self.a,"accepted_head_sha":self.a,"task_count":3,"next_task_index":0,"completed_task_results":[],"active_task":{"task_index":0,"task_id":"one"},"lifecycle_status":"active_task"})
+  return directory
  def test_real_git_chain_and_receipts(self):
   result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
   self.assertEqual(result.status,"completed",result); self.assertEqual(result.completed_count,3); self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
@@ -100,6 +106,23 @@ class ExecutorTests(unittest.TestCase):
   self.assertEqual(result.status,"completed")
   first=json.loads(Path(result.receipt_path).read_text())["executed_task_results"][0]
   self.assertEqual(first["parent_sha"],self.a)
+
+ def test_multiple_verified_source_anchor_no_progress_terminals_do_not_create_continuation_conflicts(self):
+  queue_sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
+  self.no_progress_terminal("cycle-20260827111111111112",queue_sha)
+  self.no_progress_terminal("cycle-20260827111111111113",queue_sha,status="failed")
+  self.no_progress_terminal("cycle-20260827111111111114","f"*64)
+  self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  self.assertEqual(result.status,"completed")
+  first=json.loads(Path(result.receipt_path).read_text())["executed_task_results"][0]
+  self.assertEqual(first["parent_sha"],self.a)
+
+ def test_corrupt_no_progress_terminal_receipt_still_fails_closed(self):
+  directory=self.no_progress_terminal("cycle-20260827111111111115",hashlib.sha256(self.queue.read_bytes()).hexdigest())
+  (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n")
+  with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.evidence_invalid"):
+   _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
 
  def test_pre_task_continuation_failure_keeps_source_anchor_as_final_head_and_is_discoverable(self):
   with patch("automation.orchestration.repository_multi_cycle_task_executor._discover_verified_continuation_base",side_effect=ValueError("multi_cycle.continuation.evidence_invalid")):
