@@ -9,7 +9,7 @@ def module():
 def result(status): return RepositoryMultiCycleRunResult("1","r",status,"reason","repo","/r","/s","a"*40,"b"*40,1,None,"start","finish")
 class CliTests(unittest.TestCase):
  def test_contract(self):
-  cli=module(); self.assertEqual({x for a in cli._parser()._actions for x in a.option_strings}-{ "-h","--help"},{"--repository-id","--queue-spec","--resume-cycle-run-id","--registry-path","--bindings-path","--providers-path","--output-root","--single-task-output-root"})
+  cli=module(); self.assertEqual({x for a in cli._parser()._actions for x in a.option_strings}-{ "-h","--help"},{"--repository-id","--queue-spec","--resume-cycle-run-id","--resume-terminal-cycle-run-id","--registry-path","--bindings-path","--providers-path","--output-root","--single-task-output-root"})
   for status,code,marker in (("completed",0,"READY_FOR_MULTI_CYCLE_REVIEW"),("blocked",2,"BLOCKED_REPOSITORY_MULTI_CYCLE"),("failed",1,"FAILED_REPOSITORY_MULTI_CYCLE")):
    with self.subTest(status=status),mock.patch.object(cli,"run_repository_multi_cycle",return_value=result(status)):
     output=io.StringIO()
@@ -20,7 +20,10 @@ class CliTests(unittest.TestCase):
   cli=module()
   with mock.patch.object(cli,"run_repository_multi_cycle",return_value=result("completed")) as runner:
    with redirect_stdout(io.StringIO()): self.assertEqual(cli.main(["--repository-id","repo","--queue-spec","queue"]),0)
-  runner.assert_called_once_with(repository_id="repo",queue_spec_path="queue",resume_cycle_run_id=None)
+  runner.assert_called_once_with(repository_id="repo",queue_spec_path="queue",resume_cycle_run_id=None,terminal_resume_cycle_run_id=None)
   with mock.patch.object(cli,"run_repository_multi_cycle",return_value=result("completed")) as runner:
    with redirect_stdout(io.StringIO()): self.assertEqual(cli.main(["--repository-id","repo","--queue-spec","queue","--resume-cycle-run-id","cycle-20260811123456789012","--registry-path","/tmp/registry.json","--bindings-path","/tmp/bindings.json","--providers-path","/tmp/providers.yaml","--output-root","/tmp/cycles","--single-task-output-root","/tmp/children"]),0)
-  runner.assert_called_once_with(repository_id="repo",queue_spec_path="queue",resume_cycle_run_id="cycle-20260811123456789012",registry_path="/tmp/registry.json",bindings_path="/tmp/bindings.json",providers_path="/tmp/providers.yaml",output_root="/tmp/cycles",single_task_output_root="/tmp/children")
+  runner.assert_called_once_with(repository_id="repo",queue_spec_path="queue",resume_cycle_run_id="cycle-20260811123456789012",terminal_resume_cycle_run_id=None,registry_path="/tmp/registry.json",bindings_path="/tmp/bindings.json",providers_path="/tmp/providers.yaml",output_root="/tmp/cycles",single_task_output_root="/tmp/children")
+  with mock.patch.object(cli,"run_repository_multi_cycle",return_value=result("completed")) as runner:
+   with redirect_stdout(io.StringIO()): self.assertEqual(cli.main(["--repository-id","repo","--queue-spec","queue","--resume-terminal-cycle-run-id","cycle-20260811123456789012"]),0)
+  runner.assert_called_once_with(repository_id="repo",queue_spec_path="queue",resume_cycle_run_id=None,terminal_resume_cycle_run_id="cycle-20260811123456789012")

@@ -249,11 +249,60 @@ def _terminal_zero_completion_noop_is_verified(directory: Path, receipt: Mapping
     return bool(valid)
 
 
+def _pre_task_terminal_is_noop(receipt: Mapping[str, Any]) -> bool:
+    """Return whether a verified terminal records no accepted task or child.
+
+    A preflight/continuation failure after resolving the clean source anchor has
+    no accepted edge to contribute.  It must therefore not poison a later
+    fresh-cycle continuation discovery.  This deliberately accepts no claimed
+    commit: any receipt with a stopped child remains subject to the stricter
+    zero-completion child-receipt verification below.
+    """
+    return bool(
+        _sha(receipt.get("source_anchor_sha"))
+        and _sha(receipt.get("continuation_base_sha"))
+        and receipt.get("final_accepted_head_sha") == receipt.get("continuation_base_sha")
+        and receipt.get("pre_task_terminal") is True
+        and receipt.get("completed_count") == 0
+        and receipt.get("executed_task_results") == []
+        and receipt.get("stopped_task_id") is None
+    )
+
+
+def _legacy_source_anchor_pre_task_terminal_is_noop(directory: Path, raw: Mapping[str, Any], *, source_anchor: str) -> bool:
+    """Recognize only the old producer bug as a no-edge historical receipt.
+
+    Older executors emitted ``final_accepted_head_sha: null`` when discovery
+    failed before Task 1.  Its checksum still proves the exact historical
+    payload, but it cannot satisfy the current terminal schema.  It asserts no
+    accepted child and therefore cannot grant a continuation base; ignoring it
+    is safer than letting this known no-progress producer defect permanently
+    prevent a clean fresh campaign from starting.
+    """
+    try:
+        payload = (directory / "receipt.json").read_bytes()
+        expected = f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"
+        sidecar = (directory / "receipt.sha256").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return bool(
+        sidecar == expected
+        and raw.get("source_anchor_sha") == source_anchor
+        and raw.get("continuation_base_sha") == source_anchor
+        and raw.get("final_accepted_head_sha") is None
+        and raw.get("reason_code") == "multi_cycle.continuation.evidence_invalid"
+        and raw.get("completed_count") == 0
+        and raw.get("executed_task_results") == []
+        and raw.get("stopped_task_id") is None
+    )
+
+
 def _discover_verified_continuation_base(repository_id: str, source_root: str, source_anchor: str, cycle_output_root: str | os.PathLike[str], *, exclude_cycle_run_id: str | None = None) -> str:
     """Follow only uniquely verified terminal accepted-chain edges from anchor."""
     root = Path(cycle_output_root).expanduser()
     edges: dict[str, set[str]] = {}
     zero_completion: list[tuple[Path, Mapping[str, Any]]] = []
+    pre_task_terminal: list[Mapping[str, Any]] = []
     if not root.exists():
         return source_anchor
     try:
@@ -272,6 +321,10 @@ def _discover_verified_continuation_base(repository_id: str, source_root: str, s
             continue
         if not isinstance(raw, dict) or raw.get("repository_id") != repository_id or raw.get("source_anchor_sha") != source_anchor:
             continue
+        if _legacy_source_anchor_pre_task_terminal_is_noop(
+            directory, raw, source_anchor=source_anchor
+        ):
+            continue
         try:
             receipt = read_verified_terminal_receipt(directory, repository_id, None)
         except RepositoryMultiCycleStatusError as exc:
@@ -282,7 +335,10 @@ def _discover_verified_continuation_base(repository_id: str, source_root: str, s
         if edge is not None:
             edges.setdefault(edge[0], set()).add(edge[1])
         elif receipt.get("completed_count") == 0:
-            zero_completion.append((directory, receipt))
+            if _pre_task_terminal_is_noop(receipt):
+                pre_task_terminal.append(receipt)
+            else:
+                zero_completion.append((directory, receipt))
     tip, seen = source_anchor, {source_anchor}
     while tip in edges:
         targets = edges[tip]
@@ -315,6 +371,9 @@ def _discover_verified_continuation_base(repository_id: str, source_root: str, s
             directory, receipt, repository_id=repository_id, source_root=source_root,
             source_anchor=source_anchor, reachable_heads=seen,
         ):
+            raise ValueError("multi_cycle.continuation.evidence_invalid")
+    for receipt in pre_task_terminal:
+        if receipt.get("continuation_base_sha") not in seen:
             raise ValueError("multi_cycle.continuation.evidence_invalid")
     return tip
 
@@ -416,11 +475,16 @@ def run_repository_multi_cycle(repository_id: str, queue_spec_path: str | os.Pat
         run_id, directory = generated, root / generated; directory.mkdir(parents=True, exist_ok=False)
     queue_sha = registry_sha = bindings_sha = providers_sha = source_root = source_anchor = continuation_base = accepted_head = None
     source_branch = None; task_count = 0; completed: list[dict[str, Any]] = []; stopped_task_id: str | None = None
+    preflight_failure: dict[str, Any] | None = None
 
     def record(status: str, reason: str) -> RepositoryMultiCycleRunResult:
         finished = _utc_now(); path, sidecar = directory / "receipt.json", directory / "receipt.sha256"
         public = [{key: item.get(key) for key in ("task_id", "status", "reason_code", "commit_sha", "parent_sha", "worktree_preserved", "child_receipt_path")} for item in completed]
         receipt = {"schema_version":"1","cycle_run_id":run_id,"status":status,"reason_code":reason,"repository_id":repository_id,"queue_spec_sha256":queue_sha,"source_anchor_sha":source_anchor,"continuation_base_sha":continuation_base,"final_accepted_head_sha":accepted_head,"task_count":task_count,"completed_count":len(completed),"stopped_task_id":stopped_task_id,"executed_task_results":public,"started_at":started,"finished_at":finished}
+        if source_anchor is not None and accepted_head == source_anchor and not completed and stopped_task_id is None:
+            receipt["pre_task_terminal"] = True
+        if preflight_failure is not None:
+            receipt["preflight_failure"] = preflight_failure
         try:
             _atomic_json(path, receipt); sidecar.write_text(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  receipt.json\n", encoding="utf-8")
         except (OSError, TypeError, ValueError): status, reason = "failed", "multi_cycle.receipt.write_failed"
@@ -434,8 +498,12 @@ def run_repository_multi_cycle(repository_id: str, queue_spec_path: str | os.Pat
         source = analyze_repository_state(source_root)
         if not _clean_source(source_root, source_branch, source.head_sha or ""): return record("blocked", "multi_cycle.source.invalid")
         source_anchor = source.head_sha
+        # Once the source anchor is verified, it is also the initial accepted
+        # head until a verified child acceptance advances it.  Set this before
+        # continuation discovery so any pre-task terminal receipt remains
+        # structurally valid and discoverable by the supervisor.
+        continuation_base = accepted_head = source_anchor
         if resume_cycle_run_id is None:
-            continuation_base = source_anchor
             try: continuation_base = _discover_verified_continuation_base(repository_id, source_root, source_anchor, root, exclude_cycle_run_id=run_id)
             except ValueError as exc: return record("blocked", str(exc))
             if terminal_resume_cycle_run_id is not None:
@@ -445,10 +513,21 @@ def run_repository_multi_cycle(repository_id: str, queue_spec_path: str | os.Pat
                     source_branch=source_branch, source_anchor=source_anchor,
                     cycle_output_root=root, single_task_output_root=Path(single_task_output_root).expanduser(),
                 )
+            else:
+                accepted_head = continuation_base
         else:
             continuation_base = source_anchor
         if accepted_head is None:
             accepted_head = continuation_base
+        if resume_cycle_run_id is None:
+            oversized = next((task for task in queue.tasks if len(task.allowed_changed_paths) > profile.max_changed_files), None)
+            if oversized is not None:
+                preflight_failure = {
+                    "task_id": oversized.task_id,
+                    "allowed_changed_path_count": len(oversized.allowed_changed_paths),
+                    "profile_max_changed_files": profile.max_changed_files,
+                }
+                return record("blocked", "multi_cycle.queue.allowed_paths_limit_exceeded")
     except (OSError, ValueError): return record("blocked", "multi_cycle.preflight.invalid")
 
     terminal_resume_start_index = len(completed) if terminal_resume_cycle_run_id is not None else None
