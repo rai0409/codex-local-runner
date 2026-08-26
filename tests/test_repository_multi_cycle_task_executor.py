@@ -1,8 +1,11 @@
 from __future__ import annotations
 import hashlib, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
+from unittest.mock import patch
 from automation.orchestration.repository_multi_cycle_task_executor import _child_run_id, _discover_verified_continuation_base, _runtime_single_task_spec, run_repository_multi_cycle
 from automation.orchestration.repository_multi_cycle_state import load_latest_checkpoint, write_checkpoint
+from automation.orchestration.repository_multi_cycle_status import read_verified_terminal_receipt
+from automation.orchestration.repository_multi_cycle_supervisor import RepositoryMultiCycleSupervisor
 from automation.orchestration.repository_profile import APPROVAL_ACTIONS, FORBIDDEN_GIT_OPERATION_IDS
 from automation.orchestration.repository_resolved_single_task_controller import run_repository_single_task
 
@@ -86,6 +89,47 @@ class ExecutorTests(unittest.TestCase):
   r3=run_repository_multi_cycle("repo",q3,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); d=r3.accepted_head_sha
   self.assertEqual(git(self.source,"rev-parse",f"{b}^").stdout.strip(),self.a); self.assertEqual(git(self.source,"rev-parse",f"{c}^").stdout.strip(),b); self.assertEqual(git(self.source,"rev-parse",f"{d}^").stdout.strip(),c)
   self.assertEqual(json.loads(Path(r2.receipt_path).read_text())["continuation_base_sha"],b); self.assertEqual(json.loads(Path(r3.receipt_path).read_text())["continuation_base_sha"],c); self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a); self.assertEqual(git(self.source,"status","--porcelain").stdout,"")
+
+ def test_fresh_cycle_ignores_legacy_pre_task_no_progress_receipt_and_starts_task_one(self):
+  legacy=self.output/"cycle-20260827111111111111"; legacy.mkdir(parents=True)
+  queue_sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
+  value={"schema_version":"1","cycle_run_id":legacy.name,"status":"blocked","reason_code":"multi_cycle.continuation.evidence_invalid","repository_id":"repo","queue_spec_sha256":queue_sha,"source_anchor_sha":self.a,"continuation_base_sha":self.a,"final_accepted_head_sha":None,"task_count":3,"completed_count":0,"stopped_task_id":None,"executed_task_results":[],"started_at":"2026-08-27T00:00:00Z","finished_at":"2026-08-27T00:00:01Z"}
+  payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",", ":")).encode(); (legacy/"receipt.json").write_bytes(payload); (legacy/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  self.assertEqual(result.status,"completed")
+  first=json.loads(Path(result.receipt_path).read_text())["executed_task_results"][0]
+  self.assertEqual(first["parent_sha"],self.a)
+
+ def test_pre_task_continuation_failure_keeps_source_anchor_as_final_head_and_is_discoverable(self):
+  with patch("automation.orchestration.repository_multi_cycle_task_executor._discover_verified_continuation_base",side_effect=ValueError("multi_cycle.continuation.evidence_invalid")):
+   result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  self.assertEqual((result.status,result.reason_code,result.completed_count,result.accepted_head_sha),("blocked","multi_cycle.continuation.evidence_invalid",0,self.a))
+  receipt=json.loads(Path(result.receipt_path).read_text())
+  self.assertEqual((receipt["source_anchor_sha"],receipt["continuation_base_sha"],receipt["final_accepted_head_sha"]),(self.a,self.a,self.a))
+  self.assertIsNotNone(read_verified_terminal_receipt(self.output/result.cycle_run_id,"repo",hashlib.sha256(self.queue.read_bytes()).hexdigest()))
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.base/"supervisor",cycle_output_root=self.output,worker_factory=lambda _:self.fail("worker must not launch"))
+  self.assertTrue(supervisor._verified_terminal(self.output/result.cycle_run_id,hashlib.sha256(self.queue.read_bytes()).hexdigest()))
+  observed=supervisor.run_once(); self.assertEqual(observed.reason_code,"supervisor.queue.terminal_suppressed")
+  status=json.loads((supervisor._directory/"status.json").read_text())
+  self.assertEqual(status["reason_code"],"multi_cycle.continuation.evidence_invalid")
+
+ def test_queue_allowed_path_limit_preflight_blocks_before_child_and_exact_limit_starts(self):
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"oversized","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt","two.txt"],"commit_message":"B"}]}))
+  calls=[]
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",single_task_runner=lambda **kwargs:calls.append(kwargs))
+  self.assertEqual((result.status,result.reason_code,result.accepted_head_sha),("blocked","multi_cycle.queue.allowed_paths_limit_exceeded",self.a)); self.assertEqual(calls,[])
+  receipt=json.loads(Path(result.receipt_path).read_text())
+  self.assertEqual(receipt["preflight_failure"],{"task_id":"oversized","allowed_changed_path_count":2,"profile_max_changed_files":1})
+  self.assertIsNotNone(read_verified_terminal_receipt(self.output/result.cycle_run_id,"repo",hashlib.sha256(self.queue.read_bytes()).hexdigest()))
+  self.output=self.base/"exact-output"; self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"}]}))
+  exact=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"exact-child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  self.assertEqual(exact.status,"completed")
+  accepted=exact.accepted_head_sha
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"oversized","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt","two.txt"],"commit_message":"B"}]}))
+  continued=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"exact-child",single_task_runner=lambda **kwargs:self.fail("preflight must run before child"))
+  self.assertEqual(continued.accepted_head_sha,accepted)
+  self.assertEqual(json.loads(Path(continued.receipt_path).read_text())["final_accepted_head_sha"],accepted)
 
  def test_partial_terminal_and_resume_use_verified_continuation_base(self):
   q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two"); q3=self.one_task_queue("three","three"); first=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); b=first.accepted_head_sha; self.terminal_status(first,"blocked")

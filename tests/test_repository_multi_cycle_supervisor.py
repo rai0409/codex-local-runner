@@ -51,6 +51,13 @@ class SupervisorTests(unittest.TestCase):
     self.terminal(f"cycle-0000000000000000000{len(status)}",status); self.assertEqual(self.make().run_once().reason_code,"supervisor.queue.terminal_suppressed")
     self.temp.cleanup(); self.setUp()
   directory=self.terminal("cycle-00000000000000000009"); (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n"); self.assertEqual(self.make().run_once().reason_code,"supervisor.discovery.invalid"); self.assertEqual(self.calls,[])
+
+ def test_structurally_invalid_terminal_receipt_remains_rejected(self):
+  directory=self.terminal("cycle-00000000000000000012","blocked")
+  value=json.loads((directory/"receipt.json").read_text()); value["final_accepted_head_sha"]=None
+  payload=json.dumps(value,sort_keys=True,separators=(",", ":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  supervisor=self.make(); self.assertFalse(supervisor._verified_terminal(directory,hashlib.sha256(self.queue.read_bytes()).hexdigest()))
+  self.assertEqual(supervisor.run_once().reason_code,"supervisor.discovery.invalid")
  def test_explicit_terminal_resume_launches_one_fresh_attempt_but_completed_stays_suppressed(self):
   predecessor=self.terminal("cycle-00000000000000000010","blocked"); calls=[]
   supervisor=self.make(); supervisor.resume_terminal=True
