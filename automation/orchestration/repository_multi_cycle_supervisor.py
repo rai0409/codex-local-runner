@@ -33,6 +33,7 @@ from automation.orchestration.repository_multi_cycle_replan_launch_execution imp
 from automation.orchestration.repository_multi_cycle_replan_state import ReplanPersistenceResult
 from automation.orchestration.repository_multi_cycle_state import RepositoryMultiCycleStateError, load_latest_checkpoint
 from automation.orchestration.repository_multi_cycle_status import read_verified_terminal_receipt
+from automation.orchestration.repository_multi_cycle_task_executor import _terminal_resume_pre_task_no_progress
 
 DEFAULT_SUPERVISOR_STATE_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-supervisor"
 DEFAULT_CYCLE_OUTPUT_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-runs"
@@ -210,9 +211,9 @@ class RepositoryMultiCycleSupervisor:
         try: return read_verified_terminal_receipt(directory, self.repository_id, queue_sha) is not None
         except ValueError: return False
 
-    def _candidates(self, queue_sha: str) -> tuple[list[str], list[str]]:
-        nonterminal, terminal = [], []
-        if not self.cycle_output_root.exists(): return nonterminal, terminal
+    def _candidates(self, queue_sha: str) -> tuple[list[str], list[str], list[str]]:
+        nonterminal, terminal, pre_task = [], [], []
+        if not self.cycle_output_root.exists(): return nonterminal, terminal, pre_task
         for directory in sorted(self.cycle_output_root.iterdir(), key=lambda item: item.name):
             if not directory.is_dir() or not directory.name.startswith("cycle-"): continue
             receipt = directory / "receipt.json"
@@ -220,7 +221,11 @@ class RepositoryMultiCycleSupervisor:
                 try: value=json.loads(receipt.read_text(encoding="utf-8"))
                 except (OSError, ValueError): raise ValueError("supervisor.cycle.receipt_invalid")
                 if value.get("repository_id") == self.repository_id and value.get("queue_spec_sha256") == queue_sha:
-                    if not self._verified_terminal(directory,queue_sha): raise ValueError("supervisor.cycle.receipt_invalid")
+                    try: verified = read_verified_terminal_receipt(directory, self.repository_id, queue_sha)
+                    except ValueError as exc: raise ValueError("supervisor.cycle.receipt_invalid") from exc
+                    if verified is None: raise ValueError("supervisor.cycle.receipt_invalid")
+                    if _terminal_resume_pre_task_no_progress(verified):
+                        pre_task.append(directory.name); continue
                     terminal.append(directory.name); continue
                 # A verified historical terminal receipt for another queue revision
                 # must not be reclassified as a nonterminal candidate.
@@ -231,7 +236,7 @@ class RepositoryMultiCycleSupervisor:
                 raise ValueError("supervisor.cycle.checkpoint_invalid") from exc
             if state.get("cycle_run_id") != directory.name: raise ValueError("supervisor.cycle.checkpoint_invalid")
             if state.get("repository_id") == self.repository_id and state.get("queue_spec_sha256") == queue_sha and state.get("lifecycle_status") in {"initialized","active_task","accepted_task","finalizing"}: nonterminal.append(directory.name)
-        return nonterminal, terminal
+        return nonterminal, terminal, pre_task
 
     def _launch(self, resume_cycle_run_id: str | None, *, queue_spec_path: Path | None = None, terminal_resume_cycle_run_id: str | None = None) -> Any:
         selected_queue = queue_spec_path or self.queue_spec_path
@@ -308,9 +313,11 @@ class RepositoryMultiCycleSupervisor:
         self._last_replan_launch_result = None
         if self._auto_successor_worker_active:
             return RepositoryMultiCycleSupervisorResult("running","supervisor.replan.successor_started",self.repository_id,self._queue_sha(),None,0)
-        try: queue_sha=self._queue_sha(); nonterminal, terminal=self._candidates(queue_sha)
+        try: queue_sha=self._queue_sha(); nonterminal, terminal, pre_task=self._candidates(queue_sha)
         except (OSError, ValueError): return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.invalid",self.repository_id,None,None,0)
         if len(nonterminal)>1: return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.ambiguous_nonterminal",self.repository_id,queue_sha,None,0)
+        if self.resume_terminal and pre_task and not nonterminal and not terminal:
+            return RepositoryMultiCycleSupervisorResult("blocked","supervisor.terminal_resume.pre_task_not_resumable",self.repository_id,queue_sha,pre_task[-1],0)
         if terminal and not nonterminal:
             self._write_terminal_status(self.cycle_output_root / terminal[-1], queue_sha, None, 0)
             if (
@@ -369,12 +376,16 @@ class RepositoryMultiCycleSupervisor:
                 if result.status == "running":
                     worker_pid=getattr(self._worker,"pid",None); code=self._wait_for_worker(queue_sha,result.cycle_run_id,restarts)
                     observed_queue_sha = result.queue_sha256 or queue_sha
-                    try: nonterminal,terminal=self._candidates(observed_queue_sha)
+                    try: nonterminal,terminal,pre_task=self._candidates(observed_queue_sha)
                     except ValueError:
                         self._write_status("blocked", queue_sha256=observed_queue_sha, cycle_run_id=result.cycle_run_id, worker_pid=worker_pid, worker_alive=False, crash_restart_count=restarts, reason_code="supervisor.discovery.invalid")
                         return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.invalid",self.repository_id,observed_queue_sha,result.cycle_run_id,restarts)
                     if terminal and not nonterminal:
                         self._write_terminal_status(self.cycle_output_root / terminal[-1], observed_queue_sha, worker_pid, restarts)
+                    if pre_task and not nonterminal and not terminal:
+                        self._write_terminal_status(self.cycle_output_root / pre_task[-1], observed_queue_sha, worker_pid, restarts)
+                        if self.stop_event.is_set(): break
+                        return RepositoryMultiCycleSupervisorResult("idle","supervisor.queue.pre_task_observed",self.repository_id,observed_queue_sha,pre_task[-1],restarts)
                     self._auto_successor_worker_active = False
                     if self.stop_event.is_set(): break
                     if not nonterminal and not terminal:
