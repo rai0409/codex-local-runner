@@ -269,6 +269,22 @@ def _pre_task_terminal_is_noop(receipt: Mapping[str, Any]) -> bool:
     )
 
 
+def _terminal_resume_pre_task_no_progress(receipt: Mapping[str, Any]) -> bool:
+    """Return whether a terminal is an observation, not a resume seed."""
+    anchor = receipt.get("source_anchor_sha")
+    marker = receipt.get("pre_task_terminal")
+    return bool(
+        receipt.get("status") in {"blocked", "failed"}
+        and _sha(anchor)
+        and receipt.get("continuation_base_sha") == anchor
+        and receipt.get("final_accepted_head_sha") == anchor
+        and receipt.get("completed_count") == 0
+        and receipt.get("executed_task_results") == []
+        and receipt.get("stopped_task_id") is None
+        and marker in {None, True}
+    )
+
+
 def _source_anchor_no_progress_observation_is_verified(directory: Path, receipt: Mapping[str, Any], *, repository_id: str, source_root: str, source_anchor: str) -> bool:
     """Verify a historical observation that cannot contribute an accepted edge.
 
@@ -424,11 +440,16 @@ def _load_verified_terminal_resume_seed(*, predecessor_cycle_run_id: str, reposi
     directory = cycle_output_root / predecessor_cycle_run_id
     try:
         receipt = read_verified_terminal_receipt(directory, repository_id, queue_sha256)
-        state, _ = load_latest_checkpoint(directory / "state")
-    except (OSError, RepositoryMultiCycleStatusError, RepositoryMultiCycleStateError) as exc:
+    except (OSError, RepositoryMultiCycleStatusError) as exc:
         raise ValueError("multi_cycle.terminal_resume.evidence_invalid") from exc
     if receipt is None or receipt.get("status") == "completed":
         raise ValueError("multi_cycle.terminal_resume.not_resumable")
+    if _terminal_resume_pre_task_no_progress(receipt):
+        raise ValueError("multi_cycle.terminal_resume.pre_task_not_resumable")
+    try:
+        state, _ = load_latest_checkpoint(directory / "state")
+    except (OSError, RepositoryMultiCycleStateError) as exc:
+        raise ValueError("multi_cycle.terminal_resume.evidence_invalid") from exc
     completed = receipt.get("executed_task_results")
     count = receipt.get("completed_count")
     base, accepted = receipt.get("continuation_base_sha"), receipt.get("final_accepted_head_sha")
@@ -546,12 +567,22 @@ def run_repository_multi_cycle(repository_id: str, queue_spec_path: str | os.Pat
             try: continuation_base = _discover_verified_continuation_base(repository_id, source_root, source_anchor, root, exclude_cycle_run_id=run_id)
             except ValueError as exc: return record("blocked", str(exc))
             if terminal_resume_cycle_run_id is not None:
-                continuation_base, accepted_head, completed = _load_verified_terminal_resume_seed(
-                    predecessor_cycle_run_id=terminal_resume_cycle_run_id, repository_id=repository_id,
-                    queue_sha256=queue_sha, queue=queue, source_root=source_root,
-                    source_branch=source_branch, source_anchor=source_anchor,
-                    cycle_output_root=root, single_task_output_root=Path(single_task_output_root).expanduser(),
-                )
+                try:
+                    continuation_base, accepted_head, completed = _load_verified_terminal_resume_seed(
+                        predecessor_cycle_run_id=terminal_resume_cycle_run_id, repository_id=repository_id,
+                        queue_sha256=queue_sha, queue=queue, source_root=source_root,
+                        source_branch=source_branch, source_anchor=source_anchor,
+                        cycle_output_root=root, single_task_output_root=Path(single_task_output_root).expanduser(),
+                    )
+                except ValueError as exc:
+                    allowed = {
+                        "multi_cycle.terminal_resume.run_id.invalid",
+                        "multi_cycle.terminal_resume.not_resumable",
+                        "multi_cycle.terminal_resume.pre_task_not_resumable",
+                        "multi_cycle.terminal_resume.evidence_invalid",
+                        "multi_cycle.terminal_resume.prefix_invalid",
+                    }
+                    return record("blocked", str(exc) if str(exc) in allowed else "multi_cycle.terminal_resume.evidence_invalid")
             else:
                 accepted_head = continuation_base
         else:

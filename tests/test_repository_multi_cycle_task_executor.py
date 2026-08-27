@@ -131,11 +131,16 @@ class ExecutorTests(unittest.TestCase):
   receipt=json.loads(Path(result.receipt_path).read_text())
   self.assertEqual((receipt["source_anchor_sha"],receipt["continuation_base_sha"],receipt["final_accepted_head_sha"]),(self.a,self.a,self.a))
   self.assertIsNotNone(read_verified_terminal_receipt(self.output/result.cycle_run_id,"repo",hashlib.sha256(self.queue.read_bytes()).hexdigest()))
-  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.base/"supervisor",cycle_output_root=self.output,worker_factory=lambda _:self.fail("worker must not launch"))
+  launches=[]; supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.base/"supervisor",cycle_output_root=self.output,worker_factory=lambda resume:launches.append(resume) or type("Worker",(),{"pid":123})())
   self.assertTrue(supervisor._verified_terminal(self.output/result.cycle_run_id,hashlib.sha256(self.queue.read_bytes()).hexdigest()))
-  observed=supervisor.run_once(); self.assertEqual(observed.reason_code,"supervisor.queue.terminal_suppressed")
-  status=json.loads((supervisor._directory/"status.json").read_text())
-  self.assertEqual(status["reason_code"],"multi_cycle.continuation.evidence_invalid")
+  observed=supervisor.run_once(); self.assertEqual((observed.status,observed.reason_code),("running","supervisor.worker.started")); self.assertEqual(launches,[None])
+
+ def test_terminal_resume_rejects_pre_task_no_progress_with_specific_reason(self):
+  predecessor=self.output/"cycle-20260827111111111116"; predecessor.mkdir(parents=True); queue_sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
+  value={"schema_version":"1","cycle_run_id":predecessor.name,"status":"blocked","reason_code":"multi_cycle.continuation.evidence_invalid","repository_id":"repo","queue_spec_sha256":queue_sha,"source_anchor_sha":self.a,"continuation_base_sha":self.a,"final_accepted_head_sha":self.a,"pre_task_terminal":True,"task_count":3,"completed_count":0,"stopped_task_id":None,"executed_task_results":[],"started_at":"2026-08-27T00:00:00Z","finished_at":"2026-08-27T00:00:01Z"}
+  payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",", ":")).encode(); (predecessor/"receipt.json").write_bytes(payload); (predecessor/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  calls=[]; result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",single_task_runner=lambda **kwargs:calls.append(kwargs),terminal_resume_cycle_run_id=predecessor.name)
+  self.assertEqual((result.status,result.reason_code),("blocked","multi_cycle.terminal_resume.pre_task_not_resumable")); self.assertEqual(calls,[])
 
  def test_queue_allowed_path_limit_preflight_blocks_before_child_and_exact_limit_starts(self):
   self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"oversized","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt","two.txt"],"commit_message":"B"}]}))

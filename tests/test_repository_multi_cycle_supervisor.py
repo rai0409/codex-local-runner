@@ -36,6 +36,8 @@ class SupervisorTests(unittest.TestCase):
   return directory
  def terminal(self,name,status="completed"):
   directory=self.cycles/name; directory.mkdir(parents=True); sha=hashlib.sha256(self.queue.read_bytes()).hexdigest(); value={"schema_version":"1","cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"status":status,"task_count":1,"completed_count":0,"executed_task_results":[],"source_anchor_sha":"a"*40,"final_accepted_head_sha":"a"*40}; payload=json.dumps(value,sort_keys=True,separators=(",",":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); return directory
+ def pre_task_terminal(self,name,queue_sha=None):
+  directory=self.cycles/name; directory.mkdir(parents=True); sha=queue_sha or hashlib.sha256(self.queue.read_bytes()).hexdigest(); value={"schema_version":"1","cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"status":"blocked","reason_code":"multi_cycle.continuation.evidence_invalid","task_count":1,"completed_count":0,"stopped_task_id":None,"executed_task_results":[],"source_anchor_sha":"a"*40,"continuation_base_sha":"a"*40,"final_accepted_head_sha":"a"*40,"pre_task_terminal":True}; payload=json.dumps(value,sort_keys=True,separators=(",",":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); return directory
  def replan_terminal(self,name="cycle-20260823000000000001",reason="single_task.task_completion.rework_exhausted"):
   directory=self.cycles/name; directory.mkdir(parents=True); sha=hashlib.sha256(self.queue.read_bytes()).hexdigest(); receipt={"schema_version":"1","cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"status":"blocked","reason_code":"multi_cycle.child.blocked","task_count":1,"completed_count":0,"stopped_task_id":"one","executed_task_results":[],"source_anchor_sha":"a"*40,"final_accepted_head_sha":"a"*40}; payload=json.dumps(receipt,sort_keys=True,separators=(",",":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
   write_checkpoint(directory/"state",{"cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"source_repository_root":str(self.root/"source"),"lifecycle_status":"finalizing","terminal_status":"blocked","terminal_reason_code":"multi_cycle.child.blocked","accepted_head_sha":"a"*40,"task_count":1,"next_task_index":0,"completed_task_results":[],"stopped_task_id":"one","terminal_task_result":{"task_index":0,"task_id":"one","status":"blocked","reason_code":reason}}); return directory
@@ -69,6 +71,20 @@ class SupervisorTests(unittest.TestCase):
   self.assertEqual(second.reason_code,"supervisor.queue.terminal_suppressed"); self.assertEqual(calls,[(None,predecessor.name)])
   self.temp.cleanup(); self.setUp(); self.terminal("cycle-00000000000000000011","completed"); supervisor=self.make(); supervisor.resume_terminal=True
   self.assertEqual(supervisor.run_once().reason_code,"supervisor.queue.terminal_suppressed"); self.assertEqual(self.calls,[])
+
+ def test_pre_task_no_progress_terminal_is_historical_not_fresh_launch_suppression(self):
+  predecessor=self.pre_task_terminal("cycle-00000000000000000013"); before=(predecessor/"receipt.json").read_bytes(),(predecessor/"receipt.sha256").read_bytes()
+  self.pre_task_terminal("cycle-00000000000000000014","f"*64)
+  supervisor=self.make(); nonterminal,terminal,pre_task=supervisor._candidates(hashlib.sha256(self.queue.read_bytes()).hexdigest())
+  self.assertEqual((nonterminal,terminal,pre_task),([],[],[predecessor.name]))
+  result=supervisor.run_once(); self.assertEqual((result.status,result.reason_code),("running","supervisor.worker.started")); self.assertEqual(self.calls,[None])
+  self.assertEqual(((predecessor/"receipt.json").read_bytes(),(predecessor/"receipt.sha256").read_bytes()),before)
+  self.assertEqual(self.observe()["terminal_status"],"blocked")
+
+ def test_pre_task_no_progress_terminal_is_not_a_terminal_resume_seed(self):
+  predecessor=self.pre_task_terminal("cycle-00000000000000000015")
+  supervisor=self.make(); supervisor.resume_terminal=True
+  result=supervisor.run_once(); self.assertEqual((result.status,result.reason_code,result.cycle_run_id),("blocked","supervisor.terminal_resume.pre_task_not_resumable",predecessor.name)); self.assertEqual(self.calls,[])
  def test_replan_hook_defaults_disabled_and_existing_terminal_behavior_is_unchanged(self):
   self.replan_terminal(); supervisor=self.make(); result=supervisor.run_once()
   self.assertEqual((result.status,result.reason_code),("idle","supervisor.queue.terminal_suppressed")); self.assertIsNone(result.replan_result); self.assertEqual(self.calls,[])
