@@ -18,6 +18,11 @@ from automation.orchestration.repository_resolved_single_task_controller import 
     serialize_repository_single_task_run_result,
 )
 from automation.orchestration.repository_single_task_spec import RepositorySingleTaskSpec, serialize_repository_single_task_spec
+from automation.orchestration.safe_validation_executor import (
+    SAFE_VALIDATION_EXECUTOR_SCHEMA_VERSION,
+    ValidationCommandResult,
+    ValidationExecutionResult,
+)
 
 
 PYTHON = sys.executable
@@ -67,6 +72,45 @@ class RepairPreparedAdapter(FakePreparedAdapter):
             "repair": {"attempted": True, "max_attempts": 2, "attempts_used": 2 if self.exhausted else 1, "outcome": "repair_exhausted" if self.exhausted else "repair_succeeded"},
             "validation_attempts": [{"attempt_number": 1, "phase": "initial", "execution_status": "completed", "validation_status": "failed", "validation_reason": "validation_failed", "failure": {"command_id": "compile", "kind": "compile", "status": "failed", "return_code": 1, "reason_code": "failed", "stdout_tail_sha256": "a" * 64, "stderr_tail_sha256": "b" * 64}}],
         }
+
+
+class ControllerManagedAdapter:
+    """Fake Codex surface: validation is intentionally owned by the controller."""
+
+    name = "codex_cli"
+
+    def __init__(self, action) -> None:
+        self.action = action
+        self.calls = 0
+        self.payloads = []
+
+    def execute_prepared_worktree(self, payload):
+        self.calls += 1
+        self.payloads.append(payload)
+        self.action(Path(payload["worktree_path"]), self.calls)
+        return {
+            "status": "completed",
+            "validation_deferred": True,
+            "verify": {"status": "not_run", "reason": "validation_deferred"},
+            "retry": {"attempted": False, "outcome": "not_attempted"},
+        }
+
+
+def validation_result(*, status: str, command_id: str, kind: str, argv: tuple[str, ...] = ("python", "-m", "pytest")) -> ValidationExecutionResult:
+    command_status = "passed" if status == "passed" else "timed_out" if status == "timed_out" else "failed"
+    command = ValidationCommandResult(
+        command_id, kind, argv, "/tmp", True, True, command_status,
+        0 if command_status == "passed" else None if command_status == "timed_out" else 1,
+        "safe_validation.command.passed" if command_status == "passed" else "safe_validation.command.timed_out" if command_status == "timed_out" else "safe_validation.command.failed",
+        "2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:01.000000Z", 1.0,
+        "FAILED tests/test_allowed.py::test_allowed_value - assertion\n" if command_status == "failed" else "", "", False, False,
+    )
+    return ValidationExecutionResult(
+        SAFE_VALIDATION_EXECUTOR_SCHEMA_VERSION, "repo", "/tmp",
+        "passed" if command_status == "passed" else "failed",
+        "2026-01-01T00:00:00.000000Z", "2026-01-01T00:00:01.000000Z", 1.0,
+        (command,), () if command_status == "passed" else (command_id,), (), False, None,
+    )
 
 
 class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
@@ -246,6 +290,95 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         rendered = artifact.read_text(encoding="utf-8")
         self.assertNotIn("PROMPT_SECRET_MARKER_8B71", rendered)
         self.assertNotIn("PROMPT_SECRET_MARKER_8B71", Path(result.receipt_path).read_text(encoding="utf-8"))
+
+    def test_controller_managed_repair_is_not_recorded_as_retry_and_revalidates(self):
+        def action(worktree, call):
+            (worktree / "allowed.txt").write_text("after\n", encoding="utf-8")
+
+        adapter = ControllerManagedAdapter(action)
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            side_effect=[
+                validation_result(status="failed", command_id="focused", kind="focused"),
+                validation_result(status="passed", command_id="focused", kind="focused"),
+            ],
+        ) as validation:
+            result = self._run(adapter)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(adapter.calls, 2)
+        self.assertFalse(result.retry_attempted)
+        self.assertEqual(result.retry_outcome, "not_attempted")
+        self.assertEqual(validation.call_count, 2)
+        artifact = json.loads(Path(result.receipt_path).with_name("validation_attempts.json").read_text())
+        self.assertEqual([item["phase"] for item in artifact["validation_attempts"]], ["initial", "repair"])
+        self.assertEqual(artifact["validation_attempts"][0]["classification"]["failure_class"], "test_failure")
+        self.assertIn("CURRENT prepared worktree", adapter.payloads[1]["prompt"])
+        self.assertEqual(git(self.source, "status", "--porcelain").stdout, "")
+
+    def test_controller_managed_transient_retry_changes_no_implementation(self):
+        def action(worktree, call):
+            (worktree / "allowed.txt").write_text("after\n", encoding="utf-8")
+
+        adapter = ControllerManagedAdapter(action)
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            side_effect=[
+                validation_result(status="timed_out", command_id="focused", kind="focused"),
+                validation_result(status="passed", command_id="focused", kind="focused"),
+            ],
+        ):
+            result = self._run(adapter)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(adapter.calls, 1)
+        self.assertTrue(result.retry_attempted)
+        self.assertEqual(result.retry_outcome, "retry_succeeded")
+        self.assertEqual(git(self.source, "show", f"{result.commit_sha}:allowed.txt").stdout, "after\n")
+
+    def test_controller_managed_repair_scope_violation_blocks_before_revalidation(self):
+        def action(worktree, call):
+            (worktree / "allowed.txt").write_text("after\n", encoding="utf-8")
+            if call == 2:
+                (worktree / "outside.txt").write_text("forbidden\n", encoding="utf-8")
+
+        adapter = ControllerManagedAdapter(action)
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            return_value=validation_result(status="failed", command_id="focused", kind="focused"),
+        ) as validation:
+            result = self._run(adapter)
+        self.assertEqual(result.reason_code, "single_task.validation_repair.scope_violation")
+        self.assertTrue(result.worktree_preserved)
+        self.assertIsNone(result.commit_sha)
+        self.assertEqual(adapter.calls, 2)
+        self.assertEqual(validation.call_count, 1)
+        receipt = json.loads(Path(result.receipt_path).read_text())
+        attempts = json.loads(Path(receipt["artifact_paths"]["validation_attempts"]).read_text())["validation_attempts"]
+        self.assertEqual(attempts[-1]["scope_status"], "out_of_scope")
+
+    def test_controller_managed_repair_exhaustion_and_unknown_are_fail_closed(self):
+        def action(worktree, call):
+            (worktree / "allowed.txt").write_text("after\n", encoding="utf-8")
+
+        adapter = ControllerManagedAdapter(action)
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            side_effect=[validation_result(status="failed", command_id="focused", kind="focused")] * 3,
+        ):
+            exhausted = self._run(adapter)
+        self.assertEqual(exhausted.reason_code, "single_task.validation.repair_exhausted")
+        self.assertTrue(exhausted.worktree_preserved)
+        self.assertEqual(adapter.calls, 3)
+
+        self.tearDown(); self.setUp()
+        unknown = ControllerManagedAdapter(action)
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            return_value=validation_result(status="failed", command_id="opaque", kind="opaque", argv=("opaque-tool",)),
+        ):
+            result = self._run(unknown)
+        self.assertEqual(result.reason_code, "single_task.validation.unknown_failure")
+        self.assertEqual(unknown.calls, 1)
+        self.assertTrue(result.worktree_preserved)
 
     def test_needs_rework_runs_same_worktree_through_validation_then_evaluates_again(self):
         decisions = iter(("needs_rework", "completed"))

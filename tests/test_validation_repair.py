@@ -7,6 +7,7 @@ from pathlib import Path
 from automation.orchestration.validation_repair import MAX_REPAIR_PROMPT_CHARS
 from automation.orchestration.validation_repair import MAX_REPAIR_STREAM_CHARS
 from automation.orchestration.validation_repair import build_repair_prompt
+from automation.orchestration.validation_repair import classify_validation_failure
 from automation.orchestration.validation_repair import extract_actionable_failure
 
 
@@ -59,3 +60,33 @@ class ValidationRepairTests(unittest.TestCase):
         source = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
         forbidden = {"subprocess", "os", "git", "run_codex", "execute_repository_validation"}
         self.assertFalse({node.id for node in ast.walk(source) if isinstance(node, ast.Name)} & forbidden)
+
+    def test_classifier_uses_structured_command_metadata_and_bounds_test_ids(self):
+        result = {
+            "command_results": [{
+                "command_id": "related", "kind": "related_regression", "status": "failed",
+                "return_code": 1, "reason_code": "safe_validation.command.failed",
+                "argv": ["python", "-m", "pytest", "tests"],
+                "stdout": "FAILED tests/test_a.py::test_case - assertion\n", "stderr": "",
+            }],
+        }
+        classification = classify_validation_failure(result)
+        self.assertEqual(classification.failure_class, "test_failure")
+        self.assertTrue(classification.auto_repairable)
+        self.assertFalse(classification.retryable)
+        self.assertEqual(classification.failed_command_ids, ("related",))
+        self.assertEqual(classification.failed_test_identifiers, ("tests/test_a.py::test_case",))
+
+    def test_classifier_keeps_transient_and_unknown_fail_closed_distinct(self):
+        timed_out = classify_validation_failure({"command_results": [{
+            "command_id": "full", "kind": "full", "status": "timed_out",
+            "return_code": None, "reason_code": "safe_validation.command.timed_out",
+            "argv": ["python", "-m", "pytest"], "stdout": "", "stderr": "",
+        }]})
+        unknown = classify_validation_failure({"command_results": [{
+            "command_id": "opaque", "kind": "opaque", "status": "failed",
+            "return_code": 1, "reason_code": "safe_validation.command.failed",
+            "argv": ["opaque-tool"], "stdout": "", "stderr": "",
+        }]})
+        self.assertEqual((timed_out.failure_class, timed_out.retryable, timed_out.auto_repairable), ("timeout", True, False))
+        self.assertEqual((unknown.failure_class, unknown.retryable, unknown.auto_repairable), ("unknown", False, False))
