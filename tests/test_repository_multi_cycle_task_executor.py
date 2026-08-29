@@ -149,6 +149,18 @@ class ExecutorTests(unittest.TestCase):
   self.assertEqual((result.status,result.reason_code,result.accepted_head_sha),("blocked","multi_cycle.queue.allowed_paths_limit_exceeded",self.a)); self.assertEqual(calls,[])
   receipt=json.loads(Path(result.receipt_path).read_text())
   self.assertEqual(receipt["preflight_failure"],{"task_id":"oversized","allowed_changed_path_count":2,"profile_max_changed_files":1})
+
+ def test_queue_repair_headroom_preflight_checks_later_task_before_worker(self):
+  profile=json.loads(self.profile.read_text()); profile["max_changed_files"]=18; profile["min_repair_headroom"]=2; self.profile.write_text(json.dumps(profile))
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[
+   {"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"},
+   {"task_id":"tight","prompt":"two","allowed_changed_paths":[f"src/{i}.py" for i in range(17)],"commit_message":"C"}
+  ]}))
+  calls=[]
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",single_task_runner=lambda **kwargs:calls.append(kwargs))
+  self.assertEqual((result.status,result.reason_code),("blocked","multi_cycle.queue.repair_headroom_insufficient")); self.assertEqual(calls,[])
+  receipt=json.loads(Path(result.receipt_path).read_text()); evidence=receipt["preflight_failure"]
+  self.assertEqual({key:evidence[key] for key in ("task_id","task_index","allowed_changed_path_count","profile_max_changed_files","min_repair_headroom","repair_headroom")},{"task_id":"tight","task_index":1,"allowed_changed_path_count":17,"profile_max_changed_files":18,"min_repair_headroom":2,"repair_headroom":1})
   self.assertIsNotNone(read_verified_terminal_receipt(self.output/result.cycle_run_id,"repo",hashlib.sha256(self.queue.read_bytes()).hexdigest()))
   self.output=self.base/"exact-output"; self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"}]}))
   exact=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"exact-child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)

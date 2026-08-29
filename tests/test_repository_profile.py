@@ -87,6 +87,17 @@ class RepositoryProfileTests(unittest.TestCase):
             self.error(self.payload(root, validation_timeout_seconds=18001), "profile.validation_timeout_seconds.invalid_value")
             self.error(self.payload(root, completion_evaluator_timeout_seconds=7201), "profile.completion_evaluator_timeout_seconds.invalid_value")
 
+    def test_optional_repair_headroom_defaults_to_zero_and_serializes_when_explicit(self):
+        with tempfile.TemporaryDirectory() as root:
+            legacy = validate_repository_profile(self.payload(root))
+            self.assertEqual(legacy.min_repair_headroom, 0)
+            self.assertNotIn("min_repair_headroom", repository_profile_to_mapping(legacy))
+            configured = validate_repository_profile(self.payload(root, min_repair_headroom=2))
+            self.assertEqual(configured.min_repair_headroom, 2)
+            self.assertEqual(repository_profile_to_mapping(configured)["min_repair_headroom"], 2)
+            for invalid in (True, "2", -1):
+                self.error(self.payload(root, min_repair_headroom=invalid), "profile.min_repair_headroom.invalid_type")
+
     def test_command_uniqueness_kinds_and_argv_safety(self):
         with tempfile.TemporaryDirectory() as root:
             duplicate = self.payload(root); duplicate["validation_commands"][1]["command_id"] = "focused"

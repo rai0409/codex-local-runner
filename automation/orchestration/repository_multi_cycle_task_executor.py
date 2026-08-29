@@ -19,6 +19,7 @@ from automation.orchestration.repository_registry import DEFAULT_REPOSITORY_BIND
 from automation.orchestration.repository_resolved_single_task_controller import DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT, RepositorySingleTaskRunResult, run_repository_single_task
 from automation.orchestration.repository_single_task_spec import RepositorySingleTaskSpec, serialize_repository_single_task_spec, validate_repository_single_task_spec
 from automation.orchestration.repository_state_analyzer import analyze_repository_state
+from automation.orchestration.repair_headroom import repair_headroom_evidence
 
 DEFAULT_REPOSITORY_MULTI_CYCLE_OUTPUT_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-runs"
 
@@ -590,14 +591,15 @@ def run_repository_multi_cycle(repository_id: str, queue_spec_path: str | os.Pat
         if accepted_head is None:
             accepted_head = continuation_base
         if resume_cycle_run_id is None:
-            oversized = next((task for task in queue.tasks if len(task.allowed_changed_paths) > profile.max_changed_files), None)
+            diagnostics = [repair_headroom_evidence(task_id=task.task_id, task_index=index, allowed_changed_paths=task.allowed_changed_paths, max_changed_files=profile.max_changed_files, min_repair_headroom=profile.min_repair_headroom) for index, task in enumerate(queue.tasks)]
+            oversized = next((item for item in diagnostics if item["allowed_changed_path_count"] > profile.max_changed_files), None)
             if oversized is not None:
-                preflight_failure = {
-                    "task_id": oversized.task_id,
-                    "allowed_changed_path_count": len(oversized.allowed_changed_paths),
-                    "profile_max_changed_files": profile.max_changed_files,
-                }
+                preflight_failure = {key: oversized[key] for key in ("task_id", "allowed_changed_path_count", "profile_max_changed_files")}
                 return record("blocked", "multi_cycle.queue.allowed_paths_limit_exceeded")
+            insufficient = next((item for item in diagnostics if item["repair_headroom"] < profile.min_repair_headroom), None)
+            if insufficient is not None:
+                preflight_failure = {key: insufficient[key] for key in ("task_id", "task_index", "allowed_changed_path_count", "profile_max_changed_files", "min_repair_headroom", "repair_headroom", "scope_utilization_percent", "distinct_subsystem_count", "production_path_count", "test_path_count", "migration_present", "categories", "cross_layer")}
+                return record("blocked", "multi_cycle.queue.repair_headroom_insufficient")
     except (OSError, ValueError): return record("blocked", "multi_cycle.preflight.invalid")
 
     terminal_resume_start_index = len(completed) if terminal_resume_cycle_run_id is not None else None
