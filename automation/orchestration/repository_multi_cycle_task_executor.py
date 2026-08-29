@@ -15,6 +15,7 @@ from typing import Any, Callable, Mapping
 from automation.orchestration.repository_multi_cycle_task_spec import load_repository_multi_cycle_task_spec
 from automation.orchestration.repository_multi_cycle_state import RepositoryMultiCycleStateError, load_latest_checkpoint, write_checkpoint
 from automation.orchestration.repository_multi_cycle_status import RepositoryMultiCycleStatusError, read_verified_terminal_receipt
+from automation.orchestration.repository_multi_cycle_evidence import CycleEvidenceKind, classify_cycle_evidence
 from automation.orchestration.repository_registry import DEFAULT_REPOSITORY_BINDINGS_PATH, load_repository_registry, resolve_repository
 from automation.orchestration.repository_resolved_single_task_controller import DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT, RepositorySingleTaskRunResult, run_repository_single_task
 from automation.orchestration.repository_single_task_spec import RepositorySingleTaskSpec, serialize_repository_single_task_spec, validate_repository_single_task_spec
@@ -250,42 +251,6 @@ def _terminal_zero_completion_noop_is_verified(directory: Path, receipt: Mapping
     return bool(valid)
 
 
-def _pre_task_terminal_is_noop(receipt: Mapping[str, Any]) -> bool:
-    """Return whether a verified terminal records no accepted task or child.
-
-    A preflight/continuation failure after resolving the clean source anchor has
-    no accepted edge to contribute.  It must therefore not poison a later
-    fresh-cycle continuation discovery.  This deliberately accepts no claimed
-    commit: any receipt with a stopped child remains subject to the stricter
-    zero-completion child-receipt verification below.
-    """
-    return bool(
-        _sha(receipt.get("source_anchor_sha"))
-        and _sha(receipt.get("continuation_base_sha"))
-        and receipt.get("final_accepted_head_sha") == receipt.get("continuation_base_sha")
-        and receipt.get("pre_task_terminal") is True
-        and receipt.get("completed_count") == 0
-        and receipt.get("executed_task_results") == []
-        and receipt.get("stopped_task_id") is None
-    )
-
-
-def _terminal_resume_pre_task_no_progress(receipt: Mapping[str, Any]) -> bool:
-    """Return whether a terminal is an observation, not a resume seed."""
-    anchor = receipt.get("source_anchor_sha")
-    marker = receipt.get("pre_task_terminal")
-    return bool(
-        receipt.get("status") in {"blocked", "failed"}
-        and _sha(anchor)
-        and receipt.get("continuation_base_sha") == anchor
-        and receipt.get("final_accepted_head_sha") == anchor
-        and receipt.get("completed_count") == 0
-        and receipt.get("executed_task_results") == []
-        and receipt.get("stopped_task_id") is None
-        and marker in {None, True}
-    )
-
-
 def _source_anchor_no_progress_observation_is_verified(directory: Path, receipt: Mapping[str, Any], *, repository_id: str, source_root: str, source_anchor: str) -> bool:
     """Verify a historical observation that cannot contribute an accepted edge.
 
@@ -320,34 +285,6 @@ def _source_anchor_no_progress_observation_is_verified(directory: Path, receipt:
     )
 
 
-def _legacy_source_anchor_pre_task_terminal_is_noop(directory: Path, raw: Mapping[str, Any], *, source_anchor: str) -> bool:
-    """Recognize only the old producer bug as a no-edge historical receipt.
-
-    Older executors emitted ``final_accepted_head_sha: null`` when discovery
-    failed before Task 1.  Its checksum still proves the exact historical
-    payload, but it cannot satisfy the current terminal schema.  It asserts no
-    accepted child and therefore cannot grant a continuation base; ignoring it
-    is safer than letting this known no-progress producer defect permanently
-    prevent a clean fresh campaign from starting.
-    """
-    try:
-        payload = (directory / "receipt.json").read_bytes()
-        expected = f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"
-        sidecar = (directory / "receipt.sha256").read_text(encoding="utf-8")
-    except OSError:
-        return False
-    return bool(
-        sidecar == expected
-        and raw.get("source_anchor_sha") == source_anchor
-        and raw.get("continuation_base_sha") == source_anchor
-        and raw.get("final_accepted_head_sha") is None
-        and raw.get("reason_code") == "multi_cycle.continuation.evidence_invalid"
-        and raw.get("completed_count") == 0
-        and raw.get("executed_task_results") == []
-        and raw.get("stopped_task_id") is None
-    )
-
-
 def _discover_verified_continuation_base(repository_id: str, source_root: str, source_anchor: str, cycle_output_root: str | os.PathLike[str], *, exclude_cycle_run_id: str | None = None) -> str:
     """Follow only uniquely verified terminal accepted-chain edges from anchor."""
     root = Path(cycle_output_root).expanduser()
@@ -372,10 +309,14 @@ def _discover_verified_continuation_base(repository_id: str, source_root: str, s
             continue
         if not isinstance(raw, dict) or raw.get("repository_id") != repository_id or raw.get("source_anchor_sha") != source_anchor:
             continue
-        if _legacy_source_anchor_pre_task_terminal_is_noop(
-            directory, raw, source_anchor=source_anchor
-        ):
+        classification = classify_cycle_evidence(
+            directory, repository_id, None, source_root=source_root,
+            source_anchor=source_anchor,
+        )
+        if classification is not None and classification.evidence_kind == CycleEvidenceKind.PRE_TASK_NO_PROGRESS:
             continue
+        if classification is not None and classification.evidence_kind == CycleEvidenceKind.INVALID:
+            raise ValueError("multi_cycle.continuation.evidence_invalid")
         try:
             receipt = read_verified_terminal_receipt(directory, repository_id, None)
         except RepositoryMultiCycleStatusError as exc:
@@ -386,7 +327,7 @@ def _discover_verified_continuation_base(repository_id: str, source_root: str, s
         if edge is not None:
             edges.setdefault(edge[0], set()).add(edge[1])
         elif receipt.get("completed_count") == 0:
-            if _pre_task_terminal_is_noop(receipt):
+            if classification is not None and classification.evidence_kind == CycleEvidenceKind.PRE_TASK_NO_PROGRESS:
                 pre_task_terminal.append(receipt)
             elif _source_anchor_no_progress_observation_is_verified(
                 directory, receipt, repository_id=repository_id, source_root=source_root,
@@ -439,14 +380,20 @@ def _load_verified_terminal_resume_seed(*, predecessor_cycle_run_id: str, reposi
     if not isinstance(predecessor_cycle_run_id, str) or not re.fullmatch(r"cycle-[0-9]{20}", predecessor_cycle_run_id):
         raise ValueError("multi_cycle.terminal_resume.run_id.invalid")
     directory = cycle_output_root / predecessor_cycle_run_id
+    classification = classify_cycle_evidence(
+        directory, repository_id, queue_sha256, source_root=source_root,
+        source_anchor=source_anchor,
+    )
+    if classification is not None and classification.evidence_kind == CycleEvidenceKind.PRE_TASK_NO_PROGRESS:
+        raise ValueError("multi_cycle.terminal_resume.pre_task_not_resumable")
+    if classification is not None and classification.evidence_kind == CycleEvidenceKind.INVALID:
+        raise ValueError("multi_cycle.terminal_resume.evidence_invalid")
     try:
         receipt = read_verified_terminal_receipt(directory, repository_id, queue_sha256)
     except (OSError, RepositoryMultiCycleStatusError) as exc:
         raise ValueError("multi_cycle.terminal_resume.evidence_invalid") from exc
     if receipt is None or receipt.get("status") == "completed":
         raise ValueError("multi_cycle.terminal_resume.not_resumable")
-    if _terminal_resume_pre_task_no_progress(receipt):
-        raise ValueError("multi_cycle.terminal_resume.pre_task_not_resumable")
     try:
         state, _ = load_latest_checkpoint(directory / "state")
     except (OSError, RepositoryMultiCycleStateError) as exc:
