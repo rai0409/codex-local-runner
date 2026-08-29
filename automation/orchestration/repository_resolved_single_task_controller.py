@@ -853,6 +853,8 @@ def run_repository_single_task(
             return record("blocked", f"single_task.approval.{action}_not_automatic")
     if len(spec.allowed_changed_paths) > profile.max_changed_files:
         return record("blocked", "single_task.scope.allowed_paths_limit_exceeded")
+    if profile.max_changed_files - len(spec.allowed_changed_paths) < profile.min_repair_headroom:
+        return record("blocked", "single_task.scope.repair_headroom_insufficient")
     try:
         source_before = analyze_repository_state(source_root)
     except (OSError, ValueError):

@@ -144,7 +144,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def _write_configuration(self, *, approvals=None, maximum=2) -> None:
+    def _write_configuration(self, *, approvals=None, maximum=2, min_repair_headroom=0) -> None:
         boundary = {action: "automatic" for action in APPROVAL_ACTIONS}
         if approvals:
             boundary.update(approvals)
@@ -153,6 +153,8 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
             commands.append({"command_id": command_id, "kind": kind, "argv": ["git", "diff", "--check"], "cwd": ".", "timeout_seconds": 30, "required": True, "stop_on_failure": True})
         commands.append({"command_id": "diff", "kind": "diff_check", "argv": ["git", "diff", "--check"], "cwd": ".", "timeout_seconds": 30, "required": True, "stop_on_failure": True})
         profile = {"schema_version": "1", "profile_id": "repo", "repository_root": str(self.source), "base_branch": "main", "python_executable": PYTHON, "validation_commands": commands, "artifact_requirements": [], "forbidden_git_operations": list(FORBIDDEN_GIT_OPERATION_IDS), "max_changed_files": maximum, "approval_boundary": boundary, "environment_allowlist": []}
+        if min_repair_headroom:
+            profile["min_repair_headroom"] = min_repair_headroom
         self.profile.write_text(json.dumps(profile), encoding="utf-8")
         self.registry.write_text(json.dumps({"version": 1, "repos": [{"name": "repo", "logical_role": "test"}]}), encoding="utf-8")
         self.bindings.write_text(json.dumps({"version": 1, "bindings": [{"repository_id": "repo", "profile_path": str(self.profile)}]}), encoding="utf-8")
@@ -180,6 +182,14 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         result = run_repository_single_task("repo", None, task_spec_override=spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(self._modify), evaluator_runner=self._evaluator_runner, requested_run_id="run-override")
         self.assertEqual(result.status, "completed")
         self.assertEqual(result.task_spec_sha256, hashlib.sha256(serialize_repository_single_task_spec(spec).encode("utf-8")).hexdigest())
+
+    def test_repair_headroom_blocks_before_adapter_or_worktree(self):
+        self._write_configuration(maximum=2, min_repair_headroom=2)
+        adapter = FakePreparedAdapter(self._modify)
+        result = self._run(adapter)
+        self.assertEqual(result.reason_code, "single_task.scope.repair_headroom_insufficient")
+        self.assertEqual(adapter.calls, 0)
+        self.assertIsNone(result.worktree_path)
 
     def test_task_spec_source_requires_exactly_one_mode(self):
         raw = json.loads(self.spec.read_text(encoding="utf-8")); spec = RepositorySingleTaskSpec(raw["schema_version"], raw["task_id"], raw["expected_head_sha"], raw["prompt"], tuple(raw["allowed_changed_paths"]), raw["commit_message"])
