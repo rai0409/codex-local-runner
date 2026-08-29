@@ -36,6 +36,15 @@ from automation.orchestration.repository_state_analyzer import analyze_repositor
 from automation.orchestration.safe_validation_executor import (
     SafeValidationExecutorError,
     execute_repository_validation,
+    validation_execution_result_to_mapping,
+)
+from automation.orchestration.validation_repair import (
+    MAX_VALIDATION_REPAIR_ATTEMPTS,
+    ValidationFailureClassification,
+    build_repair_prompt,
+    classify_validation_failure,
+    extract_actionable_failure,
+    validation_failure_classification_to_mapping,
 )
 from automation.orchestration.task_completion_evaluator import (
     TaskCompletionEvaluation,
@@ -238,8 +247,15 @@ def _safe_validation_attempts(value: Any) -> list[dict[str, Any]]:
     """Retain only the adapter's secret-safe validation receipt fields."""
     if not isinstance(value, list):
         return []
-    allowed = {"attempt_number", "phase", "execution_status", "validation_status", "validation_reason"}
+    allowed = {
+        "attempt_number", "phase", "execution_status", "validation_status",
+        "validation_reason", "repair_attempt_number", "scope_status",
+    }
     failure_allowed = {"command_id", "kind", "status", "return_code", "reason_code", "stdout_tail_sha256", "stderr_tail_sha256"}
+    classification_allowed = {
+        "failure_class", "auto_repairable", "retryable", "failed_command_ids",
+        "failed_test_identifiers", "scope_extension_required", "evidence_refs",
+    }
     result: list[dict[str, Any]] = []
     for item in value:
         if not isinstance(item, dict):
@@ -248,8 +264,59 @@ def _safe_validation_attempts(value: Any) -> list[dict[str, Any]]:
         failure = item.get("failure")
         if isinstance(failure, dict):
             safe["failure"] = {key: failure[key] for key in failure_allowed if key in failure}
+        classification = item.get("classification")
+        if isinstance(classification, dict):
+            safe["classification"] = {
+                key: classification[key] for key in classification_allowed if key in classification
+            }
         result.append(safe)
     return result
+
+
+def _validation_attempt_from_result(
+    *,
+    attempt_number: int,
+    phase: str,
+    repair_attempt_number: int | None,
+    result: Any,
+    scope_status: str,
+) -> tuple[dict[str, Any], ValidationFailureClassification | None]:
+    """Create the public, bounded validation evidence for controller-managed runs."""
+    mapping = validation_execution_result_to_mapping(result)
+    status = mapping["status"]
+    entry: dict[str, Any] = {
+        "attempt_number": attempt_number,
+        "phase": phase,
+        "execution_status": "completed",
+        "validation_status": status,
+        "validation_reason": "validation_passed" if status == "passed" else "validation_failed",
+        "scope_status": scope_status,
+    }
+    if repair_attempt_number is not None:
+        entry["repair_attempt_number"] = repair_attempt_number
+    if status == "passed":
+        return entry, None
+    classification = classify_validation_failure(mapping)
+    entry["classification"] = validation_failure_classification_to_mapping(classification)
+    return entry, classification
+
+
+def _repair_scope_status(
+    root: Path,
+    profile: Any,
+    effective_allowed_changed_paths: tuple[str, ...],
+) -> tuple[str, tuple[str, ...]]:
+    """Reject repair path drift before any post-repair validation command runs."""
+    snapshot = analyze_repository_state(root)
+    changed = _actual_changed_paths(snapshot)
+    offending = tuple(sorted(set(changed) - set(effective_allowed_changed_paths)))
+    if len(changed) > profile.max_changed_files:
+        return "max_changed_files_exceeded", changed
+    if offending:
+        return "out_of_scope", offending
+    if snapshot.head_sha is None or not snapshot.detached_head or snapshot.staged_files or snapshot.operations_in_progress:
+        return "worktree_state_invalid", changed
+    return "passed", changed
 
 
 def _actual_changed_paths(snapshot: Any) -> tuple[str, ...]:
@@ -859,6 +926,7 @@ def run_repository_single_task(
         response = adapter.execute_prepared_worktree({
             "prompt": spec.prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
             "repository_profile": bound_profile, "allowed_changed_paths": spec.allowed_changed_paths,
+            "controller_managed_validation": True,
             **({"execution_timeout_seconds": spec.execution_timeout_seconds}
                if spec.execution_timeout_seconds is not None else {}),
             **({"validation_timeout_seconds": spec.validation_timeout_seconds}
@@ -875,6 +943,7 @@ def run_repository_single_task(
     retry_data = response.get("retry")
     raw_validation_attempts = response.get("validation_attempts", [])
     raw_repair = response.get("repair", repair_summary)
+    controller_managed_validation = response.get("validation_deferred") is True
     if not isinstance(verify, dict) or not isinstance(retry_data, dict):
         worktree_preserved = True
         return record("blocked", "single_task.validation.failed")
@@ -889,13 +958,13 @@ def run_repository_single_task(
     if execution_status != "completed":
         worktree_preserved = True
         return record("blocked", "single_task.execution.not_completed")
-    if validation_reason == "validation_partial":
+    if not controller_managed_validation and validation_reason == "validation_partial":
         worktree_preserved = True
         return record("blocked", "single_task.validation.partial")
-    if validation_reason == "safe_validation_executor_error":
+    if not controller_managed_validation and validation_reason == "safe_validation_executor_error":
         worktree_preserved = True
         return record("blocked", "single_task.validation.executor_error")
-    if not (verify.get("status") == "passed" and validation_reason == "validation_passed" and validation_status == "passed" and retry_outcome in {"not_attempted", "retry_succeeded"}):
+    if not controller_managed_validation and not (verify.get("status") == "passed" and validation_reason == "validation_passed" and validation_status == "passed" and retry_outcome in {"not_attempted", "retry_succeeded"}):
         worktree_preserved = True
         return record("blocked", "single_task.validation.failed")
 
@@ -1025,9 +1094,178 @@ def run_repository_single_task(
                 return record("blocked", "single_task.task_scope.recovery_exhausted")
             scope_constrained_rework_status = "succeeded"
 
-    # Completion is intentionally independent from Safe Validation.  Each
-    # rework uses the same prepared-worktree adapter surface, which owns the
-    # existing bounded validation-repair loop.
+    if controller_managed_validation:
+        validation_timeout = (
+            spec.validation_timeout_seconds
+            if spec.validation_timeout_seconds is not None
+            else bound_profile.validation_timeout_seconds
+        )
+        try:
+            initial_validation = execute_repository_validation(
+                bound_profile, timeout_seconds=validation_timeout,
+            )
+        except SafeValidationExecutorError:
+            worktree_preserved = True
+            return record("blocked", "single_task.validation.retry_exhausted", "executor_error")
+        initial_entry, classification = _validation_attempt_from_result(
+            attempt_number=len(validation_attempts) + 1,
+            phase="initial",
+            repair_attempt_number=None,
+            result=initial_validation,
+            scope_status="passed",
+        )
+        validation_attempts.append(initial_entry)
+        validation_status = initial_validation.status
+        validation_reason = initial_entry["validation_reason"]
+        if initial_validation.status != "passed":
+            if classification is None:
+                worktree_preserved = True
+                return record("blocked", "single_task.validation.unknown_failure")
+            if classification.retryable:
+                retry_attempted = True
+                try:
+                    retry_validation = execute_repository_validation(
+                        bound_profile, timeout_seconds=validation_timeout,
+                    )
+                except SafeValidationExecutorError:
+                    retry_outcome = "retry_failed"
+                    worktree_preserved = True
+                    return record("blocked", "single_task.validation.retry_exhausted", "executor_error")
+                retry_entry, retry_classification = _validation_attempt_from_result(
+                    attempt_number=len(validation_attempts) + 1,
+                    phase="retry",
+                    repair_attempt_number=None,
+                    result=retry_validation,
+                    scope_status="passed",
+                )
+                validation_attempts.append(retry_entry)
+                validation_status = retry_validation.status
+                validation_reason = retry_entry["validation_reason"]
+                if retry_validation.status == "passed":
+                    retry_outcome = "retry_succeeded"
+                else:
+                    retry_outcome = "retry_failed"
+                    worktree_preserved = True
+                    detail = retry_classification.failure_class if retry_classification else "unknown"
+                    return record("blocked", "single_task.validation.retry_exhausted", detail)
+            elif not classification.auto_repairable:
+                worktree_preserved = True
+                reason = (
+                    "single_task.validation.unknown_failure"
+                    if classification.failure_class == "unknown"
+                    else "single_task.validation.non_repairable"
+                )
+                return record("blocked", reason, classification.failure_class)
+            else:
+                repair_summary = {
+                    "attempted": True,
+                    "max_attempts": MAX_VALIDATION_REPAIR_ATTEMPTS,
+                    "attempts_used": 0,
+                    "outcome": "in_progress",
+                }
+                current_classification = classification
+                current_failure = extract_actionable_failure(
+                    validation_execution_result_to_mapping(initial_validation)
+                )
+                for repair_number in range(1, MAX_VALIDATION_REPAIR_ATTEMPTS + 1):
+                    repair_summary["attempts_used"] = repair_number
+                    try:
+                        repair_response = adapter.execute_prepared_worktree({
+                            "prompt": build_repair_prompt(
+                                spec.prompt,
+                                repair_number,
+                                current_failure or {
+                                    "command_id": current_classification.failed_command_ids[0],
+                                    "kind": current_classification.failure_class,
+                                    "status": "failed", "return_code": None,
+                                    "reason_code": "validation_repair.classified_failure",
+                                    "stdout_tail": "", "stderr_tail": "",
+                                },
+                                effective_allowed_changed_paths,
+                                classification=current_classification,
+                                current_changed_paths=_actual_changed_paths(analyze_repository_state(worktree)),
+                                remaining_repair_budget=MAX_VALIDATION_REPAIR_ATTEMPTS - repair_number,
+                            ),
+                            "worktree_path": str(worktree), "work_dir": str(output_directory),
+                            "repository_profile": bound_profile,
+                            "allowed_changed_paths": effective_allowed_changed_paths,
+                            "controller_managed_validation": True,
+                            "execution_timeout_seconds": _phase_timeout(
+                                spec.completion_rework_timeout_seconds,
+                                bound_profile.completion_rework_timeout_seconds,
+                                DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS,
+                            ),
+                        })
+                    except Exception:
+                        repair_summary["outcome"] = "repair_execution_failed"
+                        worktree_preserved = True
+                        return record("blocked", "single_task.validation.repair_exhausted", "repair_execution_failed")
+                    if not isinstance(repair_response, dict) or repair_response.get("status") != "completed":
+                        repair_summary["outcome"] = "repair_execution_failed"
+                        worktree_preserved = True
+                        return record("blocked", "single_task.validation.repair_exhausted", "repair_execution_failed")
+                    try:
+                        repair_scope_status, _repair_scope_paths = _repair_scope_status(
+                            worktree, profile, effective_allowed_changed_paths,
+                        )
+                    except (OSError, ValueError):
+                        repair_scope_status, _repair_scope_paths = "worktree_state_invalid", ()
+                    if repair_scope_status != "passed":
+                        scope_classification = ValidationFailureClassification(
+                            "scope_failure", False, False, (), (), True,
+                            ("repair.scope:" + repair_scope_status,),
+                        )
+                        validation_attempts.append({
+                            "attempt_number": len(validation_attempts) + 1,
+                            "phase": "repair",
+                            "repair_attempt_number": repair_number,
+                            "execution_status": "completed",
+                            "validation_status": "not_run",
+                            "validation_reason": "validation_not_run_scope_violation",
+                            "scope_status": repair_scope_status,
+                            "classification": validation_failure_classification_to_mapping(scope_classification),
+                        })
+                        repair_summary["outcome"] = "repair_scope_violation"
+                        worktree_preserved = True
+                        return record("blocked", "single_task.validation_repair.scope_violation", repair_scope_status)
+                    try:
+                        repaired_validation = execute_repository_validation(
+                            bound_profile, timeout_seconds=validation_timeout,
+                        )
+                    except SafeValidationExecutorError:
+                        repair_summary["outcome"] = "repair_validation_executor_error"
+                        worktree_preserved = True
+                        return record("blocked", "single_task.validation.repair_exhausted", "executor_error")
+                    repair_entry, repaired_classification = _validation_attempt_from_result(
+                        attempt_number=len(validation_attempts) + 1,
+                        phase="repair",
+                        repair_attempt_number=repair_number,
+                        result=repaired_validation,
+                        scope_status="passed",
+                    )
+                    validation_attempts.append(repair_entry)
+                    validation_status = repaired_validation.status
+                    validation_reason = repair_entry["validation_reason"]
+                    if repaired_validation.status == "passed":
+                        repair_summary["outcome"] = "repair_succeeded"
+                        break
+                    if repaired_classification is None or not repaired_classification.auto_repairable:
+                        repair_summary["outcome"] = "repair_non_repairable"
+                        worktree_preserved = True
+                        detail = repaired_classification.failure_class if repaired_classification else "unknown"
+                        return record("blocked", "single_task.validation.non_repairable", detail)
+                    current_classification = repaired_classification
+                    current_failure = extract_actionable_failure(
+                        validation_execution_result_to_mapping(repaired_validation)
+                    )
+                else:
+                    repair_summary["outcome"] = "repair_exhausted"
+                    worktree_preserved = True
+                    return record("blocked", "single_task.validation.repair_exhausted")
+
+    # Completion rework starts only after deterministic validation succeeds.
+    # Its subsequent validation is controller-managed and recorded separately
+    # from validation repair, preserving the three distinct recovery states.
     for evaluation_number in range(1, MAX_TASK_REWORK_ATTEMPTS + 2):
         try:
             pre_evaluation = analyze_repository_state(worktree)
@@ -1102,6 +1340,7 @@ def run_repository_single_task(
             response = adapter.execute_prepared_worktree({
                 "prompt": rework_prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
                 "repository_profile": bound_profile, "allowed_changed_paths": effective_allowed_changed_paths,
+                "controller_managed_validation": True,
                 "execution_timeout_seconds": _phase_timeout(spec.completion_rework_timeout_seconds, bound_profile.completion_rework_timeout_seconds, DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS),
                 **({"validation_timeout_seconds": spec.validation_timeout_seconds}
                    if spec.validation_timeout_seconds is not None else {}),
@@ -1114,29 +1353,67 @@ def run_repository_single_task(
             return record("blocked", "single_task.validation.failed")
         execution_status, verify, retry_data = response.get("status"), response.get("verify"), response.get("retry")
         raw_validation_attempts, raw_repair = response.get("validation_attempts", []), response.get("repair", repair_summary)
+        completion_rework_validation_deferred = response.get("validation_deferred") is True
         if not isinstance(verify, dict) or not isinstance(retry_data, dict):
             worktree_preserved = True
             return record("blocked", "single_task.validation.failed")
         validation_reason = verify.get("reason")
         safe_validation = verify.get("safe_validation")
         validation_status = safe_validation.get("status") if isinstance(safe_validation, dict) else None
-        retry_attempted, retry_outcome = bool(retry_data.get("attempted")), retry_data.get("outcome")
-        validation_attempts = _safe_validation_attempts(raw_validation_attempts)
-        if isinstance(raw_repair, dict):
+        if not completion_rework_validation_deferred:
+            retry_attempted, retry_outcome = bool(retry_data.get("attempted")), retry_data.get("outcome")
+            validation_attempts = _safe_validation_attempts(raw_validation_attempts)
+        if not completion_rework_validation_deferred and isinstance(raw_repair, dict):
             repair_summary = {key: raw_repair[key] for key in ("attempted", "max_attempts", "attempts_used", "outcome") if key in raw_repair}
         attempt["rework_validation_status"], attempt["rework_validation_reason"] = validation_status, validation_reason
         if execution_status != "completed":
             worktree_preserved = True
             return record("blocked", "single_task.execution.not_completed")
-        if validation_reason == "validation_partial":
+        if not completion_rework_validation_deferred and validation_reason == "validation_partial":
             worktree_preserved = True
             return record("blocked", "single_task.validation.partial")
-        if validation_reason == "safe_validation_executor_error":
+        if not completion_rework_validation_deferred and validation_reason == "safe_validation_executor_error":
             worktree_preserved = True
             return record("blocked", "single_task.validation.executor_error")
-        if not (verify.get("status") == "passed" and validation_reason == "validation_passed" and validation_status == "passed" and retry_outcome in {"not_attempted", "retry_succeeded"}):
+        if not completion_rework_validation_deferred and not (verify.get("status") == "passed" and validation_reason == "validation_passed" and validation_status == "passed" and retry_outcome in {"not_attempted", "retry_succeeded"}):
             worktree_preserved = True
             return record("blocked", "single_task.validation.failed")
+        if completion_rework_validation_deferred:
+            try:
+                completion_scope_status, _ = _repair_scope_status(
+                    worktree, profile, effective_allowed_changed_paths,
+                )
+            except (OSError, ValueError):
+                completion_scope_status = "worktree_state_invalid"
+            if completion_scope_status != "passed":
+                worktree_preserved = True
+                return record("blocked", "single_task.changed_files.out_of_scope")
+            try:
+                completion_validation = execute_repository_validation(
+                    bound_profile,
+                    timeout_seconds=(
+                        spec.validation_timeout_seconds
+                        if spec.validation_timeout_seconds is not None
+                        else bound_profile.validation_timeout_seconds
+                    ),
+                )
+            except SafeValidationExecutorError:
+                worktree_preserved = True
+                return record("blocked", "single_task.validation.executor_error")
+            completion_entry, _ = _validation_attempt_from_result(
+                attempt_number=len(validation_attempts) + 1,
+                phase="completion_rework_validation",
+                repair_attempt_number=None,
+                result=completion_validation,
+                scope_status="passed",
+            )
+            validation_attempts.append(completion_entry)
+            validation_status, validation_reason = completion_validation.status, completion_entry["validation_reason"]
+            attempt["rework_validation_status"] = validation_status
+            attempt["rework_validation_reason"] = validation_reason
+            if completion_validation.status != "passed":
+                worktree_preserved = True
+                return record("blocked", "single_task.validation.failed", "completion_rework_validation_failed")
         if scope_trim_attempted:
             try:
                 rework_snapshot = analyze_repository_state(worktree)

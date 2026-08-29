@@ -267,6 +267,7 @@ class CodexCliAdapter(ProviderAdapter):
         allowed_changed_paths = payload.get("allowed_changed_paths")
         if not isinstance(allowed_changed_paths, (list, tuple)) or not all(isinstance(path, str) for path in allowed_changed_paths):
             allowed_changed_paths = None
+        controller_managed_validation = payload.get("controller_managed_validation") is True
         attempt_count, retry, repair, validation_attempts = 0, _retry_not_attempted(), _repair_not_attempted(), []
         timeout_recovery = _timeout_recovery_evidence(effective_timeout_seconds, timeout_source)
         current_prompt, phase = prompt, "initial"
@@ -284,6 +285,7 @@ class CodexCliAdapter(ProviderAdapter):
                 timeout_recovery["initial_execution_outcome"] = execution["status"]
             if (
                 execution["status"] == "timed_out"
+                and not controller_managed_validation
                 and timeout_recovery["timeout_retry_count"] < 1
             ):
                 retry_timeout_seconds = timeout_retry_seconds(effective_timeout_seconds)
@@ -301,14 +303,20 @@ class CodexCliAdapter(ProviderAdapter):
             timeout_recovery["final_execution_outcome"] = execution["status"]
             status = str(execution["status"])
             verify = _verify_not_run(_not_run_reason_for_execution_status(status))
-            if status == "completed":
+            if status == "completed" and not controller_managed_validation:
                 try: verify = _verify_from_safe_validation(execute_repository_validation(profile, timeout_seconds=validation_timeout_seconds))
                 except SafeValidationExecutorError: verify = _verify_safe_validation_executor_error()
                 verify["timeout_seconds"] = validation_timeout_seconds
                 verify["timeout_source"] = validation_timeout_source
-            validation_attempts.append(_validation_attempt(attempt_count, phase, status, verify))
+            if not controller_managed_validation:
+                validation_attempts.append(_validation_attempt(attempt_count, phase, status, verify))
             failure = extract_actionable_failure(verify.get("safe_validation"))
-            if not (status == "completed" and verify.get("reason") == "validation_failed" and failure is not None and repair["attempts_used"] < MAX_VALIDATION_REPAIR_ATTEMPTS):
+            if not (
+                not controller_managed_validation
+                and status == "completed" and verify.get("reason") == "validation_failed"
+                and failure is not None
+                and repair["attempts_used"] < MAX_VALIDATION_REPAIR_ATTEMPTS
+            ):
                 break
             repair["attempted"] = True
             repair["attempts_used"] += 1
@@ -323,7 +331,7 @@ class CodexCliAdapter(ProviderAdapter):
         interpretation = _derive_result_interpretation(status, verify, retry)
         recommendation = _derive_review_recommendation(interpretation)
         summary = _build_review_handoff_summary(final_status=status, final_verify_status=verify["status"], final_verify_reason=verify["reason"], retry_attempted=retry["attempted"], retry_outcome=retry["outcome"], result_interpretation=interpretation, review_recommendation=recommendation)
-        return {"adapter":self.name,"status":status,"started_at":execution["started_at"],"finished_at":execution["finished_at"],"artifacts":[str(item.get("path")) for item in execution["artifacts"] if isinstance(item,dict) and item.get("path")],"error":str(execution["error"]).strip() or None,"return_code":execution["return_code"],"verify":verify,"attempt_count":attempt_count,"retry":retry,"repair":repair,"timeout_recovery":timeout_recovery,"validation_attempts":validation_attempts,"result_interpretation":interpretation,"review_recommendation":recommendation,"review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status=status,attempt_count=attempt_count,return_code=execution["return_code"],verify_result=verify)}
+        return {"adapter":self.name,"status":status,"started_at":execution["started_at"],"finished_at":execution["finished_at"],"artifacts":[str(item.get("path")) for item in execution["artifacts"] if isinstance(item,dict) and item.get("path")],"error":str(execution["error"]).strip() or None,"return_code":execution["return_code"],"verify":verify,"attempt_count":attempt_count,"retry":retry,"repair":repair,"timeout_recovery":timeout_recovery,"validation_attempts":validation_attempts,"validation_deferred":controller_managed_validation,"result_interpretation":interpretation,"review_recommendation":recommendation,"review_handoff_summary":summary,"reviewer_handoff":_build_reviewer_handoff(review_handoff_summary=summary,final_status=status,attempt_count=attempt_count,return_code=execution["return_code"],verify_result=verify)}
 
     def _prepared_failure(self, reason: str) -> dict[str, Any]:
         verify, retry = _verify_not_run("validation_not_run_execution_status_failed"), _retry_not_attempted()
