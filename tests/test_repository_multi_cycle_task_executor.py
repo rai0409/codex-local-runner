@@ -45,6 +45,13 @@ class ScopeRecoveryAdapter:
    assert (root/"one.txt").is_file(); (root/"two.txt").write_text("two\n",encoding="utf-8")
   else: raise AssertionError(prompt)
   return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
+class ResumeScopeRecoveryAdapter(Adapter):
+ def execute_prepared_worktree(self,payload):
+  if payload["prompt"] != "two": return super().execute_prepared_worktree(payload)
+  self.prompts.append(payload["prompt"]); root=Path(payload["worktree_path"])
+  (root/"two.txt").write_text("two\n",encoding="utf-8")
+  (root/"resume-incidental.txt").write_text("incidental\n",encoding="utf-8")
+  return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
 class ValidationRepairAdapter:
  name="codex_cli"
  def __init__(self): self.repairs=0; self.prompts=[]
@@ -234,11 +241,14 @@ class ExecutorTests(unittest.TestCase):
   self.assertEqual(evidence.evidence_kind,CycleEvidenceKind.TASK_TERMINAL_RESUMABLE); self.assertTrue(evidence.terminal_resume_eligible); self.assertEqual(evidence.accepted_head_sha,b)
   before=(Path(blocked.receipt_path).read_bytes(), tuple(sorted((p.name,p.read_bytes()) for p in (self.output/blocked.cycle_run_id/"state").iterdir())))
   self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
-  resumed=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=blocked.cycle_run_id)
+  resumed_adapter=ResumeScopeRecoveryAdapter()
+  resumed=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:resumed_adapter,evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=blocked.cycle_run_id)
   self.assertEqual(resumed.status,"completed"); self.assertNotEqual(resumed.cycle_run_id,blocked.cycle_run_id)
   self.assertEqual(git(self.source,"rev-parse",f"{resumed.accepted_head_sha}^").stdout.strip(),b)
   state,_=load_latest_checkpoint(self.output/resumed.cycle_run_id/"state")
   self.assertTrue(state["terminal_resume_requested"]); self.assertEqual(state["terminal_resume_predecessor_cycle_run_id"],blocked.cycle_run_id); self.assertEqual(state["terminal_resume_task_index"],0)
+  resumed_child=json.loads(Path(json.loads(Path(resumed.receipt_path).read_text())["executed_task_results"][0]["child_receipt_path"]).read_text())
+  self.assertEqual(resumed_child["scope_trimmed_paths"],["resume-incidental.txt"])
   self.assertEqual((Path(blocked.receipt_path).read_bytes(), tuple(sorted((p.name,p.read_bytes()) for p in (self.output/blocked.cycle_run_id/"state").iterdir()))),before)
   self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
 
