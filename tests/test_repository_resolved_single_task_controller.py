@@ -12,11 +12,14 @@ from unittest.mock import patch
 
 from automation.orchestration.repository_profile import APPROVAL_ACTIONS, FORBIDDEN_GIT_OPERATION_IDS
 from automation.orchestration.repository_resolved_single_task_controller import (
+    MAX_UNTRACKED_COMPLETION_CONTENT_BYTES,
     RepositorySingleTaskRunResult,
+    _completion_changed_artifact_evidence,
     repository_single_task_run_result_to_mapping,
     run_repository_single_task,
     serialize_repository_single_task_run_result,
 )
+from automation.orchestration.repository_state_analyzer import analyze_repository_state
 from automation.orchestration.repository_single_task_spec import RepositorySingleTaskSpec, serialize_repository_single_task_spec
 from automation.orchestration.safe_validation_executor import (
     SAFE_VALIDATION_EXECUTOR_SCHEMA_VERSION,
@@ -415,6 +418,95 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.assertTrue(attempts[0]["rework_attempted"])
         changed_artifact = json.loads(Path(receipt["artifact_paths"]["changed_files"]).read_text(encoding="utf-8"))
         self.assertEqual(changed_artifact["actual_changed_files"], ["allowed.txt"])
+
+    def test_completion_evidence_includes_allowed_untracked_required_artifacts(self):
+        model = "packages/common/src/common/db/models/company.py"
+        migration = "alembic/versions/20260826_0010_canonical_security_identity_history.py"
+        resolver = "apps/edinet_ingest/src/edinet_ingest/companies/security_identity.py"
+        focused_test = "apps/edinet_ingest/tests/test_security_identity.py"
+        large = "apps/edinet_ingest/tests/test_large_evidence.py"
+        (self.source / model).parent.mkdir(parents=True)
+        (self.source / model).write_text("MODEL_BEFORE\n", encoding="utf-8")
+        (self.source / ".gitignore").write_text("ignored.log\n", encoding="utf-8")
+        git(self.source, "add", "--", model, ".gitignore")
+        git(self.source, "commit", "-m", "Add evidence fixture")
+        self.head = git(self.source, "rev-parse", "HEAD").stdout.strip()
+        self._write_configuration(maximum=8)
+        spec = json.loads(self.spec.read_text(encoding="utf-8"))
+        spec["allowed_changed_paths"] = [model, migration, resolver, focused_test, large]
+        self.spec.write_text(json.dumps(spec), encoding="utf-8")
+
+        def action(worktree):
+            (worktree / model).write_text("MODEL_AFTER\n", encoding="utf-8")
+            for path, content in (
+                (migration, "MIGRATION_REQUIRED_MARKER\n"),
+                (resolver, "RESOLVER_REQUIRED_MARKER\n"),
+                (focused_test, "FOCUSED_TEST_REQUIRED_MARKER\n"),
+            ):
+                candidate = worktree / path
+                candidate.parent.mkdir(parents=True, exist_ok=True)
+                candidate.write_text(content, encoding="utf-8")
+            candidate = worktree / large
+            candidate.parent.mkdir(parents=True, exist_ok=True)
+            candidate.write_text("LARGE_REQUIRED_MARKER\n" + "x" * (MAX_UNTRACKED_COMPLETION_CONTENT_BYTES * 2), encoding="utf-8")
+            (worktree / "ignored.log").write_text("IGNORED_EVIDENCE_MARKER\n", encoding="utf-8")
+            (worktree / "outside.txt").write_text("OUT_OF_SCOPE_EVIDENCE_MARKER\n", encoding="utf-8")
+
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            for path in (model, migration, resolver, focused_test, large):
+                self.assertIn(path, prompt)
+            for marker in ("MIGRATION_REQUIRED_MARKER", "RESOLVER_REQUIRED_MARKER", "FOCUSED_TEST_REQUIRED_MARKER"):
+                self.assertIn(marker, prompt)
+            self.assertIn('"change_kind":"modified_tracked"', prompt)
+            self.assertEqual(prompt.count('"change_kind":"new_untracked"'), 4)
+            self.assertIn('"content_truncated":true', prompt)
+            self.assertNotIn("IGNORED_EVIDENCE_MARKER", prompt)
+            self.assertNotIn("OUT_OF_SCOPE_EVIDENCE_MARKER", prompt)
+            directory = Path(work_root) / "evidence"
+            directory.mkdir(parents=True)
+            output = directory / "stdout.txt"
+            output.write_text(
+                "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+                + json.dumps({"status": "completed", "reason_code": "task.complete", "satisfied_criteria": ["required artifacts evidenced"], "unsatisfied_criteria": [], "evidence_refs": [migration, resolver, focused_test]})
+                + "\nTASK_COMPLETION_EVALUATION_JSON_END",
+                encoding="utf-8",
+            )
+            return {"status": "completed", "stdout_path": str(output)}
+
+        result = run_repository_single_task(
+            "repo", self.spec, registry_path=self.registry, bindings_path=self.bindings,
+            output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(action),
+            evaluator_runner=evaluator_runner,
+        )
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.reason_code, "single_task.completed")
+
+    def test_completion_evidence_excludes_ignored_and_marks_deleted_tracked_files(self):
+        deleted = self.source / "deleted.txt"
+        deleted.write_text("before\n", encoding="utf-8")
+        (self.source / ".gitignore").write_text("ignored.log\n", encoding="utf-8")
+        git(self.source, "add", "--", "deleted.txt", ".gitignore")
+        git(self.source, "commit", "-m", "Add deletion evidence fixture")
+        deleted.unlink()
+        (self.source / "allowed.txt").write_text("after\n", encoding="utf-8")
+        (self.source / "new.txt").write_text("NEW_ALLOWED_MARKER\n", encoding="utf-8")
+        (self.source / "large.txt").write_text("x" * (MAX_UNTRACKED_COMPLETION_CONTENT_BYTES * 2), encoding="utf-8")
+        (self.source / "ignored.log").write_text("IGNORED_MARKER\n", encoding="utf-8")
+        snapshot = analyze_repository_state(self.source)
+        evidence = _completion_changed_artifact_evidence(
+            self.source, snapshot, ("allowed.txt", "deleted.txt", "new.txt", "large.txt"),
+        )
+        self.assertEqual(evidence["allowed.txt"]["change_kind"], "modified_tracked")
+        self.assertEqual(evidence["deleted.txt"], {
+            "path": "deleted.txt", "inside_effective_scope": True,
+            "exists": False, "change_kind": "deleted_tracked",
+            "content_evidence": "bounded_git_diff",
+        })
+        self.assertEqual(evidence["new.txt"]["change_kind"], "new_untracked")
+        self.assertEqual(evidence["new.txt"]["content"], "NEW_ALLOWED_MARKER\n")
+        self.assertTrue(evidence["large.txt"]["content_truncated"])
+        self.assertLessEqual(evidence["large.txt"]["content_bytes"], MAX_UNTRACKED_COMPLETION_CONTENT_BYTES)
+        self.assertNotIn("ignored.log", evidence)
 
     def test_evaluator_mutation_blocks_without_stage_or_commit(self):
         def evaluator_runner(*, task, prompt, work_root, persist_prompt):

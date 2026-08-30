@@ -63,6 +63,7 @@ DEFAULT_REPOSITORY_SINGLE_TASK_OUTPUT_ROOT = (
 )
 MAX_TASK_REWORK_ATTEMPTS = 2
 MAX_SAFE_SCOPE_AUTO_EXPANSIONS = 3
+MAX_UNTRACKED_COMPLETION_CONTENT_BYTES = 8192
 
 _SCOPE_HARD_BLOCK_COMPONENTS = frozenset({
     ".git", ".github", "__pycache__", "alembic", "build", "ci", "credentials",
@@ -322,6 +323,80 @@ def _repair_scope_status(
 def _actual_changed_paths(snapshot: Any) -> tuple[str, ...]:
     """Return the canonical changed-path set for evaluator and receipts."""
     return tuple(sorted(set(snapshot.tracked_modified_files) | set(snapshot.untracked_files)))
+
+
+def _bounded_untracked_completion_content(candidate: Path, maximum: int) -> tuple[str | None, int | None, bool, str | None]:
+    """Read one regular file for evaluator evidence without following links."""
+    try:
+        if maximum < 1 or candidate.is_symlink() or not candidate.is_file():
+            return None, None, False, "not_regular_file"
+        size = candidate.stat().st_size
+        with candidate.open("rb") as stream:
+            content = stream.read(maximum + 1)
+    except OSError:
+        return None, None, False, "read_failed"
+    truncated = len(content) > maximum or size > maximum
+    content = content[:maximum]
+    text = content.decode("utf-8", errors="replace")
+    # Keep serialized evidence deterministic and legible for arbitrary file bytes.
+    text = "".join(character if character in "\n\t" or ord(character) >= 32 else "?" for character in text)
+    return text, size, truncated, None
+
+
+def _completion_changed_artifact_evidence(
+    root: Path,
+    snapshot: Any,
+    effective_allowed_changed_paths: tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    """Return bounded evidence for every in-scope effective changed artifact.
+
+    Git does not include untracked files in ``git diff``. Their content is
+    therefore added only after the same effective-scope check used by the
+    controller, with a fixed total content budget split deterministically
+    between the eligible new files.
+    """
+    effective = frozenset(effective_allowed_changed_paths)
+    tracked = frozenset(snapshot.tracked_modified_files)
+    untracked = tuple(sorted(set(snapshot.untracked_files) & effective))
+    changed = tuple(sorted(set(_actual_changed_paths(snapshot)) & effective))
+    per_file_budget = (
+        max(1, MAX_UNTRACKED_COMPLETION_CONTENT_BYTES // len(untracked))
+        if untracked else 0
+    )
+    evidence: dict[str, dict[str, Any]] = {}
+    for path in changed:
+        candidate = root / path
+        is_untracked = path in untracked
+        exists = False
+        try:
+            exists = candidate.exists() and not candidate.is_symlink()
+        except OSError:
+            pass
+        entry: dict[str, Any] = {
+            "path": path,
+            "inside_effective_scope": True,
+            "exists": exists,
+            "change_kind": (
+                "new_untracked" if is_untracked
+                else "modified_tracked" if path in tracked and exists
+                else "deleted_tracked"
+            ),
+        }
+        if is_untracked:
+            content, size, truncated, unavailable = _bounded_untracked_completion_content(
+                candidate, per_file_budget,
+            )
+            entry.update({
+                "content": content,
+                "content_bytes": min(size, per_file_budget) if size is not None else 0,
+                "file_bytes": size,
+                "content_truncated": truncated,
+                "content_unavailable_reason": unavailable,
+            })
+        else:
+            entry["content_evidence"] = "bounded_git_diff"
+        evidence[path] = entry
+    return evidence
 
 
 def _normalized_repository_relative_path(root: Path, value: Any) -> str | None:
@@ -1277,13 +1352,19 @@ def run_repository_single_task(
         pre_evaluation_fingerprint = _evaluation_worktree_fingerprint(worktree, pre_evaluation)
         evaluation_changed = _actual_changed_paths(pre_evaluation)
         bounded_diff = _git(worktree, "diff", "--no-ext-diff", "--", *evaluation_changed).stdout[:8192]
-        artifact_evidence: dict[str, Any] = {}
+        artifact_requirements: dict[str, Any] = {}
         for requirement in profile.artifact_requirements:
             candidate = worktree / requirement.path
-            artifact_evidence[requirement.artifact_id] = {
+            artifact_requirements[requirement.artifact_id] = {
                 "path": requirement.path, "required": requirement.required,
                 "exists": candidate.exists(), "expected_type": requirement.expected_type,
             }
+        artifact_evidence = {
+            "requirements": artifact_requirements,
+            "changed_artifacts": _completion_changed_artifact_evidence(
+                worktree, pre_evaluation, effective_allowed_changed_paths,
+            ),
+        }
         prompt = build_task_completion_evaluator_prompt(
             original_task=spec.prompt, allowed_changed_paths=effective_allowed_changed_paths,
             changed_paths=evaluation_changed,
