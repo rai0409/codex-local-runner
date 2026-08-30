@@ -96,6 +96,14 @@ class _ScopeRecovery:
     unresolved_unexpected_changed_files: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class _AppliedScopeRecovery:
+    """One runner-owned application of the existing changed-path recovery."""
+    status: str
+    recovery: _ScopeRecovery
+    trimmed_paths: tuple[str, ...]
+
+
 def _phase_timeout(task_value: int | None, profile_value: int | None, default: int) -> int:
     return task_value if task_value is not None else profile_value if profile_value is not None else default
 
@@ -465,6 +473,19 @@ def _is_scope_untrimmable_path(path: str) -> bool:
     )
 
 
+def _scope_extension_candidate_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Return paths that need explicit human scope review after failed rework."""
+    candidates = []
+    for path in paths:
+        parts = tuple(part.casefold() for part in PurePosixPath(path).parts)
+        if (
+            any(part in {"alembic", "migrations", "schema", "schemas"} for part in parts)
+            or "/db/models/" in path.casefold()
+        ):
+            candidates.append(path)
+    return tuple(sorted(set(candidates)))
+
+
 def _is_new_regular_file(root: Path, path: str, untracked_files: frozenset[str]) -> bool:
     """Only untracked regular files can receive deterministic new-file scope."""
     if path not in untracked_files:
@@ -543,40 +564,72 @@ def _recover_safe_changed_path_scope(
     task_id: str | None = None,
     untracked_files: tuple[str, ...] = (),
 ) -> _ScopeRecovery:
-    """Classify bounded new-file drift; only runner code can expand scope."""
+    """Classify bounded path drift without granting new path authority."""
     declared = tuple(sorted(set(declared_allowed_changed_paths)))
     actual = tuple(sorted(set(actual_changed_files)))
     declared_set = set(declared)
     unexpected = tuple(path for path in actual if path not in declared_set)
     if not unexpected:
         return _ScopeRecovery(declared, actual, unexpected, False, "not_needed", (), declared, ())
-    untracked = frozenset(untracked_files)
-    normalized: dict[str, str] = {}
     hard_blocked = False
     for raw in unexpected:
         path = _normalized_repository_relative_path(root, raw)
         if path is None or path != raw or _is_scope_untrimmable_path(path):
             hard_blocked = True
             continue
-        normalized[raw] = path
-    auto_expanded = tuple(sorted(
-        path for path in normalized.values()
-        if not _is_scope_high_authority_path(path)
-        and (
-            _is_safe_generated_migration(root, path, declared, untracked)
-            or _is_safe_task_specific_test(root, path, declared, task_id, untracked)
-        )
-    ))
-    if len(auto_expanded) > MAX_SAFE_SCOPE_AUTO_EXPANSIONS:
-        return _ScopeRecovery(declared, actual, unexpected, True, "blocked", (), declared, unexpected)
-    effective = tuple(sorted(set(declared) | set(auto_expanded)))
-    unresolved = tuple(path for path in unexpected if path not in set(auto_expanded))
+    # Repair headroom and recognisable generated-file names are never path
+    # authority.  A task must declare every final changed path explicitly.
+    auto_expanded: tuple[str, ...] = ()
+    effective = declared
+    unresolved = unexpected
     if hard_blocked:
         return _ScopeRecovery(declared, actual, unexpected, True, "blocked", auto_expanded, effective, unresolved)
     return _ScopeRecovery(
         declared, actual, unexpected, True,
-        "trim_required" if unresolved else "accepted", auto_expanded, effective, unresolved,
+        "trim_required", auto_expanded, effective, unresolved,
     )
+
+
+def _apply_scope_recovery_after_mutating_execution(
+    root: Path,
+    profile: Any,
+    execution_head: str,
+    declared_allowed_changed_paths: tuple[str, ...],
+    effective_allowed_changed_paths: tuple[str, ...],
+    *,
+    task_id: str | None,
+) -> _AppliedScopeRecovery:
+    """Collect, recover, and re-check scope after one mutating Codex phase.
+
+    This deliberately reuses the established classifier and exact-base trim.
+    It neither expands scope nor validates: callers retain their phase-specific
+    validation and bounded rework budgets.
+    """
+    snapshot = analyze_repository_state(root)
+    changed = _actual_changed_paths(snapshot)
+    baseline = tuple(sorted(set(effective_allowed_changed_paths)))
+    recovery = _recover_safe_changed_path_scope(
+        root,
+        baseline,
+        changed,
+        task_id=task_id,
+        untracked_files=snapshot.untracked_files,
+    )
+    if recovery.scope_recovery_status == "blocked":
+        return _AppliedScopeRecovery("forbidden_path", recovery, ())
+    trimmed: tuple[str, ...] = ()
+    if recovery.unresolved_unexpected_changed_files:
+        trimmed = _trim_unexpected_changed_paths(
+            root, execution_head, snapshot,
+            recovery.unresolved_unexpected_changed_files,
+        )
+    final_snapshot = analyze_repository_state(root)
+    final_changed = _actual_changed_paths(final_snapshot)
+    if len(final_changed) > profile.max_changed_files:
+        return _AppliedScopeRecovery("max_changed_files_exceeded", recovery, trimmed)
+    if set(final_changed) - set(recovery.effective_allowed_changed_paths):
+        return _AppliedScopeRecovery("out_of_scope", recovery, trimmed)
+    return _AppliedScopeRecovery("passed", recovery, trimmed)
 
 
 def _execution_base_blob(root: Path, execution_head: str, path: str) -> tuple[bytes, int] | None:
@@ -754,6 +807,17 @@ def run_repository_single_task(
     post_trim_validation_status: str | None = None
     scope_constrained_rework_attempted = False
     scope_constrained_rework_status = "not_needed"
+    scope_extension_required = False
+    scope_extension_required_paths: tuple[str, ...] = ()
+
+    def scope_extension_block_reason() -> str:
+        nonlocal scope_extension_required, scope_extension_required_paths
+        candidates = _scope_extension_candidate_paths(original_unexpected_changed_files)
+        if candidates:
+            scope_extension_required = True
+            scope_extension_required_paths = candidates
+            return "single_task.scope_extension_required"
+        return "single_task.task_scope.recovery_exhausted"
 
     def record(status: str, reason: str, detail: str | None = None) -> RepositorySingleTaskRunResult:
         nonlocal source_after, worktree_state, changed_files
@@ -818,6 +882,8 @@ def run_repository_single_task(
             "post_trim_validation_status": post_trim_validation_status,
             "scope_constrained_rework_attempted": scope_constrained_rework_attempted,
             "scope_constrained_rework_status": scope_constrained_rework_status,
+            "scope_extension_required": scope_extension_required,
+            "scope_extension_required_paths": list(scope_extension_required_paths),
             "commit_created": commit_sha is not None, "commit_sha": commit_sha,
             "commit_parent_sha": commit_parent,
             "commit_message": getattr(spec, "commit_message", None),
@@ -871,6 +937,8 @@ def run_repository_single_task(
                 "post_trim_validation_status": receipt["post_trim_validation_status"],
                 "scope_constrained_rework_attempted": receipt["scope_constrained_rework_attempted"],
                 "scope_constrained_rework_status": receipt["scope_constrained_rework_status"],
+                "scope_extension_required": receipt["scope_extension_required"],
+                "scope_extension_required_paths": receipt["scope_extension_required_paths"],
                 "staged_files": list(getattr(worktree_state, "staged_files", ())),
                 "commit_changed_files": list(changed_files) if commit_sha else [],
             })
@@ -1046,49 +1114,30 @@ def run_repository_single_task(
         return record("blocked", "single_task.validation.failed")
 
     try:
-        scope_snapshot = analyze_repository_state(worktree)
-        scope_changed_files = _actual_changed_paths(scope_snapshot)
-        if len(scope_changed_files) > profile.max_changed_files:
-            worktree_preserved = True
-            return record("blocked", "single_task.changed_files.limit_exceeded")
-        scope_recovery = _recover_safe_changed_path_scope(
-            worktree,
-            declared_allowed_changed_paths,
-            scope_changed_files,
-            task_id=task_id,
-            untracked_files=scope_snapshot.untracked_files,
+        applied_scope = _apply_scope_recovery_after_mutating_execution(
+            worktree, profile, execution_head, declared_allowed_changed_paths,
+            effective_allowed_changed_paths, task_id=task_id,
         )
     except (OSError, ValueError):
         worktree_preserved = True
         return record("blocked", "single_task.changed_files.out_of_scope")
+    scope_recovery = applied_scope.recovery
     original_unexpected_changed_files = scope_recovery.original_unexpected_changed_files
     scope_recovery_attempted = scope_recovery.scope_recovery_attempted
     scope_recovery_status = scope_recovery.scope_recovery_status
     auto_expanded_paths = scope_recovery.auto_expanded_paths
     effective_allowed_changed_paths = scope_recovery.effective_allowed_changed_paths
-    if scope_recovery_status == "blocked":
+    if applied_scope.status == "max_changed_files_exceeded":
+        worktree_preserved = True
+        return record("blocked", "single_task.changed_files.limit_exceeded")
+    if applied_scope.status != "passed":
         worktree_preserved = True
         return record("blocked", "single_task.changed_files.out_of_scope")
-    if scope_recovery.unresolved_unexpected_changed_files:
+    if applied_scope.trimmed_paths:
         scope_trim_attempted = True
-        try:
-            scope_trimmed_paths = _trim_unexpected_changed_paths(
-                worktree, execution_head, scope_snapshot,
-                scope_recovery.unresolved_unexpected_changed_files,
-            )
-            trimmed_snapshot = analyze_repository_state(worktree)
-        except (OSError, ValueError):
-            scope_trim_status = "failed"
-            worktree_preserved = True
-            return record("blocked", "single_task.changed_files.out_of_scope")
-        trimmed_changed_files = _actual_changed_paths(trimmed_snapshot)
-        if (
-            len(trimmed_changed_files) > profile.max_changed_files
-            or set(trimmed_changed_files) - set(effective_allowed_changed_paths)
-        ):
-            scope_trim_status = "failed"
-            worktree_preserved = True
-            return record("blocked", "single_task.changed_files.out_of_scope")
+        scope_trimmed_paths = applied_scope.trimmed_paths
+        scope_trim_status = "succeeded"
+        scope_recovery_status = "trim_succeeded"
         try:
             post_trim_validation = execute_repository_validation(
                 bound_profile,
@@ -1109,8 +1158,6 @@ def run_repository_single_task(
             "attempt_number": 1, "phase": "scope_trim", "execution_status": "completed",
             "validation_status": post_trim_validation.status, "validation_reason": validation_reason,
         }]
-        scope_trim_status = "succeeded"
-        scope_recovery_status = "trim_succeeded"
         if post_trim_validation.status != "passed":
             scope_constrained_rework_attempted = True
             try:
@@ -1119,6 +1166,7 @@ def run_repository_single_task(
                     "worktree_path": str(worktree), "work_dir": str(output_directory),
                     "repository_profile": bound_profile,
                     "allowed_changed_paths": effective_allowed_changed_paths,
+                    "controller_managed_validation": True,
                     "execution_timeout_seconds": _phase_timeout(
                         spec.completion_rework_timeout_seconds,
                         bound_profile.completion_rework_timeout_seconds,
@@ -1130,25 +1178,26 @@ def run_repository_single_task(
             except Exception:
                 scope_constrained_rework_status = "failed"
                 worktree_preserved = True
-                return record("blocked", "single_task.changed_files.out_of_scope")
+                return record("blocked", "single_task.execution.not_completed")
             if not isinstance(response, dict):
                 scope_constrained_rework_status = "failed"
                 worktree_preserved = True
-                return record("blocked", "single_task.changed_files.out_of_scope")
+                return record("blocked", "single_task.execution.not_completed")
             verify, retry_data = response.get("verify"), response.get("retry")
             if not isinstance(verify, dict) or not isinstance(retry_data, dict) or response.get("status") != "completed":
                 scope_constrained_rework_status = "failed"
                 worktree_preserved = True
-                return record("blocked", "single_task.changed_files.out_of_scope")
+                return record("blocked", "single_task.execution.not_completed")
             try:
-                rework_snapshot = analyze_repository_state(worktree)
-                rework_unexpected = tuple(sorted(set(_actual_changed_paths(rework_snapshot)) - set(effective_allowed_changed_paths)))
-                if rework_unexpected:
-                    scope_trimmed_paths = tuple(sorted(set(scope_trimmed_paths) | set(_trim_unexpected_changed_paths(worktree, execution_head, rework_snapshot, rework_unexpected))))
-                final_trim_snapshot = analyze_repository_state(worktree)
-                final_trim_changed = _actual_changed_paths(final_trim_snapshot)
-                if len(final_trim_changed) > profile.max_changed_files or set(final_trim_changed) - set(effective_allowed_changed_paths):
+                rework_scope = _apply_scope_recovery_after_mutating_execution(
+                    worktree, profile, execution_head, declared_allowed_changed_paths,
+                    effective_allowed_changed_paths, task_id=task_id,
+                )
+                if rework_scope.status != "passed":
                     raise OSError("scope rework left unauthorized changes")
+                scope_trimmed_paths = tuple(sorted(
+                    set(scope_trimmed_paths) | set(rework_scope.trimmed_paths)
+                ))
                 final_validation = execute_repository_validation(
                     bound_profile,
                     timeout_seconds=(
@@ -1168,7 +1217,7 @@ def run_repository_single_task(
             if final_validation.status != "passed":
                 scope_constrained_rework_status = "failed"
                 worktree_preserved = True
-                return record("blocked", "single_task.task_scope.recovery_exhausted")
+                return record("blocked", scope_extension_block_reason())
             scope_constrained_rework_status = "succeeded"
 
     if controller_managed_validation:
@@ -1282,11 +1331,27 @@ def run_repository_single_task(
                         worktree_preserved = True
                         return record("blocked", "single_task.validation.repair_exhausted", "repair_execution_failed")
                     try:
-                        repair_scope_status, _repair_scope_paths = _repair_scope_status(
-                            worktree, profile, effective_allowed_changed_paths,
+                        repair_scope = _apply_scope_recovery_after_mutating_execution(
+                            worktree, profile, execution_head,
+                            declared_allowed_changed_paths,
+                            effective_allowed_changed_paths, task_id=task_id,
                         )
                     except (OSError, ValueError):
-                        repair_scope_status, _repair_scope_paths = "worktree_state_invalid", ()
+                        repair_scope = None
+                    repair_scope_status = repair_scope.status if repair_scope is not None else "worktree_state_invalid"
+                    if repair_scope is not None:
+                        if repair_scope.recovery.scope_recovery_attempted:
+                            original_unexpected_changed_files = tuple(sorted(
+                                set(original_unexpected_changed_files)
+                                | set(repair_scope.recovery.original_unexpected_changed_files)
+                            ))
+                            scope_recovery_attempted = True
+                            scope_recovery_status = "trim_succeeded" if repair_scope.trimmed_paths else repair_scope.recovery.scope_recovery_status
+                        scope_trimmed_paths = tuple(sorted(
+                            set(scope_trimmed_paths) | set(repair_scope.trimmed_paths)
+                        ))
+                        if repair_scope.trimmed_paths:
+                            scope_trim_attempted, scope_trim_status = True, "succeeded"
                     if repair_scope_status != "passed":
                         scope_classification = ValidationFailureClassification(
                             "scope_failure", False, False, (), (), True,
@@ -1461,16 +1526,30 @@ def run_repository_single_task(
         if not completion_rework_validation_deferred and not (verify.get("status") == "passed" and validation_reason == "validation_passed" and validation_status == "passed" and retry_outcome in {"not_attempted", "retry_succeeded"}):
             worktree_preserved = True
             return record("blocked", "single_task.validation.failed")
+        try:
+            completion_scope = _apply_scope_recovery_after_mutating_execution(
+                worktree, profile, execution_head,
+                declared_allowed_changed_paths,
+                effective_allowed_changed_paths, task_id=task_id,
+            )
+        except (OSError, ValueError):
+            completion_scope = None
+        if completion_scope is None or completion_scope.status != "passed":
+            worktree_preserved = True
+            return record("blocked", "single_task.changed_files.out_of_scope")
+        if completion_scope.recovery.scope_recovery_attempted:
+            original_unexpected_changed_files = tuple(sorted(
+                set(original_unexpected_changed_files)
+                | set(completion_scope.recovery.original_unexpected_changed_files)
+            ))
+            scope_recovery_attempted = True
+            scope_recovery_status = "trim_succeeded" if completion_scope.trimmed_paths else completion_scope.recovery.scope_recovery_status
+        if completion_scope.trimmed_paths:
+            scope_trim_attempted, scope_trim_status = True, "succeeded"
+            scope_trimmed_paths = tuple(sorted(
+                set(scope_trimmed_paths) | set(completion_scope.trimmed_paths)
+            ))
         if completion_rework_validation_deferred:
-            try:
-                completion_scope_status, _ = _repair_scope_status(
-                    worktree, profile, effective_allowed_changed_paths,
-                )
-            except (OSError, ValueError):
-                completion_scope_status = "worktree_state_invalid"
-            if completion_scope_status != "passed":
-                worktree_preserved = True
-                return record("blocked", "single_task.changed_files.out_of_scope")
             try:
                 completion_validation = execute_repository_validation(
                     bound_profile,
@@ -1499,25 +1578,16 @@ def run_repository_single_task(
                 return record("blocked", "single_task.validation.failed", "completion_rework_validation_failed")
         if scope_trim_attempted:
             try:
-                rework_snapshot = analyze_repository_state(worktree)
-                rework_unexpected = tuple(sorted(
-                    set(_actual_changed_paths(rework_snapshot))
-                    - set(effective_allowed_changed_paths)
-                ))
-                if rework_unexpected:
-                    scope_trimmed_paths = tuple(sorted(
-                        set(scope_trimmed_paths)
-                        | set(_trim_unexpected_changed_paths(
-                            worktree, execution_head, rework_snapshot, rework_unexpected,
-                        ))
-                    ))
-                final_trim_snapshot = analyze_repository_state(worktree)
-                final_trim_changed = _actual_changed_paths(final_trim_snapshot)
-                if (
-                    len(final_trim_changed) > profile.max_changed_files
-                    or set(final_trim_changed) - set(effective_allowed_changed_paths)
-                ):
+                final_scope = _apply_scope_recovery_after_mutating_execution(
+                    worktree, profile, execution_head,
+                    declared_allowed_changed_paths,
+                    effective_allowed_changed_paths, task_id=task_id,
+                )
+                if final_scope.status != "passed":
                     raise OSError("scope-constrained rework left unauthorized changes")
+                scope_trimmed_paths = tuple(sorted(
+                    set(scope_trimmed_paths) | set(final_scope.trimmed_paths)
+                ))
                 final_validation = execute_repository_validation(
                     bound_profile,
                     timeout_seconds=(
@@ -1543,7 +1613,7 @@ def run_repository_single_task(
             if final_validation.status != "passed":
                 scope_constrained_rework_status = "failed"
                 worktree_preserved = True
-                return record("blocked", "single_task.task_scope.recovery_exhausted")
+                return record("blocked", scope_extension_block_reason())
             scope_constrained_rework_status = "succeeded"
 
     worktree_state = analyze_repository_state(worktree)
