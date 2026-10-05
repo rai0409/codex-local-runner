@@ -98,6 +98,51 @@ class RepositoryProfileTests(unittest.TestCase):
             for invalid in (True, "2", -1):
                 self.error(self.payload(root, min_repair_headroom=invalid), "profile.min_repair_headroom.invalid_type")
 
+    def test_optional_model_fields_validate_and_round_trip(self):
+        with tempfile.TemporaryDirectory() as root:
+            legacy = validate_repository_profile(self.payload(root))
+            self.assertIsNone(legacy.model)
+            self.assertIsNone(legacy.model_reasoning_effort)
+            legacy_mapping = repository_profile_to_mapping(legacy)
+            self.assertNotIn("model", legacy_mapping)
+            self.assertNotIn("model_reasoning_effort", legacy_mapping)
+
+            model_only = validate_repository_profile(self.payload(root, model="gpt-5.6"))
+            self.assertEqual(model_only.model, "gpt-5.6")
+            self.assertIsNone(model_only.model_reasoning_effort)
+            self.assertEqual(repository_profile_to_mapping(model_only)["model"], "gpt-5.6")
+            self.assertNotIn("model_reasoning_effort", repository_profile_to_mapping(model_only))
+
+            for effort in ("low", "medium", "high", "xhigh"):
+                profile = validate_repository_profile(self.payload(
+                    root,
+                    model_reasoning_effort=effort,
+                ))
+                mapping = repository_profile_to_mapping(profile)
+                self.assertIsNone(profile.model)
+                self.assertEqual(mapping["model_reasoning_effort"], effort)
+                self.assertEqual(validate_repository_profile(mapping), profile)
+
+            configured = validate_repository_profile(self.payload(
+                root,
+                model="gpt-5.6",
+                model_reasoning_effort="medium",
+            ))
+            self.assertEqual(
+                repository_profile_to_mapping(configured)["model"],
+                "gpt-5.6",
+            )
+
+            self.error(self.payload(root, model=""), "profile.model.invalid_type")
+            self.error(
+                self.payload(root, model_reasoning_effort="none"),
+                "profile.model_reasoning_effort.invalid_value",
+            )
+            self.error(
+                self.payload(root, model_reasoning_effort="invalid"),
+                "profile.model_reasoning_effort.invalid_value",
+            )
+
     def test_command_uniqueness_kinds_and_argv_safety(self):
         with tempfile.TemporaryDirectory() as root:
             duplicate = self.payload(root); duplicate["validation_commands"][1]["command_id"] = "focused"

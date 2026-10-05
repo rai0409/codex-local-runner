@@ -22,6 +22,29 @@ def _as_string(value: Any, *, context: str) -> str:
     return text
 
 
+def _as_codex_profile(value: Any, *, context: str) -> dict[str, str]:
+    raw = _as_mapping(value, context=context)
+    model_raw = raw.get("model")
+    if not isinstance(model_raw, str):
+        raise ValueError(f"{context}.model must be a non-empty string")
+    model = _as_string(model_raw, context=f"{context}.model")
+    effort_raw = raw.get("model_reasoning_effort")
+    if not isinstance(effort_raw, str):
+        raise ValueError(f"{context}.model_reasoning_effort must be a string")
+    model_reasoning_effort = _as_string(
+        effort_raw,
+        context=f"{context}.model_reasoning_effort",
+    )
+    if model_reasoning_effort not in {"low", "medium", "high", "xhigh"}:
+        raise ValueError(
+            f"{context}.model_reasoning_effort must be one of low, medium, high, xhigh"
+        )
+    return {
+        "model": model,
+        "model_reasoning_effort": model_reasoning_effort,
+    }
+
+
 def _as_string_tuple(value: Any, *, context: str) -> tuple[str, ...]:
     if value is None:
         return ()
@@ -146,6 +169,10 @@ def load_change_categories_policy(path: str = CHANGE_CATEGORIES_PATH) -> dict[st
                 context=f"{name}.required_tests",
             ),
             "auto_merge_allowed": bool(body.get("auto_merge_allowed", False)),
+            "codex_profile": _as_codex_profile(
+                body.get("codex_profile"),
+                context=f"{name}.codex_profile",
+            ),
         }
 
     return {"categories": categories}

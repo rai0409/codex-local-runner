@@ -254,7 +254,34 @@ def validate_no_confirmation_codex_command(command: list[str]) -> list[str]:
     return errors
 
 
-def build_no_confirmation_codex_command(*, skip_git_repo_check: bool = False) -> list[str]:
+def _normalize_optional_codex_profile(
+    model: str | None,
+    model_reasoning_effort: str | None,
+) -> tuple[str | None, str | None]:
+    normalized_model: str | None = None
+    if model is not None:
+        if not isinstance(model, str) or not (normalized_model := model.strip()):
+            raise ValueError("model must be a non-empty string")
+    if model_reasoning_effort is None:
+        return normalized_model, None
+    if not isinstance(model_reasoning_effort, str):
+        raise ValueError("model_reasoning_effort must be one of low, medium, high, xhigh")
+    normalized_effort = model_reasoning_effort.strip()
+    if normalized_effort not in {"low", "medium", "high", "xhigh"}:
+        raise ValueError("model_reasoning_effort must be one of low, medium, high, xhigh")
+    return normalized_model, normalized_effort
+
+
+def build_no_confirmation_codex_command(
+    *,
+    skip_git_repo_check: bool = False,
+    model: str | None = None,
+    model_reasoning_effort: str | None = None,
+) -> list[str]:
+    model, model_reasoning_effort = _normalize_optional_codex_profile(
+        model,
+        model_reasoning_effort,
+    )
     command = [
         "codex",
         "exec",
@@ -263,6 +290,10 @@ def build_no_confirmation_codex_command(*, skip_git_repo_check: bool = False) ->
         "--config",
         NO_CONFIRMATION_APPROVAL_CONFIG,
     ]
+    if model is not None:
+        command.extend(["-m", model])
+    if model_reasoning_effort is not None:
+        command.extend(["--config", f'model_reasoning_effort="{model_reasoning_effort}"'])
     if skip_git_repo_check:
         command.append("--skip-git-repo-check")
     command.append("-")
@@ -283,6 +314,8 @@ def build_no_confirmation_execution_profile(
     prompt_source: str,
     output_dir: str,
     timeout_seconds: int = 120,
+    model: str | None = None,
+    model_reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
     if not _normalize_text(run_id):
         raise ValueError("run_id is required")
@@ -294,7 +327,10 @@ def build_no_confirmation_execution_profile(
         raise ValueError("timeout_seconds must be between 1 and 120")
     if not _path_is_safe_for_no_confirmation(prompt_source) or not _path_is_safe_for_no_confirmation(output_dir):
         raise ValueError("unsafe no-confirmation profile path")
-    command = build_no_confirmation_codex_command()
+    command = build_no_confirmation_codex_command(
+        model=model,
+        model_reasoning_effort=model_reasoning_effort,
+    )
     return {
         "profile_name": NO_CONFIRMATION_PROFILE_NAME,
         "command_family": "codex exec",

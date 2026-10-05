@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Literal, NotRequired, TypedDict
+from typing import Any, Callable, Literal, NotRequired, TypedDict
 
 from automation.execution.codex_executor_adapter import build_no_confirmation_codex_command
 from automation.execution.codex_executor_adapter import build_no_confirmation_execution_prompt
@@ -20,6 +20,13 @@ DEFAULT_VALIDATION_TIMEOUT_SECONDS = 3600
 DEFAULT_COMPLETION_EVALUATOR_TIMEOUT_SECONDS = 3600
 MAX_COMPLETION_EVALUATOR_TIMEOUT_SECONDS = 7200
 DEFAULT_COMPLETION_REWORK_TIMEOUT_SECONDS = 7200
+_OBSERVED_USAGE_FIELDS = (
+    "input_tokens",
+    "cached_input_tokens",
+    "cache_write_input_tokens",
+    "output_tokens",
+    "reasoning_output_tokens",
+)
 
 
 def validate_codex_execution_timeout_seconds(value: object) -> int:
@@ -87,6 +94,141 @@ def _sanitize_prompt_from_stream(stream: str, prompt: str) -> str:
     return sanitized
 
 
+def _jsonl_line_content_and_ending(line: str) -> tuple[str, str]:
+    if line.endswith("\r\n"):
+        return line[:-2], "\r\n"
+    if line.endswith("\n") or line.endswith("\r"):
+        return line[:-1], line[-1]
+    return line, ""
+
+
+def _parse_jsonl_events(stdout: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Summarize a JSONL event stream and retain valid objects in line order."""
+    event_count = 0
+    invalid_line_count = 0
+    event_types: set[str] = set()
+    events: list[dict[str, Any]] = []
+    for raw_line in stdout.splitlines(keepends=True):
+        line, _ = _jsonl_line_content_and_ending(raw_line)
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except (RecursionError, TypeError, ValueError):
+            invalid_line_count += 1
+            continue
+        if not isinstance(event, dict):
+            invalid_line_count += 1
+            continue
+        event_count += 1
+        events.append(event)
+        event_type = event.get("type")
+        if isinstance(event_type, str) and (event_type := event_type.strip()):
+            event_types.add(event_type)
+    if event_count and invalid_line_count:
+        parse_status = "partial"
+    elif event_count:
+        parse_status = "parsed"
+    elif invalid_line_count:
+        parse_status = "invalid"
+    else:
+        parse_status = "empty"
+    return (
+        {
+            "enabled": True,
+            "parse_status": parse_status,
+            "event_count": event_count,
+            "invalid_line_count": invalid_line_count,
+            "event_types": sorted(event_types),
+        },
+        events,
+    )
+
+
+def _extract_usage_observations(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Record only recognized numeric usage observations from turn completions."""
+    observations: list[dict[str, int]] = []
+    invalid_event_count = 0
+
+    for event in events:
+        if event.get("type") != "turn.completed" or "usage" not in event:
+            continue
+
+        usage = event["usage"]
+        if not isinstance(usage, dict):
+            invalid_event_count += 1
+            continue
+
+        observation: dict[str, int] = {}
+        invalid_observation = False
+        for field in _OBSERVED_USAGE_FIELDS:
+            if field not in usage:
+                continue
+            value = usage[field]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                invalid_observation = True
+                break
+            observation[field] = value
+
+        if invalid_observation or not observation:
+            invalid_event_count += 1
+            continue
+        observations.append(observation)
+
+    if invalid_event_count:
+        status = "invalid"
+    elif observations:
+        status = "observed"
+    else:
+        status = "absent"
+
+    return {
+        "status": status,
+        "event_count": len(observations),
+        "invalid_event_count": invalid_event_count,
+        "events": observations,
+    }
+
+
+def _sanitize_json_event_value(value: Any, prompt: str) -> Any:
+    if isinstance(value, str):
+        return _sanitize_prompt_from_stream(value, prompt)
+    if isinstance(value, list):
+        return [_sanitize_json_event_value(item, prompt) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_json_event_value(item, prompt)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _sanitize_jsonl_stdout(stdout: str, prompt: str) -> str:
+    """Preserve JSONL order while sanitizing every valid event recursively."""
+    sanitized_lines: list[str] = []
+    for raw_line in stdout.splitlines(keepends=True):
+        line, ending = _jsonl_line_content_and_ending(raw_line)
+        if not line.strip():
+            sanitized_lines.append(raw_line)
+            continue
+        try:
+            event = json.loads(line)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            sanitized_lines.append(_sanitize_prompt_from_stream(raw_line, prompt))
+            continue
+        if not isinstance(event, dict):
+            sanitized_lines.append(_sanitize_prompt_from_stream(raw_line, prompt))
+            continue
+        sanitized_lines.append(
+            json.dumps(
+                _sanitize_json_event_value(event, prompt),
+                ensure_ascii=False,
+            )
+            + ending
+        )
+    return "".join(sanitized_lines)
+
+
 def _empty_result(error: str) -> RunCodexResult:
     return {
         "status": "not_started",
@@ -117,14 +259,26 @@ def execute_codex_cli(
     now: Callable[[], datetime] = datetime.now,
     persist_prompt: bool = True,
     return_transient_stdout: bool = False,
+    model: str | None = None,
+    model_reasoning_effort: str | None = None,
+    emit_json: bool = False,
 ) -> RunCodexResult:
     try:
         timeout_seconds = validate_codex_execution_timeout_seconds(timeout_seconds)
     except ValueError as exc:
         return _empty_result(str(exc))
     codex_path = which("codex")
-    cmd = build_no_confirmation_codex_command(skip_git_repo_check=True)
+    try:
+        cmd = build_no_confirmation_codex_command(
+            skip_git_repo_check=True,
+            model=model,
+            model_reasoning_effort=model_reasoning_effort,
+        )
+    except ValueError as exc:
+        return _empty_result(str(exc))
     effective_prompt = build_no_confirmation_execution_prompt(prompt)
+    if emit_json:
+        cmd.insert(-1, "--json")
     repo_path_raw = str(task.get("repo_path", "")).strip()
     repo_path = Path(repo_path_raw).expanduser() if repo_path_raw else None
     cwd = str(repo_path) if repo_path else ""
@@ -201,7 +355,14 @@ def execute_codex_cli(
         status = "failed"
 
     transient_stdout = stdout_text
-    if not persist_prompt:
+    json_events: dict[str, Any] | None = None
+    if emit_json:
+        if not persist_prompt:
+            stdout_text = _sanitize_jsonl_stdout(stdout_text, effective_prompt)
+            stderr_text = _sanitize_prompt_from_stream(stderr_text, effective_prompt)
+        json_events, parsed_events = _parse_jsonl_events(stdout_text)
+        json_events["usage"] = _extract_usage_observations(parsed_events)
+    elif not persist_prompt:
         stdout_text = _sanitize_prompt_from_stream(stdout_text, effective_prompt)
         stderr_text = _sanitize_prompt_from_stream(stderr_text, effective_prompt)
     stdout_path.write_text(stdout_text, encoding="utf-8")
@@ -224,6 +385,8 @@ def execute_codex_cli(
     if not persist_prompt:
         meta["prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
         meta["prompt_bytes"] = len(prompt.encode("utf-8"))
+    if json_events is not None:
+        meta["json_events"] = json_events
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     artifacts: list[RunCodexArtifact] = [
