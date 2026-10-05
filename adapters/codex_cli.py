@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import shlex
 from typing import Any, Mapping
@@ -20,9 +21,15 @@ from orchestrator.codex_execution import DEFAULT_CODEX_EXECUTION_TIMEOUT_SECONDS
 from orchestrator.codex_execution import DEFAULT_VALIDATION_TIMEOUT_SECONDS
 from orchestrator.codex_execution import timeout_retry_seconds
 from orchestrator.codex_execution import validate_codex_execution_timeout_seconds
+from orchestrator.policy_loader import get_change_category_policy
 from run_codex import run_codex
 from workspace.worktree import cleanup_git_worktree
 from workspace.worktree import prepare_git_worktree
+
+
+DEFAULT_CODEX_MODEL = "gpt-5.5"
+DEFAULT_CODEX_MODEL_REASONING_EFFORT = "low"
+_MODEL_REASONING_EFFORTS = frozenset(("low", "medium", "high", "xhigh"))
 
 
 def _not_run_reason_for_execution_status(execution_status: str) -> str:
@@ -106,6 +113,87 @@ def _resolve_validation_timeout(payload: Mapping[str, Any], profile: RepositoryP
     return _resolve_timeout(payload, profile, field="validation_timeout_seconds", default=DEFAULT_VALIDATION_TIMEOUT_SECONDS)
 
 
+def _task_model_override(payload: Mapping[str, Any]) -> str | None:
+    if "model" not in payload:
+        return None
+    value = payload["model"]
+    if not isinstance(value, str) or not (value := value.strip()):
+        raise ValueError("codex_execution.model.invalid")
+    return value
+
+
+def _task_model_reasoning_effort_override(payload: Mapping[str, Any]) -> str | None:
+    if "model_reasoning_effort" not in payload:
+        return None
+    value = payload["model_reasoning_effort"]
+    if not isinstance(value, str) or (value := value.strip()) not in _MODEL_REASONING_EFFORTS:
+        raise ValueError("codex_execution.model_reasoning_effort.invalid")
+    return value
+
+
+def _resolve_codex_execution_profile(
+    payload: Mapping[str, Any],
+    profile: RepositoryProfile,
+) -> dict[str, str]:
+    category_profile: Mapping[str, Any] | None = None
+    if "declared_category" in payload:
+        declared_category = payload["declared_category"]
+        if not isinstance(declared_category, str) or not (declared_category := declared_category.strip()):
+            raise ValueError("codex_execution.category.invalid")
+        try:
+            category_policy = get_change_category_policy(declared_category)
+        except ValueError as exc:
+            raise ValueError("codex_execution.category.invalid") from exc
+        if category_policy is None:
+            raise ValueError("codex_execution.category.invalid")
+        candidate = category_policy.get("codex_profile")
+        if not isinstance(candidate, Mapping):
+            raise ValueError("codex_execution.category.invalid")
+        category_profile = candidate
+
+    task_model = _task_model_override(payload)
+    task_effort = _task_model_reasoning_effort_override(payload)
+    if category_profile is not None:
+        try:
+            category_model = category_profile["model"]
+            category_effort = category_profile["model_reasoning_effort"]
+        except KeyError as exc:
+            raise ValueError("codex_execution.category.invalid") from exc
+    else:
+        category_model = category_effort = None
+    if task_model is not None:
+        model, model_source = task_model, "task"
+    elif category_profile is not None:
+        model, model_source = str(category_model), "category"
+    elif profile.model is not None:
+        model, model_source = profile.model, "repository_profile"
+    else:
+        model, model_source = DEFAULT_CODEX_MODEL, "default"
+    if task_effort is not None:
+        model_reasoning_effort, model_reasoning_effort_source = task_effort, "task"
+    elif category_profile is not None:
+        model_reasoning_effort, model_reasoning_effort_source = (
+            str(category_effort),
+            "category",
+        )
+    elif profile.model_reasoning_effort is not None:
+        model_reasoning_effort, model_reasoning_effort_source = (
+            profile.model_reasoning_effort,
+            "repository_profile",
+        )
+    else:
+        model_reasoning_effort, model_reasoning_effort_source = (
+            DEFAULT_CODEX_MODEL_REASONING_EFFORT,
+            "default",
+        )
+    return {
+        "model": model,
+        "model_source": model_source,
+        "model_reasoning_effort": model_reasoning_effort,
+        "model_reasoning_effort_source": model_reasoning_effort_source,
+    }
+
+
 def _timeout_recovery_evidence(effective_timeout_seconds: int, configured_timeout_source: str) -> dict[str, Any]:
     return {
         "configured_timeout_source": configured_timeout_source,
@@ -121,11 +209,19 @@ def _timeout_recovery_evidence(effective_timeout_seconds: int, configured_timeou
 
 
 def _validation_attempt(
-    attempt_number: int, phase: str, execution_status: str, verify: Mapping[str, Any],
+    attempt_number: int,
+    phase: str,
+    execution_status: str,
+    verify: Mapping[str, Any],
+    execution_profile: Mapping[str, str],
 ) -> dict[str, Any]:
     entry: dict[str, Any] = {"attempt_number": attempt_number, "phase": phase,
         "execution_status": execution_status, "validation_status": verify.get("status"),
-        "validation_reason": verify.get("reason")}
+        "validation_reason": verify.get("reason"),
+        "model": execution_profile["model"],
+        "model_source": execution_profile["model_source"],
+        "model_reasoning_effort": execution_profile["model_reasoning_effort"],
+        "model_reasoning_effort_source": execution_profile["model_reasoning_effort_source"]}
     failure = extract_actionable_failure(verify.get("safe_validation"))
     if failure is not None:
         import hashlib
@@ -264,6 +360,10 @@ class CodexCliAdapter(ProviderAdapter):
             validation_timeout_seconds, validation_timeout_source = _resolve_validation_timeout(payload, profile)
         except ValueError:
             return self._prepared_failure("codex_execution.timeout.invalid")
+        try:
+            execution_profile = _resolve_codex_execution_profile(payload, profile)
+        except ValueError as exc:
+            return self._prepared_failure(str(exc))
         allowed_changed_paths = payload.get("allowed_changed_paths")
         if not isinstance(allowed_changed_paths, (list, tuple)) or not all(isinstance(path, str) for path in allowed_changed_paths):
             allowed_changed_paths = None
@@ -279,6 +379,8 @@ class CodexCliAdapter(ProviderAdapter):
                 work_root=str(work_dir / "execution_runs"),
                 timeout_seconds=effective_timeout_seconds,
                 persist_prompt=False,
+                model=execution_profile["model"],
+                model_reasoning_effort=execution_profile["model_reasoning_effort"],
             )
             if timeout_recovery["first_execution_outcome"] == "not_started":
                 timeout_recovery["first_execution_outcome"] = execution["status"]
@@ -299,6 +401,8 @@ class CodexCliAdapter(ProviderAdapter):
                         work_root=str(work_dir / "execution_runs"),
                         timeout_seconds=retry_timeout_seconds,
                         persist_prompt=False,
+                        model=execution_profile["model"],
+                        model_reasoning_effort=execution_profile["model_reasoning_effort"],
                     )
             timeout_recovery["final_execution_outcome"] = execution["status"]
             status = str(execution["status"])
@@ -309,7 +413,15 @@ class CodexCliAdapter(ProviderAdapter):
                 verify["timeout_seconds"] = validation_timeout_seconds
                 verify["timeout_source"] = validation_timeout_source
             if not controller_managed_validation:
-                validation_attempts.append(_validation_attempt(attempt_count, phase, status, verify))
+                validation_attempts.append(
+                    _validation_attempt(
+                        attempt_count,
+                        phase,
+                        status,
+                        verify,
+                        execution_profile,
+                    )
+                )
             failure = extract_actionable_failure(verify.get("safe_validation"))
             if not (
                 not controller_managed_validation
@@ -421,6 +533,11 @@ class CodexCliAdapter(ProviderAdapter):
                 bound_profile = bind_repository_profile_to_worktree(
                     profile, worktree_result["worktree_path"]
                 )
+                bound_profile = replace(
+                    bound_profile,
+                    model=profile.model,
+                    model_reasoning_effort=profile.model_reasoning_effort,
+                )
             except (RepositoryProfileBindingError, RepositoryProfileValidationError):
                 prepared_result = self._prepared_failure("safe_validation.profile.invalid")
             else:
@@ -430,6 +547,9 @@ class CodexCliAdapter(ProviderAdapter):
                     "work_dir": str(work_dir),
                     "repository_profile": bound_profile,
                     "allowed_changed_paths": payload.get("allowed_changed_paths"),
+                    **({field: payload[field] for field in (
+                        "declared_category", "model", "model_reasoning_effort",
+                    ) if field in payload}),
                     **({"execution_timeout_seconds": payload["execution_timeout_seconds"]}
                        if "execution_timeout_seconds" in payload else {}),
                     **({"validation_timeout_seconds": payload["validation_timeout_seconds"]}

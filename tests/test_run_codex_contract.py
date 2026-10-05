@@ -96,6 +96,33 @@ class RunCodexContractTests(unittest.TestCase):
                 run_codex(task={"repo_path": repo_dir}, prompt="test", work_root=work_root)
         self.assertEqual(execute.call_args.kwargs["timeout"], 3600)
 
+    def test_model_profile_values_are_explicitly_forwarded(self) -> None:
+        with mock.patch("run_codex.execute_codex_cli", return_value={}) as execute:
+            result = run_codex(
+                task={
+                    "repo_path": ".",
+                    "model": "must-not-be-read",
+                    "model_reasoning_effort": "must-not-be-read",
+                },
+                prompt="test",
+                model="gpt-5.6",
+                model_reasoning_effort="high",
+            )
+        self.assertEqual(result, {})
+        self.assertEqual(execute.call_args.kwargs["model"], "gpt-5.6")
+        self.assertEqual(execute.call_args.kwargs["model_reasoning_effort"], "high")
+        self.assertEqual(execute.call_args.kwargs["timeout_seconds"], 3600)
+
+    def test_emit_json_is_explicitly_forwarded(self) -> None:
+        with mock.patch("run_codex.execute_codex_cli", return_value={}) as execute:
+            result = run_codex(
+                task={"repo_path": ".", "emit_json": False},
+                prompt="test",
+                emit_json=True,
+            )
+        self.assertEqual(result, {})
+        self.assertTrue(execute.call_args.kwargs["emit_json"])
+
     def test_task_timeout_is_bounded_and_invalid_values_do_not_execute(self) -> None:
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
             with mock.patch("run_codex.shutil.which", return_value="/usr/bin/codex"), mock.patch(

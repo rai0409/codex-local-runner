@@ -32,6 +32,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="codex-local-runner phase1 dispatch cli")
     parser.add_argument("--repo", required=True)
     parser.add_argument("--task-type", required=True)
+    parser.add_argument("--declared-category", default="")
     parser.add_argument("--goal", required=True)
     parser.add_argument("--provider", default="codex_cli")
     parser.add_argument("--providers-config", default="config/providers.yaml")
@@ -105,6 +106,7 @@ def main() -> int:
     source_sha = str(args.source_sha).strip()
     base_sha = str(args.base_sha).strip()
     rollback_trace_id = str(args.rollback_trace_id).strip()
+    declared_category = str(args.declared_category).strip()
 
     providers = load_yaml_file(args.providers_config)
     routing = load_yaml_file(args.routing_config)
@@ -155,6 +157,8 @@ def main() -> int:
         "validation_commands": request.validation_commands,
         "metadata": request.metadata,
     }
+    if declared_category:
+        request_payload["declared_category"] = declared_category
     request_path = out_dir / "request.json"
     result_path = out_dir / "result.json"
 
@@ -220,6 +224,8 @@ def main() -> int:
                             "work_dir": str(out_dir),
                             "repository_profile": profile,
                         }
+                        if declared_category:
+                            execution_payload["declared_category"] = declared_category
                         execution_result = resolved_adapter.execute(execution_payload)
                     except NotImplementedError as exc:
                         execution_result = {

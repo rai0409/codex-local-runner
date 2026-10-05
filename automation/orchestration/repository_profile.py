@@ -30,7 +30,7 @@ FORBIDDEN_GIT_OPERATION_IDS = (
     "worktree_overwrite", "git_config_write",
 )
 
-_ROOT_FIELDS = frozenset(("schema_version", "profile_id", "repository_root", "base_branch", "python_executable", "validation_commands", "artifact_requirements", "forbidden_git_operations", "max_changed_files", "min_repair_headroom", "approval_boundary", "environment_allowlist", "execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds"))
+_ROOT_FIELDS = frozenset(("schema_version", "profile_id", "repository_root", "base_branch", "python_executable", "validation_commands", "artifact_requirements", "forbidden_git_operations", "max_changed_files", "min_repair_headroom", "approval_boundary", "environment_allowlist", "execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds", "model", "model_reasoning_effort"))
 _COMMAND_FIELDS = frozenset(("command_id", "kind", "argv", "cwd", "timeout_seconds", "required", "stop_on_failure"))
 _ARTIFACT_FIELDS = frozenset(("artifact_id", "path", "required", "expected_type", "minimum_size_bytes", "parse_json", "required_keys", "readback_required", "checksum_required", "allow_outside_repository"))
 _NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -101,6 +101,8 @@ class RepositoryProfile:
     validation_timeout_seconds: int | None = None
     completion_evaluator_timeout_seconds: int | None = None
     completion_rework_timeout_seconds: int | None = None
+    model: str | None = None
+    model_reasoning_effort: str | None = None
 
 
 def _error(code: str, message: str) -> RepositoryProfileValidationError:
@@ -349,7 +351,7 @@ def _profile_mapping(profile: RepositoryProfile) -> dict[str, Any]:
     }
     if profile.min_repair_headroom:
         result["min_repair_headroom"] = profile.min_repair_headroom
-    for field in ("execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds"):
+    for field in ("execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds", "model", "model_reasoning_effort"):
         if getattr(profile, field) is not None:
             result[field] = getattr(profile, field)
     return result
@@ -423,7 +425,21 @@ def validate_repository_profile(profile: Mapping[str, Any] | RepositoryProfile) 
             timeout_values[field] = _positive(raw[field], f"profile.{field}")
             if timeout_values[field] > maximum:
                 raise _error(f"profile.{field}.invalid_value", "must not exceed the supported hard maximum")
-    return RepositoryProfile(version, _text(_required(raw, "profile_id", "profile"), "profile.profile_id"), str(root), _base_branch(_required(raw, "base_branch", "profile")), str(python), tuple(sorted(commands, key=lambda item: VALIDATION_COMMAND_KINDS.index(item.kind))), tuple(sorted(artifacts, key=lambda item: item.artifact_id)), tuple(item for item in FORBIDDEN_GIT_OPERATION_IDS if item in forbidden), _positive(_required(raw, "max_changed_files", "profile"), "profile.max_changed_files"), _boundary(_required(raw, "approval_boundary", "profile")), tuple(sorted(allow)), min_repair_headroom=_positive(raw.get("min_repair_headroom", 0), "profile.min_repair_headroom", allow_zero=True), **timeout_values)
+    model = _text(raw["model"], "profile.model") if "model" in raw else None
+    model_reasoning_effort = (
+        _text(raw["model_reasoning_effort"], "profile.model_reasoning_effort")
+        if "model_reasoning_effort" in raw
+        else None
+    )
+    if (
+        model_reasoning_effort is not None
+        and model_reasoning_effort not in {"low", "medium", "high", "xhigh"}
+    ):
+        raise _error(
+            "profile.model_reasoning_effort.invalid_value",
+            "must be one of low, medium, high, xhigh",
+        )
+    return RepositoryProfile(version, _text(_required(raw, "profile_id", "profile"), "profile.profile_id"), str(root), _base_branch(_required(raw, "base_branch", "profile")), str(python), tuple(sorted(commands, key=lambda item: VALIDATION_COMMAND_KINDS.index(item.kind))), tuple(sorted(artifacts, key=lambda item: item.artifact_id)), tuple(item for item in FORBIDDEN_GIT_OPERATION_IDS if item in forbidden), _positive(_required(raw, "max_changed_files", "profile"), "profile.max_changed_files"), _boundary(_required(raw, "approval_boundary", "profile")), tuple(sorted(allow)), min_repair_headroom=_positive(raw.get("min_repair_headroom", 0), "profile.min_repair_headroom", allow_zero=True), model=model, model_reasoning_effort=model_reasoning_effort, **timeout_values)
 
 
 def load_repository_profile(profile_path: str | os.PathLike[str]) -> RepositoryProfile:
