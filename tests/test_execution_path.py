@@ -27,17 +27,25 @@ from orchestrator import main as orchestrator_main
 
 class CodexExecutionArtifactTests(unittest.TestCase):
     def test_default_execution_persists_prompt_for_backward_compatibility(self) -> None:
+        captured: dict[str, str] = {}
+
+        def transport(command, **kwargs):
+            captured["input"] = kwargs["input"]
+            return subprocess.CompletedProcess(command, 0, "ok", "")
+
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
             result = execute_codex_cli(
                 task={"repo_path": repo_dir},
                 prompt="backward compatible prompt",
                 work_root=work_root,
                 which=lambda _: "/usr/bin/codex",
-                run_subprocess=lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "ok", ""),
+                run_subprocess=transport,
             )
 
-            self.assertEqual(Path(result["prompt_path"]).read_text(encoding="utf-8"), "backward compatible prompt")
-            self.assertIn("backward compatible prompt", Path(result["meta_path"]).read_text(encoding="utf-8"))
+            persisted_prompt = Path(result["prompt_path"]).read_text(encoding="utf-8")
+            self.assertEqual(persisted_prompt, captured["input"])
+            self.assertTrue(persisted_prompt.endswith("backward compatible prompt"))
+            self.assertNotIn("backward compatible prompt", Path(result["meta_path"]).read_text(encoding="utf-8"))
             self.assertIn("prompt", {artifact["name"] for artifact in result["artifacts"]})
 
     def test_no_persistence_mode_passes_prompt_but_redacts_runner_artifacts(self) -> None:
@@ -46,6 +54,7 @@ class CodexExecutionArtifactTests(unittest.TestCase):
 
         def transport(command, **kwargs):
             captured["command"] = command
+            captured["input"] = kwargs["input"]
             return subprocess.CompletedProcess(
                 command,
                 0,
@@ -66,7 +75,9 @@ class CodexExecutionArtifactTests(unittest.TestCase):
                 Path(result["meta_path"]).read_text(encoding="utf-8"),
             ]
 
-            self.assertEqual(captured["command"][-1], prompt)
+            self.assertEqual(captured["command"][-1], "-")
+            self.assertNotIn(prompt, captured["command"])
+            self.assertIn(prompt, captured["input"])
             self.assertEqual(result["prompt_path"], "")
             self.assertFalse((run_dir / "prompt.txt").exists())
             self.assertNotIn("prompt", {artifact["name"] for artifact in result["artifacts"]})
