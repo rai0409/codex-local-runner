@@ -4,6 +4,9 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from automation.orchestration.repository_multi_cycle_replan_coordinator import RepositoryMultiCycleReplanCoordinatorResult
+from automation.orchestration.repository_multi_cycle_replan_launch import ReplanLaunchClaimResult
+from automation.orchestration.repository_multi_cycle_replan_launch_execution import ReplanLaunchExecutionResult, WorkerLaunchRequest
 from automation.orchestration.repository_multi_cycle_state import write_checkpoint
 from automation.orchestration.repository_multi_cycle_supervisor import RepositoryMultiCycleSupervisor
 from automation.orchestration.repository_multi_cycle_status import inspect_repository_multi_cycle_status
@@ -33,6 +36,9 @@ class SupervisorTests(unittest.TestCase):
   return directory
  def terminal(self,name,status="completed"):
   directory=self.cycles/name; directory.mkdir(parents=True); sha=hashlib.sha256(self.queue.read_bytes()).hexdigest(); value={"schema_version":"1","cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"status":status,"task_count":1,"completed_count":0,"executed_task_results":[],"source_anchor_sha":"a"*40,"final_accepted_head_sha":"a"*40}; payload=json.dumps(value,sort_keys=True,separators=(",",":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); return directory
+ def replan_terminal(self,name="cycle-20260823000000000001",reason="single_task.task_completion.rework_exhausted"):
+  directory=self.cycles/name; directory.mkdir(parents=True); sha=hashlib.sha256(self.queue.read_bytes()).hexdigest(); receipt={"schema_version":"1","cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"status":"blocked","reason_code":"multi_cycle.child.blocked","task_count":1,"completed_count":0,"stopped_task_id":"one","executed_task_results":[],"source_anchor_sha":"a"*40,"final_accepted_head_sha":"a"*40}; payload=json.dumps(receipt,sort_keys=True,separators=(",",":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  write_checkpoint(directory/"state",{"cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":sha,"source_repository_root":str(self.root/"source"),"lifecycle_status":"finalizing","terminal_status":"blocked","terminal_reason_code":"multi_cycle.child.blocked","accepted_head_sha":"a"*40,"task_count":1,"next_task_index":0,"completed_task_results":[],"stopped_task_id":"one","terminal_task_result":{"task_index":0,"task_id":"one","status":"blocked","reason_code":reason}}); return directory
  def observe(self, pid_exists=lambda pid: False):
   return inspect_repository_multi_cycle_status("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,pid_exists=pid_exists)
  def test_kernel_lock_blocks_then_reacquires_and_ignores_stale_metadata(self):
@@ -45,6 +51,71 @@ class SupervisorTests(unittest.TestCase):
     self.terminal(f"cycle-0000000000000000000{len(status)}",status); self.assertEqual(self.make().run_once().reason_code,"supervisor.queue.terminal_suppressed")
     self.temp.cleanup(); self.setUp()
   directory=self.terminal("cycle-00000000000000000009"); (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n"); self.assertEqual(self.make().run_once().reason_code,"supervisor.discovery.invalid"); self.assertEqual(self.calls,[])
+ def test_replan_hook_defaults_disabled_and_existing_terminal_behavior_is_unchanged(self):
+  self.replan_terminal(); supervisor=self.make(); result=supervisor.run_once()
+  self.assertEqual((result.status,result.reason_code),("idle","supervisor.queue.terminal_suppressed")); self.assertIsNone(result.replan_result); self.assertEqual(self.calls,[])
+ def test_verified_terminal_invokes_optional_replan_hook_after_reconciliation(self):
+  directory=self.replan_terminal(); calls=[]
+  expected=RepositoryMultiCycleReplanCoordinatorResult("successor_ready","ready",1,"one","a"*40,self.root/"successor.json","b"*64,"c"*64,1)
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:self.fail("worker launched"),replan_coordinator=lambda value:calls.append(value) or expected)
+  result=supervisor.run_once(); self.assertEqual(result.replan_result,expected); self.assertEqual(len(calls),1); value=calls[0]
+  self.assertEqual(value.verified_terminal_result["cycle_run_id"],directory.name); self.assertEqual(value.verified_terminal_result["terminal_task_result"]["reason_code"],"single_task.task_completion.rework_exhausted"); self.assertEqual(value.verified_terminal_result["final_accepted_head_sha"],"a"*40); self.assertEqual(value.predecessor_queue_spec_sha256,hashlib.sha256(self.queue.read_bytes()).hexdigest())
+ def test_replan_hook_never_receives_invalid_receipt_or_raw_worker_exit(self):
+  directory=self.replan_terminal(); calls=[]; (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n")
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,replan_coordinator=lambda value:calls.append(value))
+  self.assertEqual(supervisor.run_once().reason_code,"supervisor.discovery.invalid"); self.assertEqual(calls,[])
+  self.temp.cleanup(); self.setUp(); supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:Worker(0),poll_seconds=0,replan_coordinator=lambda value:calls.append(value))
+  self.assertEqual(supervisor.run_forever().reason_code,"supervisor.worker.evidence_missing"); self.assertEqual(calls,[])
+ def test_replan_hook_requires_verified_checkpoint_reconciliation(self):
+  directory=self.replan_terminal(); calls=[]; checkpoint=directory/"state"/"checkpoint-000000.sha256"; checkpoint.write_text("0"*64+"  checkpoint-000000.json\n")
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,replan_coordinator=lambda value:calls.append(value))
+  result=supervisor.run_once(); self.assertEqual(result.reason_code,"supervisor.queue.terminal_suppressed"); self.assertEqual(calls,[]); self.assertIsNone(result.replan_result)
+ def test_replan_outcomes_never_launch_or_rewrite_predecessor_terminal(self):
+  for status in ("successor_ready","not_eligible","stopped","blocked"):
+   with self.subTest(status=status):
+    directory=self.replan_terminal(); receipt=directory/"receipt.json"; before=(receipt.read_bytes(),receipt.stat().st_mtime_ns); calls=[]
+    outcome=RepositoryMultiCycleReplanCoordinatorResult(status,status,1,"one","a"*40,None,None,None,0)
+    supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:self.fail("worker launched"),replan_coordinator=lambda value:calls.append(value) or outcome)
+    result=supervisor.run_once(); self.assertEqual(result.replan_result,outcome); self.assertEqual(len(calls),1); self.assertEqual(self.calls,[]); self.assertEqual((receipt.read_bytes(),receipt.stat().st_mtime_ns),before); persisted=json.loads(receipt.read_text()); self.assertEqual((persisted["status"],persisted["reason_code"]),("blocked","multi_cycle.child.blocked"))
+    self.temp.cleanup(); self.setUp()
+ def test_repeated_terminal_polling_delegates_idempotency_without_launch(self):
+  self.replan_terminal(); calls=[]; outcome=RepositoryMultiCycleReplanCoordinatorResult("successor_ready","ready",1,"one","a"*40,None,"b"*64,"c"*64,0)
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:self.fail("worker launched"),replan_coordinator=lambda value:calls.append(value) or outcome)
+  first=supervisor.run_once(); second=supervisor.run_once(); self.assertEqual(first.replan_result,outcome); self.assertEqual(second.replan_result,outcome); self.assertEqual(len(calls),2); self.assertEqual(self.calls,[])
+ def _auto_launch_supervisor(self, *, claim_status="launch_pending", execution_status="launched"):
+  directory=self.replan_terminal(); successor=self.root/"replans"/"attempt-001"/"successor_queue.json"; successor.parent.mkdir(parents=True); successor.write_text(self.queue.read_text()); claim_path=successor.with_name("launch_claim.json")
+  outcome=RepositoryMultiCycleReplanCoordinatorResult("successor_ready","ready",1,"one","a"*40,successor,"b"*64,"c"*64,1)
+  claim=ReplanLaunchClaimResult(claim_status,"claim", "repo","c"*64,1,"d"*64,claim_path,successor,"b"*64,"a"*40)
+  calls={"claim":[],"execution":[],"launch":[]}
+  def claim_acquirer(value): calls["claim"].append(value); return claim
+  def executor(value, *, worker_launcher):
+   calls["execution"].append(value)
+   if execution_status == "launched":
+    worker=worker_launcher(WorkerLaunchRequest("repo","c"*64,1,"d"*64,"e"*64,"a"*40,successor,"b"*64))
+    return ReplanLaunchExecutionResult("launched","launched","d"*64,"e"*64,successor.with_name("launch_execution.json"),successor,"b"*64,worker.worker_pid,worker.cycle_run_id,1)
+   if execution_status == "already_launched":
+    return ReplanLaunchExecutionResult("launched","launched","d"*64,"e"*64,successor.with_name("launch_execution.json"),successor,"b"*64,123,None,0)
+   return ReplanLaunchExecutionResult(execution_status,"uncertain","d"*64,"e"*64,successor.with_name("launch_execution.json"),successor,"b"*64,None,None,0)
+  supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.state,cycle_output_root=self.cycles,worker_factory=lambda resume:calls["launch"].append(resume) or Worker(),replan_coordinator=lambda value:outcome,auto_replan_launch=True,replan_claim_acquirer=claim_acquirer,replan_launch_executor=executor)
+  return directory,successor,supervisor,calls
+ def test_auto_replan_launches_verified_successor_through_existing_helper(self):
+  directory,successor,supervisor,calls=self._auto_launch_supervisor(); receipt=directory/"receipt.json"; before=receipt.read_bytes(); launches=[]; original=supervisor._launch
+  def launch(resume, *, queue_spec_path=None): launches.append((resume,queue_spec_path)); return original(resume,queue_spec_path=queue_spec_path)
+  supervisor._launch=launch; result=supervisor.run_once()
+  self.assertEqual(result.status,"running"); self.assertEqual(len(calls["claim"]),1); self.assertEqual(len(calls["execution"]),1); self.assertEqual(calls["launch"],[None]); self.assertEqual(launches,[(None,successor)]); self.assertEqual(supervisor._worker.pid,123); self.assertEqual(receipt.read_bytes(),before)
+ def test_auto_replan_same_event_or_durable_execution_never_launches_twice(self):
+  _,_,supervisor,calls=self._auto_launch_supervisor(); self.assertEqual(supervisor.run_once().status,"running"); self.assertEqual(supervisor.run_once().status,"running"); self.assertEqual(calls["launch"],[None])
+  self.temp.cleanup(); self.setUp(); _,_,supervisor,calls=self._auto_launch_supervisor(execution_status="already_launched"); self.assertEqual(supervisor.run_once().status,"idle"); self.assertEqual(calls["launch"],[])
+  self.temp.cleanup(); self.setUp(); _,_,supervisor,calls=self._auto_launch_supervisor(execution_status="launching"); self.assertEqual(supervisor.run_once().status,"idle"); self.assertEqual(calls["launch"],[])
+  self.temp.cleanup(); self.setUp(); _,_,supervisor,calls=self._auto_launch_supervisor(execution_status="launch_uncertain"); self.assertEqual(supervisor.run_once().status,"idle"); self.assertEqual(calls["launch"],[])
+ def test_auto_replan_claim_or_execution_blocked_never_launches(self):
+  _,_,supervisor,calls=self._auto_launch_supervisor(claim_status="blocked"); self.assertEqual(supervisor.run_once().status,"idle"); self.assertEqual(len(calls["execution"]),0); self.assertEqual(calls["launch"],[])
+  self.temp.cleanup(); self.setUp(); _,_,supervisor,calls=self._auto_launch_supervisor(execution_status="blocked"); self.assertEqual(supervisor.run_once().status,"idle"); self.assertEqual(calls["launch"],[])
+ def test_auto_replan_fake_launch_preserves_source_and_does_not_override_continuation(self):
+  source=self.root/"source"; source.mkdir(); marker=source/"marker.txt"; marker.write_text("A"); before=marker.read_bytes(); _,_,supervisor,_=self._auto_launch_supervisor(); self.assertEqual(supervisor.run_once().status,"running"); self.assertEqual(marker.read_bytes(),before); self.assertEqual(supervisor.root_queue_spec_path,self.queue); self.assertNotIn("continuation",supervisor._launch_verified_successor_worker.__code__.co_names)
+ def test_supervisor_has_no_direct_r6b_or_r3_dependency(self):
+  import automation.orchestration.repository_multi_cycle_supervisor as module
+  for name in ("run_codex","run_replan_planner","persist_replan_result"): self.assertFalse(hasattr(module,name))
  def test_active_and_finalizing_discovery_resume_and_ambiguous_blocks(self):
   self.checkpoint("cycle-00000000000000000001","active_task"); supervisor=self.make(); result=supervisor.run_once(); self.assertEqual(result.cycle_run_id,"cycle-00000000000000000001"); self.assertEqual(self.calls,["cycle-00000000000000000001"])
   self.temp.cleanup(); self.setUp(); self.checkpoint("cycle-00000000000000000001","finalizing"); supervisor=self.make(); self.assertEqual(supervisor.run_once().cycle_run_id,"cycle-00000000000000000001")
