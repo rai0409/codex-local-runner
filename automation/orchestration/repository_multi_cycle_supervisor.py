@@ -15,6 +15,7 @@ from threading import Event, Lock, Thread
 from typing import Any, Callable
 
 from automation.orchestration.repository_multi_cycle_state import RepositoryMultiCycleStateError, load_latest_checkpoint
+from automation.orchestration.repository_multi_cycle_status import read_verified_terminal_receipt
 
 DEFAULT_SUPERVISOR_STATE_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-supervisor"
 DEFAULT_CYCLE_OUTPUT_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-runs"
@@ -43,7 +44,7 @@ class RepositoryMultiCycleSupervisor:
         self.providers_path = Path(providers_path).expanduser() if providers_path is not None else None
         self.single_task_output_root = Path(single_task_output_root).expanduser() if single_task_output_root is not None else None
         self._cycle_output_root_supplied = cycle_output_root is not None
-        self.stop_event = Event(); self._launch_gate = Lock(); self._lock_stream: Any = None; self._worker: Any = None
+        self.stop_event = Event(); self._launch_gate = Lock(); self._lock_stream: Any = None; self._worker: Any = None; self._terminal_status_written = False
 
     @property
     def _directory(self) -> Path: return self.state_root / hashlib.sha256(self.repository_id.encode("utf-8")).hexdigest()
@@ -55,7 +56,7 @@ class RepositoryMultiCycleSupervisor:
         self._lock_stream = (self._directory / "supervisor.lock").open("a+")
         try: fcntl.flock(self._lock_stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError: self._lock_stream.close(); self._lock_stream = None; return False
-        self._atomic_status({"schema_version":"1","repository_id":self.repository_id,"state":"idle","updated_at":time.time()})
+        self._write_status("idle", queue_sha256=None, cycle_run_id=None, worker_pid=None, worker_alive=False, crash_restart_count=0)
         return True
 
     def release_lock(self) -> None:
@@ -68,23 +69,34 @@ class RepositoryMultiCycleSupervisor:
         temporary.write_text(json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")), encoding="utf-8")
         os.replace(temporary, path)
 
+    def _write_status(self, state: str, *, queue_sha256: str | None, cycle_run_id: str | None, worker_pid: int | None, worker_alive: bool, crash_restart_count: int, terminal_status: str | None = None, reason_code: str | None = None) -> None:
+        now = time.time()
+        value: dict[str, Any] = {"schema_version":"1","repository_id":self.repository_id,"queue_sha256":queue_sha256,"cycle_run_id":cycle_run_id,"state":state,"supervisor_pid":os.getpid(),"worker_pid":worker_pid,"worker_alive":worker_alive,"crash_restart_count":crash_restart_count,"updated_at":now,"last_heartbeat_at":now}
+        if terminal_status is not None: value["terminal_status"] = terminal_status
+        if reason_code is not None: value["reason_code"] = reason_code
+        self._atomic_status(value)
+
+    def _write_terminal_status(self, directory: Path, queue_sha256: str, worker_pid: int | None, crash_restart_count: int) -> bool:
+        try: receipt = read_verified_terminal_receipt(directory, self.repository_id, queue_sha256)
+        except ValueError: return False
+        if receipt is None: return False
+        self._write_status("terminal", queue_sha256=queue_sha256, cycle_run_id=directory.name, worker_pid=worker_pid, worker_alive=False, crash_restart_count=crash_restart_count, terminal_status=receipt["status"], reason_code=receipt.get("reason_code"))
+        self._terminal_status_written = True
+        return True
+
     def request_shutdown(self, *_: Any) -> None:
         # This handler may run in the main thread while a launcher thread owns
         # the gate.  It never interrupts that thread while it is spawning.
         with self._launch_gate: self.stop_event.set()
 
     def _verified_terminal(self, directory: Path, queue_sha: str) -> bool:
-        receipt, sidecar = directory / "receipt.json", directory / "receipt.sha256"
-        try:
-            payload=receipt.read_bytes(); value=json.loads(payload); expected=f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"
-            if sidecar.read_text(encoding="utf-8") != expected: return False
-        except (OSError, ValueError, json.JSONDecodeError): return False
-        return bool(isinstance(value,dict) and value.get("schema_version")=="1" and value.get("cycle_run_id")==directory.name and value.get("repository_id")==self.repository_id and value.get("queue_spec_sha256")==queue_sha and value.get("status") in {"completed","blocked","failed"} and isinstance(value.get("task_count"),int) and isinstance(value.get("completed_count"),int) and 0 <= value["completed_count"] <= value["task_count"] and isinstance(value.get("executed_task_results"),list) and isinstance(value.get("source_anchor_sha"),str) and isinstance(value.get("final_accepted_head_sha"),str))
+        try: return read_verified_terminal_receipt(directory, self.repository_id, queue_sha) is not None
+        except ValueError: return False
 
     def _candidates(self, queue_sha: str) -> tuple[list[str], list[str]]:
         nonterminal, terminal = [], []
         if not self.cycle_output_root.exists(): return nonterminal, terminal
-        for directory in self.cycle_output_root.iterdir():
+        for directory in sorted(self.cycle_output_root.iterdir(), key=lambda item: item.name):
             if not directory.is_dir() or not directory.name.startswith("cycle-"): continue
             receipt = directory / "receipt.json"
             if receipt.exists():
@@ -133,12 +145,26 @@ class RepositoryMultiCycleSupervisor:
         try: queue_sha=self._queue_sha(); nonterminal, terminal=self._candidates(queue_sha)
         except (OSError, ValueError): return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.invalid",self.repository_id,None,None,0)
         if len(nonterminal)>1: return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.ambiguous_nonterminal",self.repository_id,queue_sha,None,0)
-        if terminal and not nonterminal: return RepositoryMultiCycleSupervisorResult("idle","supervisor.queue.terminal_suppressed",self.repository_id,queue_sha,terminal[-1],0)
+        if terminal and not nonterminal:
+            self._write_terminal_status(self.cycle_output_root / terminal[-1], queue_sha, None, 0)
+            return RepositoryMultiCycleSupervisorResult("idle","supervisor.queue.terminal_suppressed",self.repository_id,queue_sha,terminal[-1],0)
         cycle_id=nonterminal[0] if nonterminal else None; worker=self._launch_or_shutdown(cycle_id)
         if worker is None: return RepositoryMultiCycleSupervisorResult("completed","supervisor.shutdown",self.repository_id,queue_sha,cycle_id,0)
         self._worker=worker
-        self._atomic_status({"schema_version":"1","repository_id":self.repository_id,"queue_sha256":queue_sha,"cycle_run_id":cycle_id,"state":"worker_active","worker_pid":getattr(worker,"pid",None),"crash_restart_count":0,"updated_at":time.time()})
+        self._write_status("worker_active", queue_sha256=queue_sha, cycle_run_id=cycle_id, worker_pid=getattr(worker,"pid",None), worker_alive=True, crash_restart_count=0)
         return RepositoryMultiCycleSupervisorResult("running","supervisor.worker.started",self.repository_id,queue_sha,cycle_id,0)
+
+    def _wait_for_worker(self, queue_sha256: str, cycle_run_id: str | None, crash_restart_count: int) -> int:
+        """Wait with bounded heartbeat polling; retain compatibility with fakes."""
+        worker = self._worker
+        poll = getattr(worker, "poll", None)
+        if not callable(poll): return worker.wait()
+        interval = max(float(self.poll_seconds), 0.05)
+        while poll() is None:
+            self._write_status("worker_active", queue_sha256=queue_sha256, cycle_run_id=cycle_run_id, worker_pid=getattr(worker,"pid",None), worker_alive=True, crash_restart_count=crash_restart_count)
+            if self.stop_event.is_set(): break
+            self.sleep(interval)
+        return worker.wait()
 
     def run_forever(self) -> RepositoryMultiCycleSupervisorResult:
         if not self.acquire_lock(): return RepositoryMultiCycleSupervisorResult("blocked","supervisor.lock.unavailable",self.repository_id,None,None,0)
@@ -150,20 +176,29 @@ class RepositoryMultiCycleSupervisor:
                     previous_sha, restarts = queue_sha, 0
                 result=self.run_once()
                 if result.status == "running":
-                    code=self._worker.wait()
-                    if self.stop_event.is_set(): break
+                    worker_pid=getattr(self._worker,"pid",None); code=self._wait_for_worker(queue_sha,result.cycle_run_id,restarts)
                     try: nonterminal,terminal=self._candidates(queue_sha)
                     except ValueError:
+                        self._write_status("blocked", queue_sha256=queue_sha, cycle_run_id=result.cycle_run_id, worker_pid=worker_pid, worker_alive=False, crash_restart_count=restarts, reason_code="supervisor.discovery.invalid")
                         return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.invalid",self.repository_id,queue_sha,result.cycle_run_id,restarts)
+                    if terminal and not nonterminal:
+                        self._write_terminal_status(self.cycle_output_root / terminal[-1], queue_sha, worker_pid, restarts)
+                    if self.stop_event.is_set(): break
                     if not nonterminal and not terminal:
+                        self._write_status("blocked", queue_sha256=queue_sha, cycle_run_id=result.cycle_run_id, worker_pid=worker_pid, worker_alive=False, crash_restart_count=restarts, reason_code="supervisor.worker.evidence_missing")
                         return RepositoryMultiCycleSupervisorResult("blocked","supervisor.worker.evidence_missing",self.repository_id,queue_sha,result.cycle_run_id,restarts)
                     if code != 0 and len(nonterminal)==1:
-                        if restarts >= self.max_crash_restarts: return RepositoryMultiCycleSupervisorResult("blocked","supervisor.worker.restart_exhausted",self.repository_id,queue_sha,nonterminal[0],restarts)
+                        if restarts >= self.max_crash_restarts:
+                            self._write_status("blocked", queue_sha256=queue_sha, cycle_run_id=nonterminal[0], worker_pid=worker_pid, worker_alive=False, crash_restart_count=restarts, reason_code="supervisor.worker.restart_exhausted")
+                            return RepositoryMultiCycleSupervisorResult("blocked","supervisor.worker.restart_exhausted",self.repository_id,queue_sha,nonterminal[0],restarts)
                         self.sleep(min(self.max_backoff_seconds, 2 ** restarts)); restarts += 1; continue
                 if result.status == "blocked": return result
                 self.sleep(self.poll_seconds)
             return RepositoryMultiCycleSupervisorResult("completed","supervisor.shutdown",self.repository_id,previous_sha,None,restarts)
-        finally: self.release_lock()
+        finally:
+            if self.stop_event.is_set() and not self._terminal_status_written:
+                self._write_status("idle", queue_sha256=previous_sha, cycle_run_id=None, worker_pid=getattr(self._worker,"pid",None), worker_alive=False, crash_restart_count=restarts, reason_code="supervisor.shutdown")
+            self.release_lock()
 
 
 __all__=["DEFAULT_SUPERVISOR_STATE_ROOT","RepositoryMultiCycleSupervisor","RepositoryMultiCycleSupervisorResult"]

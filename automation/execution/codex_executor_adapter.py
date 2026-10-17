@@ -11,8 +11,10 @@ from typing import Protocol
 NO_CONFIRMATION_PROFILE_NAME = "no_confirmation_workspace_write"
 NO_CONFIRMATION_SANDBOX = "workspace-write"
 NO_CONFIRMATION_APPROVAL_POLICY = "never"
+NO_CONFIRMATION_APPROVAL_CONFIG = 'approval_policy="never"'
 NO_CONFIRMATION_COMMAND_FAMILY = ("codex", "exec")
 NO_CONFIRMATION_FORBIDDEN_FLAGS = {
+    "--approve-for-me",
     "--yolo",
     "--dangerously-bypass-approvals-and-sandbox",
 }
@@ -51,6 +53,9 @@ NO_CONFIRMATION_FORBIDDEN_PATH_PARTS = {
     "private_sessions",
 }
 WORKSPACE_LOCAL_UV_CACHE_PREFIX = "UV_CACHE_DIR=.uv-cache"
+NO_CONFIRMATION_UNATTENDED_EXECUTION_INSTRUCTION = """UNATTENDED RUNNER EXECUTION CONTRACT
+
+Do not ask the human for confirmation or wait for user input. Proceed autonomously within the declared task boundary and make reasonable implementation decisions inside that boundary. Do not stage files, create or amend commits, create or delete branches or tags, push, pull, fetch, merge, rebase, cherry-pick, reset, restore, stash, or clean. If required work falls outside the declared boundary, stop and return the exact blocker instead of requesting permission. The runner alone owns final validation, completion evaluation, staging, and commit creation."""
 
 
 class CodexExecutionTransport(Protocol):
@@ -233,14 +238,14 @@ def validate_no_confirmation_codex_command(command: list[str]) -> list[str]:
         sandbox_value = command[sandbox_index + 1] if sandbox_index + 1 < len(command) else ""
         if sandbox_value != NO_CONFIRMATION_SANDBOX:
             errors.append("workspace-write sandbox required")
-    if "--ask-for-approval" not in command:
-        errors.append("ask-for-approval flag required")
+    if "--config" not in command:
+        errors.append("approval policy config required")
     else:
-        approval_index = command.index("--ask-for-approval")
+        approval_index = command.index("--config")
         approval_value = command[approval_index + 1] if approval_index + 1 < len(command) else ""
-        if approval_value != NO_CONFIRMATION_APPROVAL_POLICY:
+        if approval_value != NO_CONFIRMATION_APPROVAL_CONFIG:
             errors.append("approval policy never required")
-    if "-" not in command:
+    if not command or command[-1] != "-":
         errors.append("stdin prompt mode required")
     if any(flag in command for flag in NO_CONFIRMATION_FORBIDDEN_FLAGS):
         errors.append("sandbox bypass flags rejected")
@@ -249,20 +254,27 @@ def validate_no_confirmation_codex_command(command: list[str]) -> list[str]:
     return errors
 
 
-def build_no_confirmation_codex_command() -> list[str]:
+def build_no_confirmation_codex_command(*, skip_git_repo_check: bool = False) -> list[str]:
     command = [
         "codex",
         "exec",
         "--sandbox",
         NO_CONFIRMATION_SANDBOX,
-        "--ask-for-approval",
-        NO_CONFIRMATION_APPROVAL_POLICY,
-        "-",
+        "--config",
+        NO_CONFIRMATION_APPROVAL_CONFIG,
     ]
+    if skip_git_repo_check:
+        command.append("--skip-git-repo-check")
+    command.append("-")
     errors = validate_no_confirmation_codex_command(command)
     if errors:
         raise ValueError("; ".join(errors))
     return command
+
+
+def build_no_confirmation_execution_prompt(prompt: str) -> str:
+    """Attach the single runner-owned unattended contract to one task prompt."""
+    return f"{NO_CONFIRMATION_UNATTENDED_EXECUTION_INSTRUCTION}\n\nTASK INSTRUCTIONS\n\n{prompt}"
 
 
 def build_no_confirmation_execution_profile(

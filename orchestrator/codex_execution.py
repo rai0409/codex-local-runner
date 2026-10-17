@@ -8,6 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Literal, NotRequired, TypedDict
 
+from automation.execution.codex_executor_adapter import build_no_confirmation_codex_command
+from automation.execution.codex_executor_adapter import build_no_confirmation_execution_prompt
+
 
 RunCodexStatus = Literal["completed", "failed", "timed_out", "not_started"]
 
@@ -120,7 +123,8 @@ def execute_codex_cli(
     except ValueError as exc:
         return _empty_result(str(exc))
     codex_path = which("codex")
-    cmd = ["codex", "exec", "--skip-git-repo-check", prompt]
+    cmd = build_no_confirmation_codex_command(skip_git_repo_check=True)
+    effective_prompt = build_no_confirmation_execution_prompt(prompt)
     repo_path_raw = str(task.get("repo_path", "")).strip()
     repo_path = Path(repo_path_raw).expanduser() if repo_path_raw else None
     cwd = str(repo_path) if repo_path else ""
@@ -153,7 +157,7 @@ def execute_codex_cli(
 
     task_path.write_text(json.dumps(task, ensure_ascii=False, indent=2), encoding="utf-8")
     if persist_prompt:
-        prompt_path.write_text(prompt, encoding="utf-8")
+        prompt_path.write_text(effective_prompt, encoding="utf-8")
 
     return_code = None
     stdout_text = ""
@@ -164,6 +168,7 @@ def execute_codex_cli(
     try:
         completed = run_subprocess(
             cmd,
+            input=effective_prompt,
             text=True,
             capture_output=True,
             cwd=cwd,
@@ -197,8 +202,8 @@ def execute_codex_cli(
 
     transient_stdout = stdout_text
     if not persist_prompt:
-        stdout_text = _sanitize_prompt_from_stream(stdout_text, prompt)
-        stderr_text = _sanitize_prompt_from_stream(stderr_text, prompt)
+        stdout_text = _sanitize_prompt_from_stream(stdout_text, effective_prompt)
+        stderr_text = _sanitize_prompt_from_stream(stderr_text, effective_prompt)
     stdout_path.write_text(stdout_text, encoding="utf-8")
     stderr_path.write_text(stderr_text, encoding="utf-8")
 
@@ -208,7 +213,7 @@ def execute_codex_cli(
         "run_dir": str(run_dir),
         "started_at": started_at,
         "finished_at": finished_at,
-        "command": cmd if persist_prompt else [*cmd[:-1], "[prompt redacted]"],
+        "command": cmd,
         "cwd": cwd,
         "codex_path": codex_path,
         "success": success,
