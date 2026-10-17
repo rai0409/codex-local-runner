@@ -1,8 +1,11 @@
 from __future__ import annotations
 import hashlib, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
+from unittest.mock import patch
 from automation.orchestration.repository_multi_cycle_task_executor import _child_run_id, _discover_verified_continuation_base, _runtime_single_task_spec, run_repository_multi_cycle
 from automation.orchestration.repository_multi_cycle_state import load_latest_checkpoint, write_checkpoint
+from automation.orchestration.repository_multi_cycle_status import read_verified_terminal_receipt
+from automation.orchestration.repository_multi_cycle_supervisor import RepositoryMultiCycleSupervisor
 from automation.orchestration.repository_profile import APPROVAL_ACTIONS, FORBIDDEN_GIT_OPERATION_IDS
 from automation.orchestration.repository_resolved_single_task_controller import run_repository_single_task
 
@@ -13,8 +16,8 @@ class Adapter:
     def __init__(self): self.prompts=[]
     def execute_prepared_worktree(self,payload):
         prompt=payload["prompt"]; self.prompts.append(prompt); root=Path(payload["worktree_path"])
-        target={"PROMPT_SECRET_ONE":"one.txt","two":"two.txt","three":"three.txt"}[prompt]
-        prior={"two":"one.txt","three":"two.txt"}.get(prompt)
+        target={"PROMPT_SECRET_ONE":"one.txt","two":"two.txt","three":"three.txt","four":"four.txt"}[prompt]
+        prior={"two":"one.txt","three":"two.txt","four":"three.txt"}.get(prompt)
         if prior: assert (root/prior).is_file()
         (root/target).write_text(prompt+"\n",encoding="utf-8")
         return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
@@ -22,10 +25,29 @@ class FailingAdapter:
     name="codex_cli"
     def __init__(self): self.prompts=[]
     def execute_prepared_worktree(self,payload): self.prompts.append(payload["prompt"]); raise RuntimeError("execution failure")
+class SelectiveFailAdapter(Adapter):
+ def __init__(self, fail_prompt): super().__init__(); self.fail_prompt=fail_prompt
+ def execute_prepared_worktree(self,payload):
+  if payload["prompt"] == self.fail_prompt:
+   self.prompts.append(payload["prompt"]); raise RuntimeError("execution failure")
+  return super().execute_prepared_worktree(payload)
+class ScopeRecoveryAdapter:
+ name="codex_cli"
+ def __init__(self): self.prompts=[]; self.scope_repairs=0
+ def execute_prepared_worktree(self,payload):
+  prompt=payload["prompt"]; self.prompts.append(prompt); root=Path(payload["worktree_path"])
+  if prompt=="PROMPT_SECRET_ONE":
+   (root/"one.txt").write_text("one\n",encoding="utf-8")
+   for path in ("tests/test_one.py","docs/recovery.md"):
+    target=root/path; target.parent.mkdir(parents=True,exist_ok=True); target.write_text("x\n",encoding="utf-8")
+  elif prompt=="two":
+   assert (root/"one.txt").is_file(); (root/"two.txt").write_text("two\n",encoding="utf-8")
+  else: raise AssertionError(prompt)
+  return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
 class ExecutorTests(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory(); self.base=Path(self.t.name); self.source=self.base/"source"; self.source.mkdir(); git(self.source,"init","-b","main"); git(self.source,"config","user.name","T"); git(self.source,"config","user.email","t@example.invalid"); (self.source/"base.txt").write_text("A\n"); git(self.source,"add","--","base.txt"); git(self.source,"commit","-m","A"); self.a=git(self.source,"rev-parse","HEAD").stdout.strip()
-  commands=[{"command_id":kind,"kind":kind,"argv":[PYTHON,"-m","py_compile","base.txt"],"cwd":".","timeout_seconds":30,"required":True,"stop_on_failure":True} for kind in ("focused","related_regression","full","compile")]+[{"command_id":"diff","kind":"diff_check","argv":["git","diff","--check"],"cwd":".","timeout_seconds":30,"required":True,"stop_on_failure":True}]; profile={"schema_version":"1","profile_id":"repo","repository_root":str(self.source),"base_branch":"main","python_executable":PYTHON,"validation_commands":commands,"artifact_requirements":[],"forbidden_git_operations":list(FORBIDDEN_GIT_OPERATION_IDS),"max_changed_files":1,"approval_boundary":{x:"automatic" for x in APPROVAL_ACTIONS},"environment_allowlist":[]}; self.profile=self.base/"profile.json"; self.profile.write_text(json.dumps(profile)); self.registry=self.base/"repos.json"; self.registry.write_text(json.dumps({"version":1,"repos":[{"name":"repo","logical_role":"test"}]})); self.bindings=self.base/"bindings.json"; self.bindings.write_text(json.dumps({"version":1,"bindings":[{"repository_id":"repo","profile_path":str(self.profile)}]})); self.queue=self.base/"queue.json"; self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"},{"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},{"task_id":"three","prompt":"three","allowed_changed_paths":["three.txt"],"commit_message":"D"}]})); self.output=self.base/"out"
+  commands=[{"command_id":kind,"kind":kind,"argv":["git","diff","--check"],"cwd":".","timeout_seconds":30,"required":True,"stop_on_failure":True} for kind in ("focused","related_regression","full","compile")]+[{"command_id":"diff","kind":"diff_check","argv":["git","diff","--check"],"cwd":".","timeout_seconds":30,"required":True,"stop_on_failure":True}]; profile={"schema_version":"1","profile_id":"repo","repository_root":str(self.source),"base_branch":"main","python_executable":PYTHON,"validation_commands":commands,"artifact_requirements":[],"forbidden_git_operations":list(FORBIDDEN_GIT_OPERATION_IDS),"max_changed_files":1,"approval_boundary":{x:"automatic" for x in APPROVAL_ACTIONS},"environment_allowlist":[]}; self.profile=self.base/"profile.json"; self.profile.write_text(json.dumps(profile)); self.registry=self.base/"repos.json"; self.registry.write_text(json.dumps({"version":1,"repos":[{"name":"repo","logical_role":"test"}]})); self.bindings=self.base/"bindings.json"; self.bindings.write_text(json.dumps({"version":1,"bindings":[{"repository_id":"repo","profile_path":str(self.profile)}]})); self.queue=self.base/"queue.json"; self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"},{"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},{"task_id":"three","prompt":"three","allowed_changed_paths":["three.txt"],"commit_message":"D"}]})); self.output=self.base/"out"
  def tearDown(self): self.t.cleanup()
  def evaluator(self,**kwargs):
   path=Path(kwargs["work_root"])/"x"; path.mkdir(parents=True); out=path/"out"; out.write_text('TASK_COMPLETION_EVALUATION_JSON_BEGIN\n{"status":"completed","reason_code":"done","satisfied_criteria":[],"unsatisfied_criteria":[],"evidence_refs":[]}\nTASK_COMPLETION_EVALUATION_JSON_END'); return {"status":"completed","stdout_path":str(out)}
@@ -35,6 +57,12 @@ class ExecutorTests(unittest.TestCase):
   path=self.base/f"queue-{task_id}.json"; path.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":task_id,"prompt":prompt,"allowed_changed_paths":[f"{task_id}.txt"],"commit_message":task_id.upper()}]})); return path
  def terminal_status(self, result, status):
   receipt=Path(result.receipt_path); value=json.loads(receipt.read_text()); value["status"]=status; value["reason_code"]=f"multi_cycle.child.{status}"; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); receipt.write_bytes(payload); Path(result.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+ def no_progress_terminal(self, name, queue_sha, *, status="blocked"):
+  directory=self.output/name; directory.mkdir(parents=True)
+  value={"schema_version":"1","cycle_run_id":name,"status":status,"reason_code":"multi_cycle.child.acceptance_invalid","repository_id":"repo","queue_spec_sha256":queue_sha,"source_anchor_sha":self.a,"continuation_base_sha":self.a,"final_accepted_head_sha":self.a,"task_count":3,"completed_count":0,"stopped_task_id":"one","executed_task_results":[],"started_at":"2026-08-27T00:00:00Z","finished_at":"2026-08-27T00:00:01Z"}
+  payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",", ":")).encode(); (directory/"receipt.json").write_bytes(payload); (directory/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  write_checkpoint(directory/"state",{"cycle_run_id":name,"repository_id":"repo","queue_spec_sha256":queue_sha,"source_repository_root":str(self.source),"source_anchor_sha":self.a,"continuation_base_sha":self.a,"accepted_head_sha":self.a,"task_count":3,"next_task_index":0,"completed_task_results":[],"active_task":{"task_index":0,"task_id":"one"},"lifecycle_status":"active_task"})
+  return directory
  def test_real_git_chain_and_receipts(self):
   result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
   self.assertEqual(result.status,"completed",result); self.assertEqual(result.completed_count,3); self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
@@ -44,6 +72,21 @@ class ExecutorTests(unittest.TestCase):
   self.assertNotIn("PROMPT_SECRET_ONE",Path(result.receipt_path).read_text())
   persisted="\n".join(path.read_text(encoding="utf-8",errors="ignore") for path in (self.output/result.cycle_run_id).rglob("*") if path.is_file()); self.assertNotIn("PROMPT_SECRET_ONE",persisted); self.assertFalse(any(path.name.endswith(".runtime.json") for path in (self.output/result.cycle_run_id).rglob("*")))
 
+ def test_recovered_task_is_accepted_and_next_task_continues(self):
+  profile=json.loads(self.profile.read_text()); profile["max_changed_files"]=3; self.profile.write_text(json.dumps(profile))
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[
+   {"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt","tests/test_existing.py"],"commit_message":"B"},
+   {"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},
+  ]}))
+  adapter=ScopeRecoveryAdapter()
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:adapter,evaluator_runner=self.evaluator)
+  self.assertEqual((result.status,result.completed_count),("completed",2)); self.assertEqual(adapter.scope_repairs,0)
+  receipt=json.loads(Path(result.receipt_path).read_text()); first,second=receipt["executed_task_results"]
+  first_child=json.loads(Path(first["child_receipt_path"]).read_text())
+  self.assertEqual(first_child["scope_recovery_status"],"trim_succeeded")
+  self.assertEqual(first_child["unresolved_unexpected_changed_files"],[])
+  self.assertEqual(git(self.source,"rev-parse",f"{second['commit_sha']}^").stdout.strip(),first["commit_sha"])
+
  def test_cross_cycle_continuation_uses_real_git_chain_without_moving_source(self):
   q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two"); q3=self.one_task_queue("three","three")
   self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
@@ -52,6 +95,69 @@ class ExecutorTests(unittest.TestCase):
   r3=run_repository_multi_cycle("repo",q3,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); d=r3.accepted_head_sha
   self.assertEqual(git(self.source,"rev-parse",f"{b}^").stdout.strip(),self.a); self.assertEqual(git(self.source,"rev-parse",f"{c}^").stdout.strip(),b); self.assertEqual(git(self.source,"rev-parse",f"{d}^").stdout.strip(),c)
   self.assertEqual(json.loads(Path(r2.receipt_path).read_text())["continuation_base_sha"],b); self.assertEqual(json.loads(Path(r3.receipt_path).read_text())["continuation_base_sha"],c); self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a); self.assertEqual(git(self.source,"status","--porcelain").stdout,"")
+
+ def test_fresh_cycle_ignores_legacy_pre_task_no_progress_receipt_and_starts_task_one(self):
+  legacy=self.output/"cycle-20260827111111111111"; legacy.mkdir(parents=True)
+  queue_sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
+  value={"schema_version":"1","cycle_run_id":legacy.name,"status":"blocked","reason_code":"multi_cycle.continuation.evidence_invalid","repository_id":"repo","queue_spec_sha256":queue_sha,"source_anchor_sha":self.a,"continuation_base_sha":self.a,"final_accepted_head_sha":None,"task_count":3,"completed_count":0,"stopped_task_id":None,"executed_task_results":[],"started_at":"2026-08-27T00:00:00Z","finished_at":"2026-08-27T00:00:01Z"}
+  payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",", ":")).encode(); (legacy/"receipt.json").write_bytes(payload); (legacy/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  self.assertEqual(result.status,"completed")
+  first=json.loads(Path(result.receipt_path).read_text())["executed_task_results"][0]
+  self.assertEqual(first["parent_sha"],self.a)
+
+ def test_multiple_verified_source_anchor_no_progress_terminals_do_not_create_continuation_conflicts(self):
+  queue_sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
+  self.no_progress_terminal("cycle-20260827111111111112",queue_sha)
+  self.no_progress_terminal("cycle-20260827111111111113",queue_sha,status="failed")
+  self.no_progress_terminal("cycle-20260827111111111114","f"*64)
+  self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  self.assertEqual(result.status,"completed")
+  first=json.loads(Path(result.receipt_path).read_text())["executed_task_results"][0]
+  self.assertEqual(first["parent_sha"],self.a)
+
+ def test_corrupt_no_progress_terminal_receipt_still_fails_closed(self):
+  directory=self.no_progress_terminal("cycle-20260827111111111115",hashlib.sha256(self.queue.read_bytes()).hexdigest())
+  (directory/"receipt.sha256").write_text("0"*64+"  receipt.json\n")
+  with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.evidence_invalid"):
+   _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
+
+ def test_pre_task_continuation_failure_keeps_source_anchor_as_final_head_and_is_discoverable(self):
+  with patch("automation.orchestration.repository_multi_cycle_task_executor._discover_verified_continuation_base",side_effect=ValueError("multi_cycle.continuation.evidence_invalid")):
+   result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  self.assertEqual((result.status,result.reason_code,result.completed_count,result.accepted_head_sha),("blocked","multi_cycle.continuation.evidence_invalid",0,self.a))
+  receipt=json.loads(Path(result.receipt_path).read_text())
+  self.assertEqual((receipt["source_anchor_sha"],receipt["continuation_base_sha"],receipt["final_accepted_head_sha"]),(self.a,self.a,self.a))
+  self.assertIsNotNone(read_verified_terminal_receipt(self.output/result.cycle_run_id,"repo",hashlib.sha256(self.queue.read_bytes()).hexdigest()))
+  launches=[]; supervisor=RepositoryMultiCycleSupervisor("repo",self.queue,state_root=self.base/"supervisor",cycle_output_root=self.output,worker_factory=lambda resume:launches.append(resume) or type("Worker",(),{"pid":123})())
+  self.assertTrue(supervisor._verified_terminal(self.output/result.cycle_run_id,hashlib.sha256(self.queue.read_bytes()).hexdigest()))
+  observed=supervisor.run_once(); self.assertEqual((observed.status,observed.reason_code),("running","supervisor.worker.started")); self.assertEqual(launches,[None])
+
+ def test_terminal_resume_rejects_pre_task_no_progress_with_specific_reason(self):
+  predecessor=self.output/"cycle-20260827111111111116"; predecessor.mkdir(parents=True); queue_sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
+  value={"schema_version":"1","cycle_run_id":predecessor.name,"status":"blocked","reason_code":"multi_cycle.continuation.evidence_invalid","repository_id":"repo","queue_spec_sha256":queue_sha,"source_anchor_sha":self.a,"continuation_base_sha":self.a,"final_accepted_head_sha":self.a,"pre_task_terminal":True,"task_count":3,"completed_count":0,"stopped_task_id":None,"executed_task_results":[],"started_at":"2026-08-27T00:00:00Z","finished_at":"2026-08-27T00:00:01Z"}
+  payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",", ":")).encode(); (predecessor/"receipt.json").write_bytes(payload); (predecessor/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  calls=[]; result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",single_task_runner=lambda **kwargs:calls.append(kwargs),terminal_resume_cycle_run_id=predecessor.name)
+  self.assertEqual((result.status,result.reason_code),("blocked","multi_cycle.terminal_resume.pre_task_not_resumable")); self.assertEqual(calls,[])
+
+ def test_queue_allowed_path_limit_preflight_blocks_before_child_and_exact_limit_starts(self):
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"oversized","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt","two.txt"],"commit_message":"B"}]}))
+  calls=[]
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",single_task_runner=lambda **kwargs:calls.append(kwargs))
+  self.assertEqual((result.status,result.reason_code,result.accepted_head_sha),("blocked","multi_cycle.queue.allowed_paths_limit_exceeded",self.a)); self.assertEqual(calls,[])
+  receipt=json.loads(Path(result.receipt_path).read_text())
+  self.assertEqual(receipt["preflight_failure"],{"task_id":"oversized","allowed_changed_path_count":2,"profile_max_changed_files":1})
+  self.assertIsNotNone(read_verified_terminal_receipt(self.output/result.cycle_run_id,"repo",hashlib.sha256(self.queue.read_bytes()).hexdigest()))
+  self.output=self.base/"exact-output"; self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"}]}))
+  exact=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"exact-child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  self.assertEqual(exact.status,"completed")
+  accepted=exact.accepted_head_sha
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"oversized","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt","two.txt"],"commit_message":"B"}]}))
+  continued=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"exact-child",single_task_runner=lambda **kwargs:self.fail("preflight must run before child"))
+  self.assertEqual(continued.accepted_head_sha,accepted)
+  self.assertEqual(json.loads(Path(continued.receipt_path).read_text())["final_accepted_head_sha"],accepted)
 
  def test_partial_terminal_and_resume_use_verified_continuation_base(self):
   q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two"); q3=self.one_task_queue("three","three"); first=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); b=first.accepted_head_sha; self.terminal_status(first,"blocked")
@@ -63,13 +169,49 @@ class ExecutorTests(unittest.TestCase):
   q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); first=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); b=first.accepted_head_sha
   for status in ("blocked","failed"):
    self.terminal_status(first,status); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
-  value=json.loads(Path(first.receipt_path).read_text()); value["completed_count"]=0; value["executed_task_results"]=[]; value["final_accepted_head_sha"]=self.a; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); Path(first.receipt_path).write_bytes(payload); Path(first.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
+  value=json.loads(Path(first.receipt_path).read_text()); value["completed_count"]=0; value["executed_task_results"]=[]; value["final_accepted_head_sha"]=self.a; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); Path(first.receipt_path).write_bytes(payload); Path(first.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n");
+  with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.evidence_invalid"): _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
   value["completed_count"]=1; value["executed_task_results"]=[{"task_id":"one","status":"completed","commit_sha":b,"parent_sha":self.a}]; value["final_accepted_head_sha"]=b; payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); Path(first.receipt_path).write_bytes(payload); Path(first.receipt_sha256_path).write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
   duplicate=self.output/"cycle-20260823000000000000"; duplicate.mkdir(); same=dict(value); same["cycle_run_id"]=duplicate.name; payload=json.dumps(same,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); (duplicate/"receipt.json").write_bytes(payload); (duplicate/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
   fork=self.output/"cycle-20260823000000000001"; fork.mkdir(); tree=git(self.source,"show","-s","--format=%T",b).stdout.strip(); x=subprocess.run(["git","-C",str(self.source),"commit-tree",tree,"-p",self.a],input="X\n",text=True,capture_output=True,check=True).stdout.strip(); other=dict(value); other["cycle_run_id"]=fork.name; other["final_accepted_head_sha"]=x; other["executed_task_results"]=[{"task_id":"other","status":"completed","commit_sha":x,"parent_sha":self.a}]; payload=json.dumps(other,ensure_ascii=True,sort_keys=True,separators=(",",":")).encode(); (fork/"receipt.json").write_bytes(payload); (fork/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
   with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.ambiguous"): _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
   (fork/"receipt.sha256").write_text("0"*64+"  receipt.json\n")
   with self.assertRaisesRegex(ValueError,"multi_cycle.continuation.evidence_invalid"): _discover_verified_continuation_base("repo",str(self.source),self.a,self.output)
+
+ def test_terminal_resume_reuses_verified_zero_completion_base_without_mutating_predecessor(self):
+  q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two")
+  first=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
+  b=first.accepted_head_sha
+  blocked=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.blocked_evaluator)
+  self.assertEqual((blocked.status,blocked.completed_count,blocked.accepted_head_sha),("blocked",0,b))
+  before=(Path(blocked.receipt_path).read_bytes(), tuple(sorted((p.name,p.read_bytes()) for p in (self.output/blocked.cycle_run_id/"state").iterdir())))
+  self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
+  resumed=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=blocked.cycle_run_id)
+  self.assertEqual(resumed.status,"completed"); self.assertNotEqual(resumed.cycle_run_id,blocked.cycle_run_id)
+  self.assertEqual(git(self.source,"rev-parse",f"{resumed.accepted_head_sha}^").stdout.strip(),b)
+  state,_=load_latest_checkpoint(self.output/resumed.cycle_run_id/"state")
+  self.assertTrue(state["terminal_resume_requested"]); self.assertEqual(state["terminal_resume_predecessor_cycle_run_id"],blocked.cycle_run_id); self.assertEqual(state["terminal_resume_task_index"],0)
+  self.assertEqual((Path(blocked.receipt_path).read_bytes(), tuple(sorted((p.name,p.read_bytes()) for p in (self.output/blocked.cycle_run_id/"state").iterdir()))),before)
+  self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
+
+ def test_terminal_resumes_only_first_unfinished_task_across_a_contiguous_four_task_prefix(self):
+  queue=self.base/"four.json"; queue.write_text(json.dumps({"schema_version":"1","tasks":[
+   {"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"},
+   {"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},
+   {"task_id":"three","prompt":"three","allowed_changed_paths":["three.txt"],"commit_message":"D"},
+   {"task_id":"four","prompt":"four","allowed_changed_paths":["four.txt"],"commit_message":"E"},
+  ]}))
+  first=run_repository_multi_cycle("repo",queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:SelectiveFailAdapter("two"),evaluator_runner=self.evaluator)
+  self.assertEqual((first.status,first.completed_count,first.stopped_task_id),("failed",1,"two")); b=first.accepted_head_sha
+  second=run_repository_multi_cycle("repo",queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:SelectiveFailAdapter("three"),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=first.cycle_run_id)
+  self.assertEqual((second.status,second.completed_count,second.stopped_task_id),("failed",2,"three")); c=second.accepted_head_sha
+  third=run_repository_multi_cycle("repo",queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:SelectiveFailAdapter("four"),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=second.cycle_run_id)
+  self.assertEqual((third.status,third.completed_count,third.stopped_task_id),("failed",3,"four"),third.reason_code); d=third.accepted_head_sha
+  final=run_repository_multi_cycle("repo",queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=third.cycle_run_id)
+  self.assertEqual((final.status,final.completed_count),("completed",4)); e=final.accepted_head_sha
+  self.assertEqual(git(self.source,"rev-parse",f"{c}^").stdout.strip(),b); self.assertEqual(git(self.source,"rev-parse",f"{d}^").stdout.strip(),c); self.assertEqual(git(self.source,"rev-parse",f"{e}^").stdout.strip(),d)
+  self.assertEqual(git(self.source,"rev-list","--all","--count","--","one.txt").stdout.strip(),"1")
+  self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
 
  def _state(self, run_id, *, anchor, active, completed=None, accepted=None, **override):
   completed=[] if completed is None else completed

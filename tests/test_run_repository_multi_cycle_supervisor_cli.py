@@ -61,6 +61,12 @@ def test_cli_default_and_max_without_auto_leave_coordinator_disabled() -> None:
     assert max_only.get("auto_replan_launch") is None
 
 
+def test_cli_terminal_resume_is_opt_in() -> None:
+    cli = _cli_module()
+    assert _run(cli, []).get("resume_terminal") is None
+    assert _run(cli, ["--resume-terminal"])["resume_terminal"] is True
+
+
 @pytest.mark.parametrize(("arguments", "expected"), [(["--auto-replan"], 2), (["--auto-replan", "--max-auto-replans", "1"], 1)])
 def test_cli_auto_replan_forwards_budget(arguments: list[str], expected: int) -> None:
     cli = _cli_module()

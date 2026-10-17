@@ -33,6 +33,7 @@ from automation.orchestration.repository_multi_cycle_replan_launch_execution imp
 from automation.orchestration.repository_multi_cycle_replan_state import ReplanPersistenceResult
 from automation.orchestration.repository_multi_cycle_state import RepositoryMultiCycleStateError, load_latest_checkpoint
 from automation.orchestration.repository_multi_cycle_status import read_verified_terminal_receipt
+from automation.orchestration.repository_multi_cycle_task_executor import _terminal_resume_pre_task_no_progress
 
 DEFAULT_SUPERVISOR_STATE_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-supervisor"
 DEFAULT_CYCLE_OUTPUT_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-runs"
@@ -51,7 +52,7 @@ class RepositoryMultiCycleSupervisorResult:
 
 class RepositoryMultiCycleSupervisor:
     """One repository-scoped supervisor; workers always run out of process."""
-    def __init__(self, repository_id: str, queue_spec_path: str | os.PathLike[str], *, state_root: str | os.PathLike[str] = DEFAULT_SUPERVISOR_STATE_ROOT, cycle_output_root: str | os.PathLike[str] | None = None, registry_path: str | os.PathLike[str] | None = None, bindings_path: str | os.PathLike[str] | None = None, providers_path: str | os.PathLike[str] | None = None, single_task_output_root: str | os.PathLike[str] | None = None, poll_seconds: float = 1.0, max_crash_restarts: int = 3, max_backoff_seconds: float = 30.0, worker_factory: Callable[[str | None], Any] | None = None, sleep: Callable[[float], None] = time.sleep, replan_coordinator: Callable[[VerifiedTerminalReplanInput], RepositoryMultiCycleReplanCoordinatorResult] | None = None, auto_replan_launch: bool = False, replan_claim_acquirer: Callable[[ReplanLaunchClaimInput], ReplanLaunchClaimResult] = acquire_replan_launch_claim, replan_launch_executor: Callable[..., ReplanLaunchExecutionResult] = execute_replan_launch) -> None:
+    def __init__(self, repository_id: str, queue_spec_path: str | os.PathLike[str], *, state_root: str | os.PathLike[str] = DEFAULT_SUPERVISOR_STATE_ROOT, cycle_output_root: str | os.PathLike[str] | None = None, registry_path: str | os.PathLike[str] | None = None, bindings_path: str | os.PathLike[str] | None = None, providers_path: str | os.PathLike[str] | None = None, single_task_output_root: str | os.PathLike[str] | None = None, poll_seconds: float = 1.0, max_crash_restarts: int = 3, max_backoff_seconds: float = 30.0, worker_factory: Callable[[str | None], Any] | None = None, sleep: Callable[[float], None] = time.sleep, replan_coordinator: Callable[[VerifiedTerminalReplanInput], RepositoryMultiCycleReplanCoordinatorResult] | None = None, auto_replan_launch: bool = False, replan_claim_acquirer: Callable[[ReplanLaunchClaimInput], ReplanLaunchClaimResult] = acquire_replan_launch_claim, replan_launch_executor: Callable[..., ReplanLaunchExecutionResult] = execute_replan_launch, resume_terminal: bool = False) -> None:
         self.repository_id, self.queue_spec_path = repository_id, Path(queue_spec_path).expanduser()
         self.root_queue_spec_path = self.queue_spec_path; self._root_queue_spec_sha256: str | None = None
         self.state_root = Path(state_root).expanduser()
@@ -60,13 +61,14 @@ class RepositoryMultiCycleSupervisor:
         self.worker_factory, self.sleep = worker_factory, sleep
         self.replan_coordinator = replan_coordinator
         self.auto_replan_launch = auto_replan_launch
+        self.resume_terminal = resume_terminal
         self.replan_claim_acquirer, self.replan_launch_executor = replan_claim_acquirer, replan_launch_executor
         self.registry_path = Path(registry_path).expanduser() if registry_path is not None else None
         self.bindings_path = Path(bindings_path).expanduser() if bindings_path is not None else None
         self.providers_path = Path(providers_path).expanduser() if providers_path is not None else None
         self.single_task_output_root = Path(single_task_output_root).expanduser() if single_task_output_root is not None else None
         self._cycle_output_root_supplied = cycle_output_root is not None
-        self.stop_event = Event(); self._launch_gate = Lock(); self._lock_stream: Any = None; self._worker: Any = None; self._terminal_status_written = False; self._last_replan_result: RepositoryMultiCycleReplanCoordinatorResult | None = None; self._last_replan_launch_result: ReplanLaunchExecutionResult | None = None; self._auto_successor_worker_active = False
+        self.stop_event = Event(); self._launch_gate = Lock(); self._lock_stream: Any = None; self._worker: Any = None; self._terminal_status_written = False; self._last_replan_result: RepositoryMultiCycleReplanCoordinatorResult | None = None; self._last_replan_launch_result: ReplanLaunchExecutionResult | None = None; self._auto_successor_worker_active = False; self._terminal_resume_consumed = False
 
     @property
     def _directory(self) -> Path: return self.state_root / hashlib.sha256(self.repository_id.encode("utf-8")).hexdigest()
@@ -150,6 +152,46 @@ class RepositoryMultiCycleSupervisor:
             return None
         terminal = dict(receipt)
         terminal["terminal_task_result"] = dict(terminal_task)
+        # Scope-deficiency replan is permitted only after the controller's
+        # receipt proves the bounded trim/rework sequence.  This keeps the
+        # planner from treating a generic scope violation as authority.
+        if terminal_task.get("reason_code") == "single_task.task_scope.recovery_exhausted":
+            try:
+                child_path = Path(str(terminal_task.get("child_receipt_path", "")))
+                payload = child_path.read_bytes()
+                child = json.loads(payload)
+                sidecar = child_path.with_name("receipt.sha256").read_text(encoding="utf-8")
+                digest = hashlib.sha256(payload).hexdigest()
+            except (OSError, ValueError, json.JSONDecodeError):
+                return None
+            required = (
+                child_path.name == "receipt.json",
+                terminal_task.get("child_receipt_sha256") == digest,
+                sidecar == f"{digest}  receipt.json\n",
+                isinstance(child, dict),
+                child.get("repository_id") == self.repository_id,
+                child.get("task_id") == terminal_task.get("task_id"),
+                child.get("reason_code") == "single_task.task_scope.recovery_exhausted",
+                child.get("scope_trim_attempted") is True,
+                child.get("scope_constrained_rework_attempted") is True,
+                child.get("scope_constrained_rework_status") in {"failed", "succeeded"},
+                isinstance(child.get("declared_allowed_changed_paths"), list),
+                isinstance(child.get("effective_allowed_changed_paths"), list),
+                isinstance(child.get("original_unexpected_changed_files"), list),
+                isinstance(child.get("scope_trimmed_paths"), list),
+            )
+            if not all(required):
+                return None
+            terminal["completion_evaluation"] = {
+                key: child[key]
+                for key in (
+                    "declared_allowed_changed_paths", "effective_allowed_changed_paths",
+                    "original_unexpected_changed_files", "auto_expanded_paths",
+                    "scope_trimmed_paths", "scope_constrained_rework_attempted",
+                    "scope_constrained_rework_status", "post_trim_validation_status",
+                )
+                if key in child
+            }
         return VerifiedTerminalReplanInput(
             repository_id=self.repository_id,
             source_repository_root=state["source_repository_root"],
@@ -169,9 +211,9 @@ class RepositoryMultiCycleSupervisor:
         try: return read_verified_terminal_receipt(directory, self.repository_id, queue_sha) is not None
         except ValueError: return False
 
-    def _candidates(self, queue_sha: str) -> tuple[list[str], list[str]]:
-        nonterminal, terminal = [], []
-        if not self.cycle_output_root.exists(): return nonterminal, terminal
+    def _candidates(self, queue_sha: str) -> tuple[list[str], list[str], list[str]]:
+        nonterminal, terminal, pre_task = [], [], []
+        if not self.cycle_output_root.exists(): return nonterminal, terminal, pre_task
         for directory in sorted(self.cycle_output_root.iterdir(), key=lambda item: item.name):
             if not directory.is_dir() or not directory.name.startswith("cycle-"): continue
             receipt = directory / "receipt.json"
@@ -179,7 +221,11 @@ class RepositoryMultiCycleSupervisor:
                 try: value=json.loads(receipt.read_text(encoding="utf-8"))
                 except (OSError, ValueError): raise ValueError("supervisor.cycle.receipt_invalid")
                 if value.get("repository_id") == self.repository_id and value.get("queue_spec_sha256") == queue_sha:
-                    if not self._verified_terminal(directory,queue_sha): raise ValueError("supervisor.cycle.receipt_invalid")
+                    try: verified = read_verified_terminal_receipt(directory, self.repository_id, queue_sha)
+                    except ValueError as exc: raise ValueError("supervisor.cycle.receipt_invalid") from exc
+                    if verified is None: raise ValueError("supervisor.cycle.receipt_invalid")
+                    if _terminal_resume_pre_task_no_progress(verified):
+                        pre_task.append(directory.name); continue
                     terminal.append(directory.name); continue
                 # A verified historical terminal receipt for another queue revision
                 # must not be reclassified as a nonterminal candidate.
@@ -190,13 +236,14 @@ class RepositoryMultiCycleSupervisor:
                 raise ValueError("supervisor.cycle.checkpoint_invalid") from exc
             if state.get("cycle_run_id") != directory.name: raise ValueError("supervisor.cycle.checkpoint_invalid")
             if state.get("repository_id") == self.repository_id and state.get("queue_spec_sha256") == queue_sha and state.get("lifecycle_status") in {"initialized","active_task","accepted_task","finalizing"}: nonterminal.append(directory.name)
-        return nonterminal, terminal
+        return nonterminal, terminal, pre_task
 
-    def _launch(self, resume_cycle_run_id: str | None, *, queue_spec_path: Path | None = None) -> Any:
+    def _launch(self, resume_cycle_run_id: str | None, *, queue_spec_path: Path | None = None, terminal_resume_cycle_run_id: str | None = None) -> Any:
         selected_queue = queue_spec_path or self.queue_spec_path
         if self.worker_factory is not None: return self.worker_factory(resume_cycle_run_id)
         command=[sys.executable, str(Path(__file__).resolve().parents[2] / "scripts" / "run_repository_multi_cycle.py"), "--repository-id", self.repository_id, "--queue-spec", str(selected_queue)]
         if resume_cycle_run_id: command.extend(["--resume-cycle-run-id",resume_cycle_run_id])
+        if terminal_resume_cycle_run_id: command.extend(["--resume-terminal-cycle-run-id",terminal_resume_cycle_run_id])
         configuration = (("--registry-path", self.registry_path), ("--bindings-path", self.bindings_path), ("--providers-path", self.providers_path), ("--single-task-output-root", self.single_task_output_root))
         for flag, value in configuration:
             if value is not None: command.extend([flag,os.fspath(value)])
@@ -243,13 +290,17 @@ class RepositoryMultiCycleSupervisor:
             worker_launcher=self._launch_verified_successor_worker,
         )
 
-    def _launch_or_shutdown(self, resume_cycle_run_id: str | None, *, queue_spec_path: Path | None = None) -> Any | None:
+    def _launch_or_shutdown(self, resume_cycle_run_id: str | None, *, queue_spec_path: Path | None = None, terminal_resume_cycle_run_id: str | None = None) -> Any | None:
         outcome: dict[str, Any] = {}
         completed = Event()
         def launcher() -> None:
             try:
                 with self._launch_gate:
-                    if not self.stop_event.is_set(): outcome["worker"] = self._launch(resume_cycle_run_id, queue_spec_path=queue_spec_path)
+                    if not self.stop_event.is_set():
+                        if terminal_resume_cycle_run_id is None:
+                            outcome["worker"] = self._launch(resume_cycle_run_id, queue_spec_path=queue_spec_path)
+                        else:
+                            outcome["worker"] = self._launch(resume_cycle_run_id, queue_spec_path=queue_spec_path, terminal_resume_cycle_run_id=terminal_resume_cycle_run_id)
             except BaseException as exc: outcome["error"] = exc
             finally: completed.set()
         thread = Thread(target=launcher, name="repository-multi-cycle-launcher")
@@ -262,9 +313,11 @@ class RepositoryMultiCycleSupervisor:
         self._last_replan_launch_result = None
         if self._auto_successor_worker_active:
             return RepositoryMultiCycleSupervisorResult("running","supervisor.replan.successor_started",self.repository_id,self._queue_sha(),None,0)
-        try: queue_sha=self._queue_sha(); nonterminal, terminal=self._candidates(queue_sha)
+        try: queue_sha=self._queue_sha(); nonterminal, terminal, pre_task=self._candidates(queue_sha)
         except (OSError, ValueError): return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.invalid",self.repository_id,None,None,0)
         if len(nonterminal)>1: return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.ambiguous_nonterminal",self.repository_id,queue_sha,None,0)
+        if self.resume_terminal and pre_task and not nonterminal and not terminal:
+            return RepositoryMultiCycleSupervisorResult("blocked","supervisor.terminal_resume.pre_task_not_resumable",self.repository_id,queue_sha,pre_task[-1],0)
         if terminal and not nonterminal:
             self._write_terminal_status(self.cycle_output_root / terminal[-1], queue_sha, None, 0)
             if (
@@ -275,6 +328,23 @@ class RepositoryMultiCycleSupervisor:
             ):
                 self.queue_spec_path = self._last_replan_launch_result.successor_queue_path
                 return RepositoryMultiCycleSupervisorResult("running","supervisor.replan.successor_started",self.repository_id,self._queue_sha(),None,0,self._last_replan_result)
+            # An R6 successor is authoritative for this terminal event.  A
+            # same-queue retry must not race it or create a second worker.
+            if self._last_replan_result is not None and self._last_replan_result.status == "successor_ready":
+                return RepositoryMultiCycleSupervisorResult("idle","supervisor.queue.terminal_suppressed",self.repository_id,queue_sha,terminal[-1],0,self._last_replan_result)
+            if self.resume_terminal and not self._terminal_resume_consumed:
+                try:
+                    receipt = read_verified_terminal_receipt(self.cycle_output_root / terminal[-1], self.repository_id, queue_sha)
+                except ValueError:
+                    receipt = None
+                if receipt is not None and receipt.get("status") in {"blocked", "failed"}:
+                    self._terminal_resume_consumed = True
+                    worker = self._launch_or_shutdown(None, terminal_resume_cycle_run_id=terminal[-1])
+                    if worker is None:
+                        return RepositoryMultiCycleSupervisorResult("completed","supervisor.shutdown",self.repository_id,queue_sha,None,0,self._last_replan_result)
+                    self._worker = worker
+                    self._write_status("worker_active", queue_sha256=queue_sha, cycle_run_id=None, worker_pid=getattr(worker,"pid",None), worker_alive=True, crash_restart_count=0)
+                    return RepositoryMultiCycleSupervisorResult("running","supervisor.terminal_resume.started",self.repository_id,queue_sha,None,0,self._last_replan_result)
             return RepositoryMultiCycleSupervisorResult("idle","supervisor.queue.terminal_suppressed",self.repository_id,queue_sha,terminal[-1],0,self._last_replan_result)
         cycle_id=nonterminal[0] if nonterminal else None; worker=self._launch_or_shutdown(cycle_id)
         if worker is None: return RepositoryMultiCycleSupervisorResult("completed","supervisor.shutdown",self.repository_id,queue_sha,cycle_id,0)
@@ -306,12 +376,16 @@ class RepositoryMultiCycleSupervisor:
                 if result.status == "running":
                     worker_pid=getattr(self._worker,"pid",None); code=self._wait_for_worker(queue_sha,result.cycle_run_id,restarts)
                     observed_queue_sha = result.queue_sha256 or queue_sha
-                    try: nonterminal,terminal=self._candidates(observed_queue_sha)
+                    try: nonterminal,terminal,pre_task=self._candidates(observed_queue_sha)
                     except ValueError:
                         self._write_status("blocked", queue_sha256=observed_queue_sha, cycle_run_id=result.cycle_run_id, worker_pid=worker_pid, worker_alive=False, crash_restart_count=restarts, reason_code="supervisor.discovery.invalid")
                         return RepositoryMultiCycleSupervisorResult("blocked","supervisor.discovery.invalid",self.repository_id,observed_queue_sha,result.cycle_run_id,restarts)
                     if terminal and not nonterminal:
                         self._write_terminal_status(self.cycle_output_root / terminal[-1], observed_queue_sha, worker_pid, restarts)
+                    if pre_task and not nonterminal and not terminal:
+                        self._write_terminal_status(self.cycle_output_root / pre_task[-1], observed_queue_sha, worker_pid, restarts)
+                        if self.stop_event.is_set(): break
+                        return RepositoryMultiCycleSupervisorResult("idle","supervisor.queue.pre_task_observed",self.repository_id,observed_queue_sha,pre_task[-1],restarts)
                     self._auto_successor_worker_active = False
                     if self.stop_event.is_set(): break
                     if not nonterminal and not terminal:
