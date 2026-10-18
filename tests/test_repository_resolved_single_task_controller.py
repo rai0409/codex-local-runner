@@ -860,7 +860,7 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         self.assertEqual(receipt["scope_extension_required_paths"], ["alembic/versions/20260001_required.py"])
         self.assertEqual(receipt["effective_allowed_changed_paths"], ["allowed.txt"])
 
-    def test_completion_deficiency_after_trimming_uses_one_scope_constrained_rework(self):
+    def test_completion_rework_after_successful_scope_recovery_uses_its_own_budget(self):
         calls = []
 
         def action(worktree):
@@ -898,10 +898,162 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "completed")
         self.assertEqual(adapter.calls, 2)
-        self.assertTrue(adapter.payloads[1]["prompt"].startswith("Mode: Repair\nGoal: satisfy"))
+        self.assertIn("Independent evaluator findings:", adapter.payloads[1]["prompt"])
+        self.assertIn("reason_code: task.more", adapter.payloads[1]["prompt"])
         receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        attempts = json.loads(Path(receipt["artifact_paths"]["task_completion_attempts"]).read_text(encoding="utf-8"))["attempts"]
+        self.assertTrue(attempts[0]["rework_attempted"])
+        self.assertEqual([item["status"] for item in attempts], ["needs_rework", "completed"])
+        self.assertTrue(receipt["scope_trim_attempted"])
+        self.assertFalse(receipt["scope_constrained_rework_attempted"])
+        self.assertEqual(receipt["reason_code"], "single_task.completed")
+
+    def test_production_like_scope_recovery_then_completion_rework_accepts(self):
+        """A prior successful scope rework cannot consume completion rework."""
+        def action(worktree, call):
+            (worktree / "allowed.txt").write_text(
+                "after\n" if call < 3 else "completion-fixed\n", encoding="utf-8",
+            )
+            if call == 1:
+                (worktree / "security_identity_evidence.py").write_text(
+                    "temporary drift\n", encoding="utf-8",
+                )
+
+        decisions = iter(("needs_rework", "completed"))
+        completion_passed = {"value": False}
+
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            status = next(decisions)
+            if status == "completed":
+                completion_passed["value"] = True
+            directory = Path(work_root) / status
+            directory.mkdir(parents=True, exist_ok=True)
+            output = directory / "stdout.txt"
+            output.write_text(
+                "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+                + json.dumps({
+                    "status": status,
+                    "reason_code": (
+                        "import_links.conflicting_csv_rows_commit_partial"
+                        if status == "needs_rework" else "task.done"
+                    ),
+                    "satisfied_criteria": [],
+                    "unsatisfied_criteria": ["reject conflicting rows atomically"] if status == "needs_rework" else [],
+                    "evidence_refs": ["allowed.txt"],
+                }) + "\nTASK_COMPLETION_EVALUATION_JSON_END",
+                encoding="utf-8",
+            )
+            return {"status": "completed", "stdout_path": str(output)}
+
+        adapter = ControllerManagedAdapter(action)
+        module = __import__(
+            "automation.orchestration.repository_resolved_single_task_controller",
+            fromlist=["_git"],
+        )
+        original_git = module._git
+
+        def checked_git(root, *arguments):
+            if arguments[:1] == ("commit",):
+                self.assertTrue(completion_passed["value"])
+            return original_git(root, *arguments)
+
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            side_effect=[
+                validation_result(status="failed", command_id="focused", kind="focused"),
+                validation_result(status="passed", command_id="focused", kind="focused"),
+                validation_result(status="passed", command_id="focused", kind="focused"),
+                validation_result(status="passed", command_id="focused", kind="focused"),
+            ],
+        ), patch(
+            "automation.orchestration.repository_resolved_single_task_controller._git",
+            side_effect=checked_git,
+        ):
+            result = run_repository_single_task("repo", self.spec, registry_path=self.registry,
+                bindings_path=self.bindings, output_root=self.output,
+                adapter_resolver=lambda: adapter, evaluator_runner=evaluator_runner)
+
+        self.assertEqual(result.status, "completed")
+        self.assertIsNotNone(result.commit_sha)
+        self.assertEqual(adapter.calls, 3)
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        attempts = json.loads(Path(receipt["artifact_paths"]["task_completion_attempts"]).read_text(encoding="utf-8"))["attempts"]
+        self.assertEqual([item["status"] for item in attempts], ["needs_rework", "completed"])
+        self.assertTrue(attempts[0]["rework_attempted"])
         self.assertTrue(receipt["scope_constrained_rework_attempted"])
         self.assertEqual(receipt["scope_constrained_rework_status"], "succeeded")
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], [])
+        self.assertFalse(receipt["scope_extension_required"])
+        self.assertEqual(receipt["actual_changed_files"], ["allowed.txt"])
+        self.assertNotEqual(receipt["reason_code"], "single_task.task_scope.recovery_exhausted")
+
+    def test_completion_rework_exhaustion_is_not_misclassified_as_scope_recovery(self):
+        decisions = iter(("needs_rework", "needs_rework", "needs_rework"))
+        evaluation_number = 0
+
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            nonlocal evaluation_number
+            evaluation_number += 1
+            status = next(decisions)
+            directory = Path(work_root) / str(evaluation_number)
+            directory.mkdir(parents=True, exist_ok=True)
+            output = directory / "stdout.txt"
+            output.write_text(
+                "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+                + json.dumps({
+                    "status": status, "reason_code": "import_links.conflicting_csv_rows_commit_partial",
+                    "satisfied_criteria": [], "unsatisfied_criteria": ["atomic rejection"],
+                    "evidence_refs": ["allowed.txt"],
+                }) + "\nTASK_COMPLETION_EVALUATION_JSON_END", encoding="utf-8",
+            )
+            return {"status": "completed", "stdout_path": str(output)}
+
+        result = run_repository_single_task(
+            "repo", self.spec, registry_path=self.registry, bindings_path=self.bindings,
+            output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(self._modify),
+            evaluator_runner=evaluator_runner,
+        )
+        self.assertEqual(result.reason_code, "single_task.task_completion.rework_exhausted")
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], [])
+        self.assertNotEqual(receipt["reason_code"], "single_task.task_scope.recovery_exhausted")
+
+    def test_completion_rework_execution_failure_is_completion_specific_when_scope_is_clean(self):
+        def action(worktree, call):
+            if call == 1:
+                self._modify(worktree)
+                return
+            raise RuntimeError("completion rework failed")
+
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            directory = Path(work_root) / "needs-rework"
+            directory.mkdir(parents=True, exist_ok=True)
+            output = directory / "stdout.txt"
+            output.write_text(
+                "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+                + json.dumps({
+                    "status": "needs_rework",
+                    "reason_code": "import_links.conflicting_csv_rows_commit_partial",
+                    "satisfied_criteria": [], "unsatisfied_criteria": ["atomic rejection"],
+                    "evidence_refs": ["allowed.txt"],
+                }) + "\nTASK_COMPLETION_EVALUATION_JSON_END", encoding="utf-8",
+            )
+            return {"status": "completed", "stdout_path": str(output)}
+
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            return_value=validation_result(status="passed", command_id="focused", kind="focused"),
+        ):
+            result = run_repository_single_task(
+                "repo", self.spec, registry_path=self.registry, bindings_path=self.bindings,
+                output_root=self.output, adapter_resolver=lambda: ControllerManagedAdapter(action),
+                evaluator_runner=evaluator_runner,
+            )
+        self.assertEqual(result.reason_code, "single_task.execution.not_completed")
+        self.assertEqual(result.status, "failed")
+        receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
+        self.assertIsNone(receipt["detail_reason_code"])
+        self.assertEqual(receipt["unresolved_unexpected_changed_files"], [])
 
     def test_completion_rework_scope_drift_is_trimmed_before_completion(self):
         calls = []
@@ -927,9 +1079,14 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
             )
             return {"status": "completed", "stdout_path": str(output)}
 
-        result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(action), evaluator_runner=evaluator_runner)
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            return_value=validation_result(status="passed", command_id="focused", kind="focused"),
+        ) as validation:
+            result = run_repository_single_task("repo", self.spec, registry_path=self.registry, bindings_path=self.bindings, output_root=self.output, adapter_resolver=lambda: FakePreparedAdapter(action), evaluator_runner=evaluator_runner)
         self.assertEqual(result.status, "completed")
         self.assertIsNotNone(result.commit_sha)
+        self.assertEqual(validation.call_count, 1)
         receipt = json.loads(Path(result.receipt_path).read_text(encoding="utf-8"))
         self.assertEqual(receipt["scope_recovery_status"], "trim_succeeded")
         self.assertEqual(receipt["scope_trimmed_paths"], ["src/late.py"])
@@ -1211,3 +1368,48 @@ class RepositoryResolvedSingleTaskControllerTests(unittest.TestCase):
         result = RepositorySingleTaskRunResult("1", "run", "blocked", "single_task.changed_files.none", None, "repo", "task", "/tmp/repo", "main", "a" * 40, "a" * 40, "profile", "b" * 64, "/tmp/work", False, None, None, None, (), "codex_cli", "completed", "passed", "validation_passed", False, "not_attempted", "/tmp/r", "/tmp/s", "start", "finish")
         self.assertEqual(repository_single_task_run_result_to_mapping(result)["changed_files"], [])
         self.assertEqual(serialize_repository_single_task_run_result(result), serialize_repository_single_task_run_result(result))
+
+    def test_semantic_gate_non_deferred_rework_has_no_duplicate_runner_validation(self):
+        """Adapter-owned validation is evidence when scope recovery changed nothing."""
+        calls = 0
+
+        class Adapter:
+            name = "codex_cli"
+
+            def execute_prepared_worktree(_, payload):
+                nonlocal calls
+                calls += 1
+                self._modify(Path(payload["worktree_path"]))
+                return {
+                    "status": "completed",
+                    "verify": {"status": "passed", "reason": "validation_passed", "safe_validation": {"status": "passed"}},
+                    "retry": {"attempted": False, "outcome": "not_attempted"},
+                }
+
+        decisions = iter(("needs_rework", "completed"))
+
+        def evaluator_runner(*, task, prompt, work_root, persist_prompt):
+            status = next(decisions)
+            directory = Path(work_root) / status
+            directory.mkdir(parents=True, exist_ok=True)
+            output = directory / "stdout.txt"
+            output.write_text(
+                "TASK_COMPLETION_EVALUATION_JSON_BEGIN\n"
+                + json.dumps({"status": status, "reason_code": "task.more", "satisfied_criteria": [], "unsatisfied_criteria": ["more"] if status == "needs_rework" else [], "evidence_refs": ["allowed.txt"]})
+                + "\nTASK_COMPLETION_EVALUATION_JSON_END",
+                encoding="utf-8",
+            )
+            return {"status": "completed", "stdout_path": str(output)}
+
+        with patch(
+            "automation.orchestration.repository_resolved_single_task_controller.execute_repository_validation",
+            return_value=validation_result(status="passed", command_id="focused", kind="focused"),
+        ) as validation:
+            result = run_repository_single_task(
+                "repo", self.spec, registry_path=self.registry, bindings_path=self.bindings,
+                output_root=self.output, adapter_resolver=Adapter,
+                evaluator_runner=evaluator_runner,
+            )
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(calls, 2)
+        self.assertEqual(validation.call_count, 0)
