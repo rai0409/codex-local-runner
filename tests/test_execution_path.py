@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 import sys
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -45,6 +46,7 @@ class CodexExecutionArtifactTests(unittest.TestCase):
             persisted_prompt = Path(result["prompt_path"]).read_text(encoding="utf-8")
             self.assertEqual(persisted_prompt, captured["input"])
             self.assertTrue(persisted_prompt.endswith("backward compatible prompt"))
+            self.assertIn("backward compatible prompt", persisted_prompt)
             self.assertNotIn("backward compatible prompt", Path(result["meta_path"]).read_text(encoding="utf-8"))
             self.assertIn("prompt", {artifact["name"] for artifact in result["artifacts"]})
 
@@ -67,6 +69,8 @@ class CodexExecutionArtifactTests(unittest.TestCase):
                 task={"repo_path": repo_dir}, prompt=prompt, work_root=work_root,
                 which=lambda _: "/usr/bin/codex", run_subprocess=transport,
                 persist_prompt=False,
+                model=" gpt-5.5 ",
+                model_reasoning_effort="medium",
             )
             run_dir = Path(result["run_dir"])
             persisted = [
@@ -78,6 +82,11 @@ class CodexExecutionArtifactTests(unittest.TestCase):
             self.assertEqual(captured["command"][-1], "-")
             self.assertNotIn(prompt, captured["command"])
             self.assertIn(prompt, captured["input"])
+            self.assertEqual(captured["command"][captured["command"].index("-m") + 1], "gpt-5.5")
+            self.assertEqual(
+                captured["command"][captured["command"].index('model_reasoning_effort="medium"')],
+                'model_reasoning_effort="medium"',
+            )
             self.assertEqual(result["prompt_path"], "")
             self.assertFalse((run_dir / "prompt.txt").exists())
             self.assertNotIn("prompt", {artifact["name"] for artifact in result["artifacts"]})
@@ -85,6 +94,294 @@ class CodexExecutionArtifactTests(unittest.TestCase):
                 self.assertNotIn(prompt, content)
                 self.assertNotIn("DISTINCTIVE-PROMPT-MARKER-7f3d", content)
             self.assertIn("useful stdout", persisted[0])
+
+    def test_model_profile_injection_and_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
+            commands: list[list[str]] = []
+
+            def transport(command, **kwargs):
+                commands.append(command)
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            default_result = execute_codex_cli(
+                task={"repo_path": repo_dir},
+                prompt="prompt",
+                work_root=work_root,
+                which=lambda _: "/usr/bin/codex",
+                run_subprocess=transport,
+            )
+            self.assertEqual(default_result["status"], "completed")
+            self.assertEqual(commands[-1], [
+                "codex", "exec", "--sandbox", "workspace-write", "--config",
+                'approval_policy="never"', "--skip-git-repo-check", "-",
+            ])
+
+            model_only = execute_codex_cli(
+                task={"repo_path": repo_dir},
+                prompt="prompt",
+                work_root=work_root,
+                which=lambda _: "/usr/bin/codex",
+                run_subprocess=transport,
+                model="gpt-5.6",
+            )
+            self.assertEqual(model_only["status"], "completed")
+            self.assertEqual(commands[-1][commands[-1].index("-m") + 1], "gpt-5.6")
+            self.assertNotIn("model_reasoning_effort", " ".join(commands[-1]))
+
+            effort_only = execute_codex_cli(
+                task={"repo_path": repo_dir},
+                prompt="prompt",
+                work_root=work_root,
+                which=lambda _: "/usr/bin/codex",
+                run_subprocess=transport,
+                model_reasoning_effort="low",
+            )
+            self.assertEqual(effort_only["status"], "completed")
+            self.assertNotIn("-m", commands[-1])
+            self.assertIn('model_reasoning_effort="low"', commands[-1])
+
+            for effort in ("low", "medium", "high", "xhigh"):
+                result = execute_codex_cli(
+                    task={"repo_path": repo_dir},
+                    prompt="prompt",
+                    work_root=work_root,
+                    which=lambda _: "/usr/bin/codex",
+                    run_subprocess=transport,
+                    model="gpt-5.6",
+                    model_reasoning_effort=effort,
+                )
+                self.assertEqual(result["status"], "completed")
+                command = commands[-1]
+                self.assertEqual(command[:2], ["codex", "exec"])
+                self.assertEqual(command[-1], "-")
+                self.assertEqual(command[command.index("-m") + 1], "gpt-5.6")
+                self.assertIn(f'model_reasoning_effort="{effort}"', command)
+
+            for kwargs in (
+                {"model": ""},
+                {"model_reasoning_effort": ""},
+                {"model_reasoning_effort": "none"},
+                {"model_reasoning_effort": "invalid"},
+            ):
+                result = execute_codex_cli(
+                    task={"repo_path": repo_dir},
+                    prompt="prompt",
+                    work_root=work_root,
+                    which=lambda _: "/usr/bin/codex",
+                    run_subprocess=transport,
+                    **kwargs,
+                )
+                self.assertEqual(result["status"], "not_started")
+            self.assertEqual(len(commands), 7)
+
+    def test_json_event_mode_preserves_stdin_contract_and_redacts_jsonl(self) -> None:
+        prompt = "JSON-PROMPT-MARKER-4c9e\nJSON-PROMPT-SECOND-LINE"
+
+        def execute(stdout: str, *, emit_json: bool) -> tuple[dict, list[str]]:
+            command: list[str] = []
+
+            def transport(argv, **kwargs):
+                command.extend(argv)
+                self.assertIn(prompt, kwargs["input"])
+                return subprocess.CompletedProcess(argv, 0, stdout, "")
+
+            with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
+                result = execute_codex_cli(
+                    task={"repo_path": repo_dir},
+                    prompt=prompt,
+                    work_root=work_root,
+                    which=lambda _: "/usr/bin/codex",
+                    run_subprocess=transport,
+                    persist_prompt=False,
+                    emit_json=emit_json,
+                )
+                result["meta"] = json.loads(Path(result["meta_path"]).read_text(encoding="utf-8"))
+                result["persisted_stdout"] = Path(result["stdout_path"]).read_text(encoding="utf-8")
+            return result, command
+
+        plain_result, plain_command = execute("plain output", emit_json=False)
+        self.assertNotIn("--json", plain_command)
+        self.assertEqual(plain_command[-1], "-")
+        self.assertNotIn("json_events", plain_result["meta"])
+
+        valid_stdout = '{"type":"thread.started"}\n{"type":"item.completed"}\n'
+        valid_result, valid_command = execute(valid_stdout, emit_json=True)
+        self.assertEqual(valid_command[:2], ["codex", "exec"])
+        self.assertEqual(valid_command[-1], "-")
+        self.assertLess(valid_command.index("--json"), len(valid_command) - 1)
+        self.assertNotIn(prompt, valid_command)
+        self.assertEqual(valid_result["meta"]["json_events"], {
+            "enabled": True,
+            "parse_status": "parsed",
+            "event_count": 2,
+            "invalid_line_count": 0,
+            "event_types": ["item.completed", "thread.started"],
+            "usage": {
+                "status": "absent",
+                "event_count": 0,
+                "invalid_event_count": 0,
+                "events": [],
+            },
+        })
+
+        cases = (
+            ('{"type":"one"}\nnot-json\n{"type":"two"}\n', "partial", 2, 1),
+            ("not-json\n[]\n", "invalid", 0, 2),
+            (" \n\t\n", "empty", 0, 0),
+        )
+        for stdout, parse_status, event_count, invalid_line_count in cases:
+            with self.subTest(parse_status=parse_status):
+                result, _ = execute(stdout, emit_json=True)
+                summary = result["meta"]["json_events"]
+                self.assertEqual(summary["parse_status"], parse_status)
+                self.assertEqual(summary["event_count"], event_count)
+                self.assertEqual(summary["invalid_line_count"], invalid_line_count)
+                self.assertEqual(result["status"], "completed")
+                self.assertTrue(result["success"])
+
+        nested_stdout = json.dumps({
+            "type": "example",
+            "nested": {"values": ["safe", prompt]},
+        }, ensure_ascii=False) + "\n" + f"invalid {prompt.splitlines()[0]}\n"
+        private_result, _ = execute(nested_stdout, emit_json=True)
+        persisted_lines = private_result["persisted_stdout"].splitlines()
+        self.assertEqual(len(persisted_lines), 2)
+        sanitized_event = json.loads(persisted_lines[0])
+        self.assertEqual(sanitized_event["nested"]["values"][0], "safe")
+        self.assertNotIn(prompt, private_result["persisted_stdout"])
+        self.assertNotIn("JSON-PROMPT-MARKER-4c9e", private_result["persisted_stdout"])
+        self.assertNotIn("JSON-PROMPT-SECOND-LINE", private_result["persisted_stdout"])
+        self.assertNotIn(prompt, json.dumps(private_result["meta"], ensure_ascii=False))
+        self.assertEqual(private_result["meta"]["json_events"]["parse_status"], "partial")
+
+    def test_json_event_usage_observations_follow_observed_schema(self) -> None:
+        def execute(lines: list[str]) -> dict:
+            def transport(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, 0, "\n".join(lines), "")
+
+            with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_root:
+                result = execute_codex_cli(
+                    task={"repo_path": repo_dir},
+                    prompt="usage observation prompt",
+                    work_root=work_root,
+                    which=lambda _: "/usr/bin/codex",
+                    run_subprocess=transport,
+                    emit_json=True,
+                )
+                return json.loads(Path(result["meta_path"]).read_text(encoding="utf-8"))
+
+        observed = execute([
+            '{"type":"turn.started"}',
+            (
+                '{"type":"turn.completed","usage":{"input_tokens":18643,'
+                '"cached_input_tokens":2432,"cache_write_input_tokens":0,'
+                '"output_tokens":31,"reasoning_output_tokens":19}}'
+            ),
+        ])["json_events"]["usage"]
+        self.assertEqual(observed, {
+            "status": "observed",
+            "event_count": 1,
+            "invalid_event_count": 0,
+            "events": [{
+                "input_tokens": 18643,
+                "cached_input_tokens": 2432,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 31,
+                "reasoning_output_tokens": 19,
+            }],
+        })
+        self.assertFalse(
+            {"total_tokens", "billable_tokens", "uncached_input_tokens", "cost", "quota", "remaining"}
+            & set(observed)
+        )
+
+        for name, lines, expected in (
+            (
+                "absent_usage",
+                ['{"type":"turn.completed"}'],
+                {"status": "absent", "event_count": 0, "invalid_event_count": 0, "events": []},
+            ),
+            (
+                "no_turn_completed",
+                ['{"type":"thread.started"}', '{"type":"turn.started"}'],
+                {"status": "absent", "event_count": 0, "invalid_event_count": 0, "events": []},
+            ),
+            (
+                "invalid_mapping",
+                ['{"type":"turn.completed","usage":"bad"}'],
+                {"status": "invalid", "event_count": 0, "invalid_event_count": 1, "events": []},
+            ),
+            (
+                "invalid_string_field",
+                ['{"type":"turn.completed","usage":{"input_tokens":"18643"}}'],
+                {"status": "invalid", "event_count": 0, "invalid_event_count": 1, "events": []},
+            ),
+            (
+                "invalid_bool_field",
+                ['{"type":"turn.completed","usage":{"input_tokens":true}}'],
+                {"status": "invalid", "event_count": 0, "invalid_event_count": 1, "events": []},
+            ),
+            (
+                "invalid_negative_field",
+                ['{"type":"turn.completed","usage":{"output_tokens":-1}}'],
+                {"status": "invalid", "event_count": 0, "invalid_event_count": 1, "events": []},
+            ),
+            (
+                "invalid_without_recognized_fields",
+                ['{"type":"turn.completed","usage":{"future_usage_field":999}}'],
+                {"status": "invalid", "event_count": 0, "invalid_event_count": 1, "events": []},
+            ),
+            (
+                "unknown_field_is_ignored",
+                ['{"type":"turn.completed","usage":{"input_tokens":100,"future_usage_field":999}}'],
+                {
+                    "status": "observed",
+                    "event_count": 1,
+                    "invalid_event_count": 0,
+                    "events": [{"input_tokens": 100}],
+                },
+            ),
+            (
+                "multiple_events_preserve_order",
+                [
+                    '{"type":"turn.completed","usage":{"input_tokens":1}}',
+                    '{"type":"turn.completed","usage":{"output_tokens":2}}',
+                ],
+                {
+                    "status": "observed",
+                    "event_count": 2,
+                    "invalid_event_count": 0,
+                    "events": [{"input_tokens": 1}, {"output_tokens": 2}],
+                },
+            ),
+            (
+                "mixed_valid_invalid",
+                [
+                    '{"type":"turn.completed","usage":{"input_tokens":1}}',
+                    '{"type":"turn.completed","usage":{"output_tokens":-1}}',
+                ],
+                {
+                    "status": "invalid",
+                    "event_count": 1,
+                    "invalid_event_count": 1,
+                    "events": [{"input_tokens": 1}],
+                },
+            ),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(execute(lines)["json_events"]["usage"], expected)
+
+        partial = execute([
+            '{"type":"turn.completed","usage":{"input_tokens":7}}',
+            "not-json",
+        ])["json_events"]
+        self.assertEqual(partial["parse_status"], "partial")
+        self.assertEqual(partial["usage"], {
+            "status": "observed",
+            "event_count": 1,
+            "invalid_event_count": 0,
+            "events": [{"input_tokens": 7}],
+        })
 
     def test_transient_stdout_is_opt_in_and_never_persisted(self) -> None:
         prompt = "TASK_COMPLETION_EVALUATION_JSON_BEGIN\nDISTINCTIVE-PROMPT-MARKER-7f3d\nTASK_COMPLETION_EVALUATION_JSON_END"
@@ -921,6 +1218,338 @@ class CodexCliExecutionTests(unittest.TestCase):
             },
         )
 
+    def test_codex_execution_profile_resolution_and_evidence(self) -> None:
+        def run_case(
+            payload_overrides: dict[str, object],
+            *,
+            model: str | None = None,
+            model_reasoning_effort: str | None = None,
+        ) -> tuple[dict, list[mock._Call]]:
+            with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
+                root = Path(raw)
+                _prepared_git_directory(root)
+                profile = replace(
+                    _safe_adapter_profile(root),
+                    model=model,
+                    model_reasoning_effort=model_reasoning_effort,
+                )
+                execution = {
+                    "status": "completed", "return_code": 0, "started_at": "a",
+                    "finished_at": "b", "artifacts": [], "error": "",
+                }
+                with mock.patch(
+                    "adapters.codex_cli.run_codex", return_value=execution,
+                ) as codex, mock.patch(
+                    "adapters.codex_cli.execute_repository_validation",
+                    return_value=_safe_execution_result("passed"),
+                ):
+                    result = CodexCliAdapter().execute_prepared_worktree({
+                        "prompt": "test prompt", "worktree_path": str(root),
+                        "work_dir": work_dir, "repository_profile": profile,
+                        **payload_overrides,
+                    })
+                    return result, list(codex.call_args_list)
+
+        cases = (
+            ({}, None, None, "gpt-5.5", "default", "low", "default"),
+            ({}, "profile-model", "high", "profile-model", "repository_profile", "high", "repository_profile"),
+            ({"declared_category": "docs_only"}, "profile-model", "high", "gpt-5.5", "category", "low", "category"),
+            ({"declared_category": "runtime_fix_high_risk"}, None, None, "gpt-5.6", "category", "medium", "category"),
+            ({"declared_category": "runtime_fix_high_risk", "model": "task-model", "model_reasoning_effort": "xhigh"}, "profile-model", "low", "task-model", "task", "xhigh", "task"),
+            ({"declared_category": "docs_only", "model": "task-model"}, "profile-model", "high", "task-model", "task", "low", "category"),
+        )
+        for payload, profile_model, profile_effort, model, model_source, effort, effort_source in cases:
+            with self.subTest(payload=payload):
+                result, calls = run_case(
+                    payload,
+                    model=profile_model,
+                    model_reasoning_effort=profile_effort,
+                )
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(calls[0].kwargs["model"], model)
+                self.assertEqual(calls[0].kwargs["model_reasoning_effort"], effort)
+                evidence = result["validation_attempts"][0]
+                self.assertEqual(
+                    {key: evidence[key] for key in (
+                        "model", "model_source", "model_reasoning_effort",
+                        "model_reasoning_effort_source",
+                    )},
+                    {
+                        "model": model,
+                        "model_source": model_source,
+                        "model_reasoning_effort": effort,
+                        "model_reasoning_effort_source": effort_source,
+                    },
+                )
+
+    def test_codex_execution_profile_invalid_inputs_do_not_run_codex(self) -> None:
+        with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
+            root = Path(raw)
+            _prepared_git_directory(root)
+            profile = _safe_adapter_profile(root)
+            for payload, reason in (
+                ({"declared_category": "unknown_category"}, "codex_execution.category.invalid"),
+                ({"model": ""}, "codex_execution.model.invalid"),
+                ({"model_reasoning_effort": "none"}, "codex_execution.model_reasoning_effort.invalid"),
+                ({"model_reasoning_effort": "invalid"}, "codex_execution.model_reasoning_effort.invalid"),
+            ):
+                with self.subTest(payload=payload), mock.patch(
+                    "adapters.codex_cli.run_codex",
+                ) as codex:
+                    result = CodexCliAdapter().execute_prepared_worktree({
+                        "prompt": "test prompt", "worktree_path": str(root),
+                        "work_dir": work_dir, "repository_profile": profile,
+                        **payload,
+                    })
+                self.assertEqual(result["error"], reason)
+                codex.assert_not_called()
+
+    def test_codex_execution_profile_is_fixed_for_timeout_retry_and_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
+            root = Path(raw)
+            _prepared_git_directory(root)
+            profile = _safe_adapter_profile(root)
+            timed_out = {
+                "status": "timed_out", "return_code": None, "started_at": "a",
+                "finished_at": "b", "artifacts": [], "error": "timeout",
+            }
+            completed = {
+                "status": "completed", "return_code": 0, "started_at": "a",
+                "finished_at": "b", "artifacts": [], "error": "",
+            }
+            payload = {
+                "prompt": "test prompt", "worktree_path": str(root), "work_dir": work_dir,
+                "repository_profile": profile, "declared_category": "runtime_fix_high_risk",
+            }
+            with mock.patch(
+                "adapters.codex_cli.run_codex", side_effect=[timed_out, completed],
+            ) as codex, mock.patch(
+                "adapters.codex_cli.execute_repository_validation",
+                return_value=_safe_execution_result("passed"),
+            ):
+                timeout_result = CodexCliAdapter().execute_prepared_worktree(payload)
+            self.assertEqual(timeout_result["status"], "completed")
+            self.assertEqual(len(codex.call_args_list), 2)
+            self.assertEqual(
+                [
+                    (call.kwargs["model"], call.kwargs["model_reasoning_effort"])
+                    for call in codex.call_args_list
+                ],
+                [("gpt-5.6", "medium"), ("gpt-5.6", "medium")],
+            )
+
+            with mock.patch(
+                "adapters.codex_cli.run_codex", side_effect=[completed, completed],
+            ) as codex, mock.patch(
+                "adapters.codex_cli.execute_repository_validation",
+                side_effect=[_safe_execution_result("failed"), _safe_execution_result("passed")],
+            ):
+                repair_result = CodexCliAdapter().execute_prepared_worktree(payload)
+            self.assertEqual([item["phase"] for item in repair_result["validation_attempts"]], ["initial", "repair"])
+            self.assertEqual(len(codex.call_args_list), 2)
+            for call in codex.call_args_list:
+                self.assertEqual(call.kwargs["model"], "gpt-5.6")
+                self.assertEqual(call.kwargs["model_reasoning_effort"], "medium")
+            for evidence in repair_result["validation_attempts"]:
+                self.assertEqual(evidence["model_source"], "category")
+                self.assertEqual(evidence["model_reasoning_effort_source"], "category")
+
+    def test_execute_transports_explicit_profile_fields_to_prepared_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as raw, tempfile.TemporaryDirectory() as work_dir:
+            root = Path(raw)
+            _prepared_git_directory(root)
+            payload = _adapter_payload(root, work_dir)
+            payload["repository_profile"] = replace(
+                payload["repository_profile"],
+                model="repository-model",
+                model_reasoning_effort="medium",
+            )
+            payload.update({
+                "declared_category": "docs_only",
+                "model": "task-model",
+                "model_reasoning_effort": "high",
+            })
+            prepared_result = {
+                "adapter": "codex_cli", "status": "completed", "started_at": "a",
+                "finished_at": "b", "artifacts": [], "error": None, "return_code": 0,
+            }
+            with mock.patch(
+                "adapters.codex_cli.prepare_git_worktree",
+                return_value={
+                    "created": True, "cleanup_needed": False,
+                    "worktree_path": str(root), "branch_name": "branch", "error": "",
+                },
+            ), mock.patch.object(
+                CodexCliAdapter,
+                "execute_prepared_worktree",
+                return_value=prepared_result,
+            ) as prepared:
+                result = CodexCliAdapter().execute(payload)
+        self.assertEqual(result, prepared_result)
+        prepared_payload = prepared.call_args.args[0]
+        self.assertEqual(prepared_payload["declared_category"], "docs_only")
+        self.assertEqual(prepared_payload["model"], "task-model")
+        self.assertEqual(prepared_payload["model_reasoning_effort"], "high")
+        self.assertEqual(prepared_payload["repository_profile"].model, "repository-model")
+        self.assertEqual(
+            prepared_payload["repository_profile"].model_reasoning_effort,
+            "medium",
+        )
+
+    def test_execution_profile_end_to_end_acceptance(self) -> None:
+        """Exercise category resolution through the real stdin command path.
+
+        Only the Codex binary and safe-validation process boundaries are faked;
+        policy loading, profile resolution, run_codex transport, command building,
+        and execution-artifact persistence remain production code.
+        """
+        prompt = "E2E-PROFILE-PROMPT-9df1"
+        original_subprocess_run = subprocess.run
+
+        def run_case(
+            payload_overrides: dict[str, object],
+            *,
+            profile_model: str | None = None,
+            profile_effort: str | None = None,
+            validation_results: list[ValidationExecutionResult] | None = None,
+            timeout_first: bool = False,
+        ) -> tuple[dict, list[tuple[list[str], str]], list[Path]]:
+            calls: list[tuple[list[str], str]] = []
+
+            def transport(command, **kwargs):
+                if "input" not in kwargs:
+                    return original_subprocess_run(command, **kwargs)
+                calls.append((list(command), kwargs["input"]))
+                if timeout_first and len(calls) == 1:
+                    raise subprocess.TimeoutExpired(command, kwargs["timeout"], output="", stderr="")
+                return subprocess.CompletedProcess(command, 0, kwargs["input"], kwargs["input"])
+
+            with tempfile.TemporaryDirectory(dir="/tmp") as raw, tempfile.TemporaryDirectory(dir="/tmp") as work_dir:
+                root = Path(raw)
+                (root / ".git").mkdir()
+                profile = _safe_adapter_profile(root)
+                profile = replace(
+                    profile,
+                    model=profile_model,
+                    model_reasoning_effort=profile_effort,
+                )
+                payload = {
+                    "prompt": prompt,
+                    "worktree_path": str(root),
+                    "work_dir": work_dir,
+                    "repository_profile": profile,
+                    **payload_overrides,
+                }
+                validation = validation_results or [_safe_execution_result("passed")]
+                with mock.patch("run_codex.shutil.which", return_value="/fake/codex"), mock.patch(
+                    "run_codex.subprocess.run", side_effect=transport,
+                ), mock.patch(
+                    "adapters.codex_cli.execute_repository_validation",
+                    side_effect=validation,
+                ):
+                    result = CodexCliAdapter().execute_prepared_worktree(payload)
+                run_root = Path(work_dir) / "execution_runs"
+                artifacts = sorted(run_root.iterdir()) if run_root.exists() else []
+                artifact_snapshots = [
+                    (
+                        run_dir / "stdout.txt",
+                        run_dir / "stderr.txt",
+                        run_dir / "meta.json",
+                        run_dir / "prompt.txt",
+                    )
+                    for run_dir in artifacts
+                ]
+                copied_artifacts: list[Path] = []
+                for stdout_path, stderr_path, meta_path, prompt_path in artifact_snapshots:
+                    self.assertFalse(prompt_path.exists())
+                    for path in (stdout_path, stderr_path, meta_path):
+                        self.assertNotIn(prompt, path.read_text(encoding="utf-8"))
+                    copied_artifacts.append(meta_path)
+                return result, calls, copied_artifacts
+
+        def assert_command_profile(command: list[str], model: str, effort: str) -> None:
+            self.assertEqual(command[:2], ["codex", "exec"])
+            self.assertEqual(command[-1], "-")
+            self.assertNotIn(prompt, command)
+            self.assertEqual(command[command.index("-m") + 1], model)
+            self.assertIn(f'model_reasoning_effort="{effort}"', command)
+
+        category_result, category_calls, category_artifacts = run_case({"declared_category": "docs_only"})
+        self.assertEqual(len(category_calls), 1)
+        category_command, category_stdin = category_calls[0]
+        assert_command_profile(category_command, "gpt-5.5", "low")
+        self.assertIn(prompt, category_stdin)
+        self.assertEqual(len(category_artifacts), 1)
+        category_evidence = category_result["validation_attempts"][0]
+        self.assertEqual(
+            {key: category_evidence[key] for key in (
+                "model", "model_source", "model_reasoning_effort", "model_reasoning_effort_source",
+            )},
+            {
+                "model": "gpt-5.5",
+                "model_source": "category",
+                "model_reasoning_effort": "low",
+                "model_reasoning_effort_source": "category",
+            },
+        )
+
+        field_result, field_calls, _ = run_case(
+            {"declared_category": "docs_only", "model": "task-model"},
+            profile_model="repo-model",
+            profile_effort="high",
+        )
+        assert_command_profile(field_calls[0][0], "task-model", "low")
+        field_evidence = field_result["validation_attempts"][0]
+        self.assertEqual(field_evidence["model_source"], "task")
+        self.assertEqual(field_evidence["model_reasoning_effort_source"], "category")
+
+        repository_result, repository_calls, _ = run_case(
+            {}, profile_model="repo-model", profile_effort="high",
+        )
+        assert_command_profile(repository_calls[0][0], "repo-model", "high")
+        repository_evidence = repository_result["validation_attempts"][0]
+        self.assertEqual(repository_evidence["model_source"], "repository_profile")
+        self.assertEqual(repository_evidence["model_reasoning_effort_source"], "repository_profile")
+
+        default_result, default_calls, _ = run_case({})
+        assert_command_profile(default_calls[0][0], "gpt-5.5", "low")
+        default_evidence = default_result["validation_attempts"][0]
+        self.assertEqual(default_evidence["model_source"], "default")
+        self.assertEqual(default_evidence["model_reasoning_effort_source"], "default")
+
+        timeout_result, timeout_calls, _ = run_case(
+            {"declared_category": "runtime_fix_high_risk"}, timeout_first=True,
+        )
+        self.assertEqual(timeout_result["status"], "completed")
+        self.assertEqual(len(timeout_calls), 2)
+        for command, stdin in timeout_calls:
+            assert_command_profile(command, "gpt-5.6", "medium")
+            self.assertIn(prompt, stdin)
+
+        repair_result, repair_calls, _ = run_case(
+            {"declared_category": "runtime_fix_high_risk"},
+            validation_results=[_safe_execution_result("failed"), _safe_execution_result("passed")],
+        )
+        self.assertEqual([entry["phase"] for entry in repair_result["validation_attempts"]], ["initial", "repair"])
+        self.assertEqual(len(repair_calls), 2)
+        for command, _ in repair_calls:
+            assert_command_profile(command, "gpt-5.6", "medium")
+
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw, tempfile.TemporaryDirectory(dir="/tmp") as work_dir:
+            root = Path(raw)
+            (root / ".git").mkdir()
+            with mock.patch("adapters.codex_cli.run_codex") as run_codex_mock:
+                invalid_result = CodexCliAdapter().execute_prepared_worktree({
+                    "prompt": prompt,
+                    "worktree_path": str(root),
+                    "work_dir": work_dir,
+                    "repository_profile": _safe_adapter_profile(root),
+                    "declared_category": "unsupported_category",
+                })
+        self.assertEqual(invalid_result["status"], "failed")
+        self.assertEqual(invalid_result["error"], "codex_execution.category.invalid")
+        run_codex_mock.assert_not_called()
+
     def test_stub_adapters_do_not_execute(self) -> None:
         with self.assertRaises(NotImplementedError):
             ChatgptTasksAdapter().execute({})
@@ -1123,7 +1752,7 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
                     "artifacts": [],
                     "error": "simulated execution failure",
                 },
-            ):
+            ) as execute_mock:
                 with mock.patch(
                     "sys.argv",
                     [
@@ -1132,6 +1761,8 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
                         "codex-local-runner",
                         "--task-type",
                         "orchestration",
+                        "--declared-category",
+                        "docs_only",
                         "--goal",
                         "verify semantics",
                         "--provider",
@@ -1143,6 +1774,7 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
                     rc = orchestrator_main.main()
 
             result = self._read_single_result(output_root)
+            request_payload = self._read_single_request(output_root)
             output_dir = self._single_output_dir(output_root)
             rubric = json.loads((output_dir / "rubric.json").read_text(encoding="utf-8"))
             merge_gate = json.loads((output_dir / "merge_gate.json").read_text(encoding="utf-8"))
@@ -1150,6 +1782,8 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(result["status"], "accepted")
         self.assertEqual(result["execution"]["status"], "failed")
+        self.assertEqual(request_payload["declared_category"], "docs_only")
+        self.assertEqual(execute_mock.call_args.args[0]["declared_category"], "docs_only")
         self.assertEqual(
             set(result["persistence"].keys()),
             {"evaluation_artifacts", "ledger", "execution_target", "merge_execution", "merge_receipt"},

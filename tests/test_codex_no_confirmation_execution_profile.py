@@ -101,6 +101,45 @@ class CodexNoConfirmationExecutionProfileTests(unittest.TestCase):
         self.assertTrue(profile["stdin_prompt_mode_supported"])
         self.assertTrue(profile["output_capture_supported"])
 
+    def test_model_profile_flags_preserve_no_confirmation_command_contract(self):
+        baseline = [
+            "codex", "exec", "--sandbox", NO_CONFIRMATION_SANDBOX,
+            "--config", NO_CONFIRMATION_APPROVAL_CONFIG, "-",
+        ]
+        self.assertEqual(build_no_confirmation_codex_command(), baseline)
+        command = build_no_confirmation_codex_command(
+            model="gpt-5.6",
+            model_reasoning_effort="high",
+        )
+        self.assertEqual(command[:2], ["codex", "exec"])
+        self.assertEqual(command[-1], "-")
+        self.assertEqual(command[command.index("--sandbox") + 1], NO_CONFIRMATION_SANDBOX)
+        self.assertEqual(command[command.index("--config") + 1], NO_CONFIRMATION_APPROVAL_CONFIG)
+        self.assertEqual(command[command.index("-m") + 1], "gpt-5.6")
+        self.assertIn('model_reasoning_effort="high"', command)
+        self.assertEqual(validate_no_confirmation_codex_command(command), [])
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            profile = build_no_confirmation_execution_profile(
+                run_id="profile-flags",
+                prompt_source="stdin",
+                output_dir=raw,
+                model="gpt-5.6",
+                model_reasoning_effort="high",
+            )
+        self.assertEqual(profile["command"], command)
+        self.assertEqual(profile["effective_command_shape"], " ".join(command))
+        self.assertTrue(profile["stdin_prompt_mode_supported"])
+
+    def test_model_profile_rejects_invalid_values(self):
+        for kwargs in (
+            {"model": ""},
+            {"model_reasoning_effort": ""},
+            {"model_reasoning_effort": "none"},
+            {"model_reasoning_effort": "invalid"},
+        ):
+            with self.assertRaises(ValueError):
+                build_no_confirmation_codex_command(**kwargs)
+
     def test_command_validation_rejects_yolo_danger_and_bypass_flags(self):
         command = build_no_confirmation_codex_command()
         self.assertEqual(validate_no_confirmation_codex_command(command), [])

@@ -18,6 +18,9 @@ def run_codex(
     timeout_seconds: object | None = None,
     persist_prompt: bool = True,
     return_transient_stdout: bool = False,
+    model: str | None = None,
+    model_reasoning_effort: str | None = None,
+    emit_json: bool = False,
 ) -> RunCodexResult:
     configured_timeout = timeout_seconds
     if configured_timeout is None and "execution_timeout_seconds" in task:
@@ -34,4 +37,7 @@ def run_codex(
         timeout_seconds=configured_timeout,
         persist_prompt=persist_prompt,
         return_transient_stdout=return_transient_stdout,
+        model=model,
+        model_reasoning_effort=model_reasoning_effort,
+        emit_json=emit_json,
     )

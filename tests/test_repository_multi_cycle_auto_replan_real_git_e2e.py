@@ -73,7 +73,9 @@ class FixtureAdapter:
             (root / "predecessor.txt").write_text("B\n", encoding="utf-8")
         elif prompt == "make successor":
             (root / "successor.txt").write_text("C\n", encoding="utf-8")
-        elif prompt == "force rework" or prompt.startswith("Mode: Repair\n"):
+        elif prompt == "force rework":
+            (root / "successor.txt").write_text("needs rework\n", encoding="utf-8")
+        elif prompt.startswith("Mode: Repair\n"):
             pass
         else:
             raise AssertionError(f"unexpected task prompt: {prompt!r}")
@@ -145,7 +147,7 @@ def test_real_git_r6_auto_replan_launches_one_r5_continued_successor() -> None:
             {
                 "command_id": kind,
                 "kind": kind,
-                "argv": [PYTHON, "-m", "py_compile", "base.txt"],
+                    "argv": ["git", "diff", "--check"],
                 "cwd": ".",
                 "timeout_seconds": 30,
                 "required": True,
@@ -283,6 +285,27 @@ def test_real_git_r6_auto_replan_launches_one_r5_continued_successor() -> None:
             value for value in child_receipts if value["task_id"] == "failed-task"
         )
         assert failed_child["reason_code"] == "single_task.task_completion.rework_exhausted"
+        assert failed_child["actual_changed_files"] == ["successor.txt"]
+        assert failed_child["declared_allowed_changed_paths"] == ["successor.txt"]
+        assert failed_child["original_unexpected_changed_files"] == []
+        assert failed_child["effective_allowed_changed_paths"] == ["successor.txt"]
+        assert failed_child["auto_expanded_paths"] == []
+        assert failed_child["scope_recovery_status"] == "not_needed"
+        failed_attempts = json.loads(
+            Path(failed_child["artifact_paths"]["task_completion_attempts"]).read_text(
+                encoding="utf-8"
+            )
+        )["attempts"]
+        assert [attempt["status"] for attempt in failed_attempts] == [
+            "needs_rework",
+            "needs_rework",
+            "needs_rework",
+        ]
+        assert [attempt["rework_attempted"] for attempt in failed_attempts] == [
+            True,
+            True,
+            False,
+        ]
         b = predecessor.accepted_head_sha
         assert b is not None and b != a, (
             predecessor_receipt,
