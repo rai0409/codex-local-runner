@@ -37,7 +37,7 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
         self.assertEqual(result.scope_recovery_status, "not_needed")
         self.assertEqual(result.effective_allowed_changed_paths, ("src/feature.py",))
 
-    def test_real_topix_drift_auto_expands_only_migration_and_task_test(self):
+    def test_real_topix_drift_keeps_declared_scope_and_marks_all_drift_for_trimming(self):
         declared = (
             "alembic/versions/20260823_0008_edinet_fetch_attempt_ledger.py",
             "packages/common/tests/test_existing_ledger.py",
@@ -49,11 +49,8 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
         )
         result = self._recover(declared, actual)
         self.assertEqual(result.scope_recovery_status, "trim_required")
-        self.assertEqual(result.auto_expanded_paths, (
-            "alembic/versions/20260824_0008_edinet_fetch_attempt_ledger.py",
-            "packages/common/tests/test_edinet_fetch_attempt_ledger.py",
-        ))
-        self.assertEqual(result.unresolved_unexpected_changed_files, ("docs/disclosure_gold_readiness.md",))
+        self.assertEqual(result.auto_expanded_paths, ())
+        self.assertEqual(result.unresolved_unexpected_changed_files, tuple(sorted(actual)))
         self.assertNotIn("docs/disclosure_gold_readiness.md", result.effective_allowed_changed_paths)
         self.assertEqual(result.declared_allowed_changed_paths, tuple(sorted(declared)))
 
@@ -69,8 +66,9 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
         )
         result = self._recover(declared, actual, task_id="edinet-fetch-attempt-artifact-retention")
         self.assertEqual(result.scope_recovery_status, "trim_required")
-        self.assertEqual(result.auto_expanded_paths, ("alembic/versions/20260825_0009_edinet_fetch_attempt_artifacts.py",))
+        self.assertEqual(result.auto_expanded_paths, ())
         self.assertEqual(result.unresolved_unexpected_changed_files, (
+            "alembic/versions/20260825_0009_edinet_fetch_attempt_artifacts.py",
             "packages/common/src/common/db/models/__init__.py",
             "packages/common/tests/test_metadata.py",
         ))
@@ -112,7 +110,7 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
                 )
                 self.assertEqual(result.scope_recovery_status, "blocked")
 
-    def test_symlink_escape_and_more_than_three_auto_expansions_are_blocked(self):
+    def test_symlink_escape_is_blocked_and_generated_name_count_never_expands_scope(self):
         outside = self.root.parent / "outside.py"
         outside.write_text("x\n", encoding="utf-8")
         link = self.root / "packages/common/tests/test_edinet_fetch_attempt_ledger.py"
@@ -128,7 +126,7 @@ class ChangedPathScopeRecoveryTests(unittest.TestCase):
         actual = tuple(f"alembic/versions/20260824_{number:04d}_task_{number}.py" for number in range(4))
         result = self._recover(declared, actual, task_id="task")
         self.assertEqual(MAX_SAFE_SCOPE_AUTO_EXPANSIONS, 3)
-        self.assertEqual(result.scope_recovery_status, "blocked")
+        self.assertEqual(result.scope_recovery_status, "trim_required")
         self.assertEqual(result.auto_expanded_paths, ())
 
 

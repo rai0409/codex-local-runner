@@ -128,6 +128,23 @@ class SafeValidationAdapterIntegrationTests(unittest.TestCase):
         self.assertEqual(result["attempt_count"], 2); self.assertEqual(result["retry"]["outcome"], "retry_succeeded")
         self.assertEqual(result["repair"], {"attempted": True, "max_attempts": 2, "attempts_used": 1, "outcome": "repair_succeeded"})
         self.assertEqual(result["verify"]["status"], "passed")
+
+    def test_controller_managed_validation_defers_validation_and_never_uses_adapter_retry(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); _git_worktree(root); profile = _profile(root)
+            execution = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
+            payload = {
+                "prompt": "original task", "worktree_path": str(root), "work_dir": str(root),
+                "repository_profile": profile, "controller_managed_validation": True,
+            }
+            with mock.patch("adapters.codex_cli.run_codex", return_value=execution) as codex, mock.patch("adapters.codex_cli.execute_repository_validation") as validation:
+                result = adapter.execute_prepared_worktree(payload)
+        codex.assert_called_once()
+        validation.assert_not_called()
+        self.assertTrue(result["validation_deferred"])
+        self.assertEqual(result["retry"], {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"})
+        self.assertEqual(result["repair"]["outcome"], "not_attempted")
     def test_mismatch_and_nonautomatic_preflight_do_not_start_codex(self) -> None:
         adapter = CodexCliAdapter()
         with tempfile.TemporaryDirectory() as raw:

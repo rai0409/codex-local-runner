@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict, dataclass
+import re
 from typing import Any
 
 
@@ -9,6 +11,31 @@ MAX_VALIDATION_REPAIR_ATTEMPTS = 2
 MAX_REPAIR_STREAM_CHARS = 4000
 MAX_REPAIR_PROMPT_CHARS = 20000
 _ACTIONABLE_STATUSES = frozenset(("failed", "timed_out", "spawn_failed"))
+_TEST_IDENTIFIER = re.compile(r"(?m)^FAILED\s+([^\s]+)")
+
+
+@dataclass(frozen=True)
+class ValidationFailureClassification:
+    """Bounded, machine-readable interpretation of Safe Validation evidence."""
+
+    failure_class: str
+    auto_repairable: bool
+    retryable: bool
+    failed_command_ids: tuple[str, ...]
+    failed_test_identifiers: tuple[str, ...]
+    scope_extension_required: bool
+    evidence_refs: tuple[str, ...]
+
+
+def validation_failure_classification_to_mapping(
+    value: ValidationFailureClassification,
+) -> dict[str, Any]:
+    if not isinstance(value, ValidationFailureClassification):
+        raise TypeError("value must be ValidationFailureClassification")
+    result = asdict(value)
+    for key in ("failed_command_ids", "failed_test_identifiers", "evidence_refs"):
+        result[key] = list(result[key])
+    return result
 
 
 def _tail(value: str, limit: int = MAX_REPAIR_STREAM_CHARS) -> str:
@@ -48,11 +75,87 @@ def extract_actionable_failure(safe_validation: Mapping[str, Any] | Any) -> dict
     return None
 
 
+def _failed_test_identifiers(command_results: Sequence[Any]) -> tuple[str, ...]:
+    """Extract a small conventional pytest identifier set only when available."""
+    values: list[str] = []
+    for result in command_results:
+        if not isinstance(result, Mapping):
+            continue
+        for stream in (result.get("stdout"), result.get("stderr")):
+            if not isinstance(stream, str):
+                continue
+            for match in _TEST_IDENTIFIER.finditer(_tail(stream)):
+                identifier = match.group(1)
+                if len(identifier) <= 512 and identifier not in values:
+                    values.append(identifier)
+                    if len(values) == 20:
+                        return tuple(values)
+    return tuple(values)
+
+
+def classify_validation_failure(
+    safe_validation: Mapping[str, Any] | Any,
+) -> ValidationFailureClassification:
+    """Classify Safe Validation result metadata without public exception text.
+
+    Command kind and argv are authoritative.  Output is consulted only for the
+    optional, bounded pytest identifiers where the executor has no structured
+    test-result field.
+    """
+    if not isinstance(safe_validation, Mapping):
+        return ValidationFailureClassification("unknown", False, False, (), (), False, ())
+    command_results = safe_validation.get("command_results")
+    if not isinstance(command_results, Sequence) or isinstance(command_results, (str, bytes, bytearray)):
+        return ValidationFailureClassification("unknown", False, False, (), (), False, ())
+    failed = [
+        result for result in command_results
+        if isinstance(result, Mapping) and result.get("status") in _ACTIONABLE_STATUSES
+    ]
+    command_ids = tuple(
+        result["command_id"] for result in failed
+        if isinstance(result.get("command_id"), str) and result["command_id"]
+    )
+    if not failed or len(command_ids) != len(failed):
+        return ValidationFailureClassification("unknown", False, False, command_ids, (), False, tuple(f"validation.command:{item}" for item in command_ids))
+    first = failed[0]
+    status = first.get("status")
+    kind = first.get("kind")
+    argv = first.get("argv")
+    argv_text = " ".join(item for item in argv if isinstance(item, str)).casefold() if isinstance(argv, Sequence) and not isinstance(argv, (str, bytes, bytearray)) else ""
+    kind_text = kind.casefold() if isinstance(kind, str) else ""
+    evidence_refs = tuple(f"validation.command:{item}" for item in command_ids)
+    if status == "timed_out":
+        return ValidationFailureClassification("timeout", False, True, command_ids, (), False, evidence_refs)
+    if status == "spawn_failed":
+        return ValidationFailureClassification("infrastructure_failure", False, True, command_ids, (), False, evidence_refs)
+    if "scope" in kind_text:
+        return ValidationFailureClassification("scope_failure", False, False, command_ids, (), True, evidence_refs)
+    if "compile" in kind_text or "py_compile" in argv_text:
+        category = "compile_failure"
+    elif "migration" in kind_text or "alembic" in argv_text or "migration" in argv_text:
+        category = "migration_failure"
+    elif "contract" in kind_text or "contract" in argv_text:
+        category = "contract_failure"
+    elif "import" in kind_text or re.search(r"\bimport\b", argv_text):
+        category = "import_failure"
+    elif kind_text in {"focused", "related_regression", "full"} or "pytest" in argv_text or "test" in kind_text:
+        category = "test_failure"
+    else:
+        category = "unknown"
+    repairable = category in {"test_failure", "compile_failure", "import_failure", "migration_failure", "contract_failure"}
+    identifiers = _failed_test_identifiers(failed) if category == "test_failure" else ()
+    return ValidationFailureClassification(category, repairable, False, command_ids, identifiers, False, evidence_refs)
+
+
 def build_repair_prompt(
     original_prompt: str,
     repair_attempt_number: int,
     failure: Mapping[str, Any],
     allowed_changed_paths: Sequence[str] | None = None,
+    *,
+    classification: ValidationFailureClassification | None = None,
+    current_changed_paths: Sequence[str] | None = None,
+    remaining_repair_budget: int | None = None,
 ) -> str:
     """Build a bounded, deterministic repair instruction without executing anything."""
     if not isinstance(original_prompt, str):
@@ -70,15 +173,31 @@ def build_repair_prompt(
     if not all(isinstance(path, str) for path in paths):
         raise ValueError("allowed_changed_paths must contain strings")
     scope = "\n".join(f"- {path}" for path in paths) if paths else "No allowed_changed_paths were supplied."
-    safety = """Continue from the CURRENT prepared worktree. Inspect and preserve valid existing task changes. Fix the root cause represented by the validation failure and remain within the original task objective. Do not weaken validation merely to obtain a green result. Do not delete, skip, xfail, or broadly relax tests just to pass. Do not modify Repository Profile validation commands to bypass failure. Do not stage files; do not commit; do not switch, create, or delete branches; do not reset; do not restore unrelated changes; do not clean; do not stash; do not push; do not create a PR; do not merge; do not tag; do not release; do not deploy."""
+    changed = tuple(current_changed_paths or ())
+    if not all(isinstance(path, str) for path in changed):
+        raise ValueError("current_changed_paths must contain strings")
+    if remaining_repair_budget is not None and (isinstance(remaining_repair_budget, bool) or not isinstance(remaining_repair_budget, int) or remaining_repair_budget < 0):
+        raise ValueError("remaining_repair_budget must be a nonnegative integer")
+    classification_mapping = validation_failure_classification_to_mapping(classification) if classification is not None else {}
+    classified = "\n".join(f"- {key}: {value}" for key, value in classification_mapping.items()) or "- unavailable"
+    changed_scope = "\n".join(f"- {path}" for path in changed) or "- no changed paths recorded"
+    safety = """Continue from the CURRENT prepared worktree and retain its existing diff; do not restart or reimplement the task. Repair only the demonstrated validation failure, preserve already-correct behavior, and remain inside effective_allowed_changed_paths. Do not edit the source repository directly. Do not redesign the task. Do not weaken validation merely to obtain a green result. Do not delete, skip, xfail, or broadly relax tests just to pass. Do not modify Repository Profile validation commands to bypass failure. Do not stage files; do not commit; do not switch, create, or delete branches; do not reset; do not revert unrelated valid changes; do not clean; do not stash; do not push; do not create a PR; do not merge; do not tag; do not release; do not deploy."""
     prefix = f"""Autonomous validation repair attempt {repair_attempt_number} of {MAX_VALIDATION_REPAIR_ATTEMPTS}.
 
 Original task objective:
 """
     details = f"""
 
-Allowed changed paths (modify only these when supplied):
+Effective allowed changed paths (modify only these):
 {scope}
+
+Current changed paths:
+{changed_scope}
+
+Failure classification:
+{classified}
+
+Remaining repair budget after this attempt: {remaining_repair_budget if remaining_repair_budget is not None else "unknown"}
 
 Safe Validation failure:
 - command_id: {failure["command_id"]}
@@ -105,5 +224,6 @@ Bounded stdout tail:
 
 __all__ = [
     "MAX_REPAIR_PROMPT_CHARS", "MAX_REPAIR_STREAM_CHARS", "MAX_VALIDATION_REPAIR_ATTEMPTS",
-    "build_repair_prompt", "extract_actionable_failure",
+    "ValidationFailureClassification", "build_repair_prompt", "classify_validation_failure",
+    "extract_actionable_failure", "validation_failure_classification_to_mapping",
 ]

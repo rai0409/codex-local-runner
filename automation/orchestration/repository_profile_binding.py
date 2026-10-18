@@ -89,6 +89,7 @@ def bind_repository_profile_to_worktree(
         "validation_commands": commands, "artifact_requirements": artifacts,
         "forbidden_git_operations": list(source.forbidden_git_operations),
         "max_changed_files": source.max_changed_files,
+        "min_repair_headroom": source.min_repair_headroom,
         "approval_boundary": asdict(source.approval_boundary),
         "environment_allowlist": list(source.environment_allowlist),
         **({field: getattr(source, field) for field in ("execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds") if getattr(source, field) is not None})})

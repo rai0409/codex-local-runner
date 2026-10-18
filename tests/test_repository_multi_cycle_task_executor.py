@@ -2,9 +2,10 @@ from __future__ import annotations
 import hashlib, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
-from automation.orchestration.repository_multi_cycle_task_executor import _child_run_id, _discover_verified_continuation_base, _runtime_single_task_spec, run_repository_multi_cycle
+from automation.orchestration.repository_multi_cycle_task_executor import _child_run_id, _discover_verified_continuation_base, _load_verified_terminal_resume_seed, _runtime_single_task_spec, run_repository_multi_cycle
 from automation.orchestration.repository_multi_cycle_state import load_latest_checkpoint, write_checkpoint
 from automation.orchestration.repository_multi_cycle_status import read_verified_terminal_receipt
+from automation.orchestration.repository_multi_cycle_evidence import CycleEvidenceKind, classify_cycle_evidence
 from automation.orchestration.repository_multi_cycle_supervisor import RepositoryMultiCycleSupervisor
 from automation.orchestration.repository_profile import APPROVAL_ACTIONS, FORBIDDEN_GIT_OPERATION_IDS
 from automation.orchestration.repository_resolved_single_task_controller import run_repository_single_task
@@ -43,6 +44,24 @@ class ScopeRecoveryAdapter:
   elif prompt=="two":
    assert (root/"one.txt").is_file(); (root/"two.txt").write_text("two\n",encoding="utf-8")
   else: raise AssertionError(prompt)
+  return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
+class ResumeScopeRecoveryAdapter(Adapter):
+ def execute_prepared_worktree(self,payload):
+  if payload["prompt"] != "two": return super().execute_prepared_worktree(payload)
+  self.prompts.append(payload["prompt"]); root=Path(payload["worktree_path"])
+  (root/"two.txt").write_text("two\n",encoding="utf-8")
+  (root/"resume-incidental.txt").write_text("incidental\n",encoding="utf-8")
+  return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
+class ValidationRepairAdapter:
+ name="codex_cli"
+ def __init__(self): self.repairs=0; self.prompts=[]
+ def execute_prepared_worktree(self,payload):
+  root=Path(payload["worktree_path"]); prompt=payload["prompt"]; self.prompts.append(prompt)
+  if prompt=="PROMPT_SECRET_ONE":
+   self.repairs+=1; (root/"one.py").write_text("REPAIRED = True\n")
+   return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"},"repair":{"attempted":True,"max_attempts":2,"attempts_used":1,"outcome":"repair_succeeded"},"validation_attempts":[{"attempt_number":1,"phase":"initial","execution_status":"completed","validation_status":"failed","validation_reason":"validation_failed","failure":{"command_id":"compile","kind":"compile","status":"failed","return_code":1,"reason_code":"safe_validation.command.failed","stdout_tail_sha256":"a"*64,"stderr_tail_sha256":"b"*64}}]}
+  elif prompt=="two":
+   assert (root/"one.py").is_file(); (root/"two.txt").write_text("two\n")
   return {"status":"completed","verify":{"status":"passed","reason":"validation_passed","safe_validation":{"status":"passed"}},"retry":{"attempted":False,"outcome":"not_attempted"}}
 class ExecutorTests(unittest.TestCase):
  def setUp(self):
@@ -87,10 +106,25 @@ class ExecutorTests(unittest.TestCase):
   self.assertEqual(first_child["unresolved_unexpected_changed_files"],[])
   self.assertEqual(git(self.source,"rev-parse",f"{second['commit_sha']}^").stdout.strip(),first["commit_sha"])
 
+ def test_repaired_child_receipt_is_accepted_and_next_task_continues(self):
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[
+   {"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.py"],"commit_message":"B"},
+   {"task_id":"two","prompt":"two","allowed_changed_paths":["two.txt"],"commit_message":"C"},
+  ]}))
+  adapter=ValidationRepairAdapter()
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:adapter,evaluator_runner=self.evaluator)
+  self.assertEqual((result.status,result.completed_count),("completed",2)); self.assertEqual(adapter.repairs,1,adapter.prompts)
+  receipt=json.loads(Path(result.receipt_path).read_text()); first,second=receipt["executed_task_results"]
+  child=json.loads(Path(first["child_receipt_path"]).read_text())
+  self.assertEqual(child["status"],"completed")
+  self.assertEqual(git(self.source,"rev-parse",f"{second['commit_sha']}^").stdout.strip(),first["commit_sha"])
+
  def test_cross_cycle_continuation_uses_real_git_chain_without_moving_source(self):
   q1=self.one_task_queue("one","PROMPT_SECRET_ONE"); q2=self.one_task_queue("two","two"); q3=self.one_task_queue("three","three")
   self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
   r1=run_repository_multi_cycle("repo",q1,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); b=r1.accepted_head_sha; self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),b,self.output),b)
+  historical=self.output/"cycle-20260827111111111110"; historical.mkdir(); queue_sha=hashlib.sha256(q1.read_bytes()).hexdigest(); historical_value={"schema_version":"1","cycle_run_id":historical.name,"status":"blocked","reason_code":"multi_cycle.continuation.evidence_invalid","repository_id":"repo","queue_spec_sha256":queue_sha,"source_anchor_sha":self.a,"continuation_base_sha":self.a,"final_accepted_head_sha":self.a,"pre_task_terminal":True,"task_count":1,"completed_count":0,"stopped_task_id":None,"executed_task_results":[]}; historical_payload=json.dumps(historical_value,sort_keys=True,separators=(",",":")).encode(); (historical/"receipt.json").write_bytes(historical_payload); (historical/"receipt.sha256").write_text(f"{hashlib.sha256(historical_payload).hexdigest()}  receipt.json\n")
+  historical_evidence=classify_cycle_evidence(historical,"repo",queue_sha,source_anchor=self.a); self.assertEqual(historical_evidence.evidence_kind,CycleEvidenceKind.PRE_TASK_NO_PROGRESS); self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
   r2=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); c=r2.accepted_head_sha
   r3=run_repository_multi_cycle("repo",q3,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator); d=r3.accepted_head_sha
   self.assertEqual(git(self.source,"rev-parse",f"{b}^").stdout.strip(),self.a); self.assertEqual(git(self.source,"rev-parse",f"{c}^").stdout.strip(),b); self.assertEqual(git(self.source,"rev-parse",f"{d}^").stdout.strip(),c)
@@ -101,6 +135,13 @@ class ExecutorTests(unittest.TestCase):
   queue_sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
   value={"schema_version":"1","cycle_run_id":legacy.name,"status":"blocked","reason_code":"multi_cycle.continuation.evidence_invalid","repository_id":"repo","queue_spec_sha256":queue_sha,"source_anchor_sha":self.a,"continuation_base_sha":self.a,"final_accepted_head_sha":None,"task_count":3,"completed_count":0,"stopped_task_id":None,"executed_task_results":[],"started_at":"2026-08-27T00:00:00Z","finished_at":"2026-08-27T00:00:01Z"}
   payload=json.dumps(value,ensure_ascii=True,sort_keys=True,separators=(",", ":")).encode(); (legacy/"receipt.json").write_bytes(payload); (legacy/"receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n")
+  current=self.output/"cycle-20260827111111111112"; current.mkdir()
+  current_value={**value,"cycle_run_id":current.name,"final_accepted_head_sha":self.a,"pre_task_terminal":True}
+  current_payload=json.dumps(current_value,ensure_ascii=True,sort_keys=True,separators=(",", ":")).encode(); (current/"receipt.json").write_bytes(current_payload); (current/"receipt.sha256").write_text(f"{hashlib.sha256(current_payload).hexdigest()}  receipt.json\n")
+  for directory in (legacy,current):
+   evidence=classify_cycle_evidence(directory,"repo",queue_sha,source_anchor=self.a)
+   self.assertEqual(evidence.evidence_kind,CycleEvidenceKind.PRE_TASK_NO_PROGRESS)
+   self.assertFalse(evidence.fresh_launch_suppressing); self.assertFalse(evidence.continuation_eligible)
   self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),self.a)
   result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
   self.assertEqual(result.status,"completed")
@@ -149,6 +190,18 @@ class ExecutorTests(unittest.TestCase):
   self.assertEqual((result.status,result.reason_code,result.accepted_head_sha),("blocked","multi_cycle.queue.allowed_paths_limit_exceeded",self.a)); self.assertEqual(calls,[])
   receipt=json.loads(Path(result.receipt_path).read_text())
   self.assertEqual(receipt["preflight_failure"],{"task_id":"oversized","allowed_changed_path_count":2,"profile_max_changed_files":1})
+
+ def test_queue_repair_headroom_preflight_checks_later_task_before_worker(self):
+  profile=json.loads(self.profile.read_text()); profile["max_changed_files"]=18; profile["min_repair_headroom"]=2; self.profile.write_text(json.dumps(profile))
+  self.queue.write_text(json.dumps({"schema_version":"1","tasks":[
+   {"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"},
+   {"task_id":"tight","prompt":"two","allowed_changed_paths":[f"src/{i}.py" for i in range(17)],"commit_message":"C"}
+  ]}))
+  calls=[]
+  result=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",single_task_runner=lambda **kwargs:calls.append(kwargs))
+  self.assertEqual((result.status,result.reason_code),("blocked","multi_cycle.queue.repair_headroom_insufficient")); self.assertEqual(calls,[])
+  receipt=json.loads(Path(result.receipt_path).read_text()); evidence=receipt["preflight_failure"]
+  self.assertEqual({key:evidence[key] for key in ("task_id","task_index","allowed_changed_path_count","profile_max_changed_files","min_repair_headroom","repair_headroom")},{"task_id":"tight","task_index":1,"allowed_changed_path_count":17,"profile_max_changed_files":18,"min_repair_headroom":2,"repair_headroom":1})
   self.assertIsNotNone(read_verified_terminal_receipt(self.output/result.cycle_run_id,"repo",hashlib.sha256(self.queue.read_bytes()).hexdigest()))
   self.output=self.base/"exact-output"; self.queue.write_text(json.dumps({"schema_version":"1","tasks":[{"task_id":"one","prompt":"PROMPT_SECRET_ONE","allowed_changed_paths":["one.txt"],"commit_message":"B"}]}))
   exact=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"exact-child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator)
@@ -184,15 +237,34 @@ class ExecutorTests(unittest.TestCase):
   b=first.accepted_head_sha
   blocked=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.blocked_evaluator)
   self.assertEqual((blocked.status,blocked.completed_count,blocked.accepted_head_sha),("blocked",0,b))
+  evidence=classify_cycle_evidence(self.output/blocked.cycle_run_id,"repo",hashlib.sha256(q2.read_bytes()).hexdigest(),source_root=str(self.source),source_anchor=self.a)
+  self.assertEqual(evidence.evidence_kind,CycleEvidenceKind.TASK_TERMINAL_RESUMABLE); self.assertTrue(evidence.terminal_resume_eligible); self.assertEqual(evidence.accepted_head_sha,b)
   before=(Path(blocked.receipt_path).read_bytes(), tuple(sorted((p.name,p.read_bytes()) for p in (self.output/blocked.cycle_run_id/"state").iterdir())))
   self.assertEqual(_discover_verified_continuation_base("repo",str(self.source),self.a,self.output),b)
-  resumed=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=blocked.cycle_run_id)
+  resumed_adapter=ResumeScopeRecoveryAdapter()
+  resumed=run_repository_multi_cycle("repo",q2,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:resumed_adapter,evaluator_runner=self.evaluator,terminal_resume_cycle_run_id=blocked.cycle_run_id)
   self.assertEqual(resumed.status,"completed"); self.assertNotEqual(resumed.cycle_run_id,blocked.cycle_run_id)
   self.assertEqual(git(self.source,"rev-parse",f"{resumed.accepted_head_sha}^").stdout.strip(),b)
   state,_=load_latest_checkpoint(self.output/resumed.cycle_run_id/"state")
   self.assertTrue(state["terminal_resume_requested"]); self.assertEqual(state["terminal_resume_predecessor_cycle_run_id"],blocked.cycle_run_id); self.assertEqual(state["terminal_resume_task_index"],0)
+  resumed_child=json.loads(Path(json.loads(Path(resumed.receipt_path).read_text())["executed_task_results"][0]["child_receipt_path"]).read_text())
+  self.assertEqual(resumed_child["scope_trimmed_paths"],["resume-incidental.txt"])
   self.assertEqual((Path(blocked.receipt_path).read_bytes(), tuple(sorted((p.name,p.read_bytes()) for p in (self.output/blocked.cycle_run_id/"state").iterdir()))),before)
   self.assertEqual(git(self.source,"rev-parse","HEAD").stdout.strip(),self.a)
+
+ def test_terminal_resume_seed_rejects_missing_or_mismatched_terminal_evidence(self):
+  blocked=run_repository_multi_cycle("repo",self.queue,registry_path=self.registry,bindings_path=self.bindings,output_root=self.output,single_task_output_root=self.base/"child",adapter_resolver=lambda:Adapter(),evaluator_runner=self.blocked_evaluator)
+  directory=self.output/blocked.cycle_run_id; state,_=load_latest_checkpoint(directory/"state"); original_state=dict(state); terminal=state["terminal_task_result"]; child_path=Path(terminal["child_receipt_path"]); child_payload=child_path.read_bytes(); child_sidecar=child_path.with_name("receipt.sha256").read_bytes(); queue=__import__("automation.orchestration.repository_multi_cycle_task_spec",fromlist=["load_repository_multi_cycle_task_spec"]).load_repository_multi_cycle_task_spec(self.queue); queue_sha=hashlib.sha256(self.queue.read_bytes()).hexdigest()
+  def seed(): return _load_verified_terminal_resume_seed(predecessor_cycle_run_id=blocked.cycle_run_id,repository_id="repo",queue_sha256=queue_sha,queue=queue,source_root=str(self.source),source_branch="main",source_anchor=self.a,cycle_output_root=self.output,single_task_output_root=self.base/"child")
+  def rejects():
+   with self.assertRaisesRegex(ValueError,"multi_cycle.terminal_resume.evidence_invalid"): seed()
+  self.assertEqual(seed(),(self.a,self.a,[]))
+  state_dir=directory/"state"; hidden=directory/"state-missing"; state_dir.rename(hidden); rejects(); hidden.rename(state_dir)
+  state=dict(original_state); state["terminal_task_result"]=None; write_checkpoint(state_dir,state); rejects(); write_checkpoint(state_dir,original_state)
+  child_path.with_name("receipt.sha256").write_text("0"*64+"  receipt.json\n"); rejects(); child_path.with_name("receipt.sha256").write_bytes(child_sidecar)
+  value=json.loads(child_payload); value["task_id"]="other"; payload=json.dumps(value,sort_keys=True,separators=(",",":")).encode(); child_path.write_bytes(payload); child_path.with_name("receipt.sha256").write_text(f"{hashlib.sha256(payload).hexdigest()}  receipt.json\n"); rejects(); child_path.write_bytes(child_payload); child_path.with_name("receipt.sha256").write_bytes(child_sidecar)
+  for field,value in (("child_run_id","run-wrong"),("task_spec_sha256","0"*64)):
+   state=dict(original_state); state["terminal_task_result"]=dict(terminal); state["terminal_task_result"][field]=value; write_checkpoint(state_dir,state); rejects()
 
  def test_terminal_resumes_only_first_unfinished_task_across_a_contiguous_four_task_prefix(self):
   queue=self.base/"four.json"; queue.write_text(json.dumps({"schema_version":"1","tasks":[

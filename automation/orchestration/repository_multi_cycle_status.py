@@ -121,7 +121,9 @@ def _empty_status(repository_id: str, queue_sha256: str) -> dict[str, Any]:
             "task_count": None, "completed_count": None, "current_task_index": None, "current_task_id": None,
             "phase": None, "last_activity_at": None, "terminal_status": None, "reason_code": None,
             "source_anchor_sha": None, "final_accepted_head_sha": None, "action_required": False,
-            "authoritative_source": "none"}
+            "authoritative_source": "none", "evidence_kind": None,
+            "continuation_eligible": False, "fresh_launch_suppressing": False,
+            "terminal_resume_eligible": False}
 
 
 def inspect_repository_multi_cycle_status(repository_id: str, queue_spec_path: str | os.PathLike[str], *, state_root: str | os.PathLike[str] = DEFAULT_SUPERVISOR_STATE_ROOT, cycle_output_root: str | os.PathLike[str] = DEFAULT_CYCLE_OUTPUT_ROOT, pid_exists: Callable[[Any], bool] = _pid_exists) -> dict[str, Any]:
@@ -149,24 +151,35 @@ def inspect_repository_multi_cycle_status(repository_id: str, queue_spec_path: s
                 status = candidate
         except RepositoryMultiCycleStatusError:
             status_error = "observation.status_invalid"
-    terminals: list[tuple[Path, dict[str, Any]]] = []
-    checkpoints: list[tuple[Path, dict[str, Any]]] = []
+    # Delayed import avoids a module cycle: the shared classifier consumes the
+    # receipt/checkpoint readers defined above, while this observer consumes its
+    # semantic result instead of recreating terminal meanings.
+    from automation.orchestration.repository_multi_cycle_evidence import CycleEvidenceKind, classify_cycle_evidence
+    terminals: list[tuple[Path, dict[str, Any], Any]] = []
+    checkpoints: list[tuple[Path, dict[str, Any], Any]] = []
     try:
         directories = sorted((item for item in cycle_root.iterdir() if item.is_dir() and item.name.startswith("cycle-")), key=lambda item: item.name) if cycle_root.exists() else []
         for directory in directories:
+            evidence = classify_cycle_evidence(directory, repository_id, queue_sha256)
+            if evidence is not None and evidence.evidence_kind == CycleEvidenceKind.INVALID:
+                raise RepositoryMultiCycleStatusError("observation.evidence_invalid")
+            if evidence is not None and evidence.evidence_kind == CycleEvidenceKind.PRE_TASK_NO_PROGRESS:
+                terminals.append((directory, _read_json(directory / "receipt.json"), evidence)); continue
             terminal = read_verified_terminal_receipt(directory, repository_id, queue_sha256)
             if terminal is not None:
-                terminals.append((directory, terminal)); continue
+                if evidence is None or evidence.evidence_kind == CycleEvidenceKind.INVALID:
+                    raise RepositoryMultiCycleStatusError("observation.evidence_invalid")
+                terminals.append((directory, terminal, evidence)); continue
             checkpoint = _read_latest_checkpoint_read_only(directory)
             if checkpoint is not None and checkpoint.get("cycle_run_id") == directory.name and checkpoint.get("repository_id") == repository_id and checkpoint.get("queue_spec_sha256") == queue_sha256:
-                if checkpoint.get("lifecycle_status") not in _LIFECYCLE_STATUSES:
+                if evidence is None or evidence.evidence_kind != CycleEvidenceKind.ACTIVE:
                     raise RepositoryMultiCycleStatusError("observation.checkpoint_invariant")
-                checkpoints.append((directory, checkpoint))
+                checkpoints.append((directory, checkpoint, evidence))
     except RepositoryMultiCycleStatusError as exc:
         return {**result, "state": "blocked_observation", "reason_code": str(exc), "action_required": True, "authoritative_source": "verified_evidence"}
     wanted_cycle = status.get("cycle_run_id")
-    terminal_for_status = next(((directory, receipt) for directory, receipt in terminals if directory.name == wanted_cycle), None)
-    checkpoint_for_status = next(((directory, checkpoint) for directory, checkpoint in checkpoints if directory.name == wanted_cycle), None)
+    terminal_for_status = next(((directory, receipt, evidence) for directory, receipt, evidence in terminals if directory.name == wanted_cycle), None)
+    checkpoint_for_status = next(((directory, checkpoint, evidence) for directory, checkpoint, evidence in checkpoints if directory.name == wanted_cycle), None)
     if terminal_for_status is not None:
         selected_terminal, selected_checkpoint = terminal_for_status, None
     elif checkpoint_for_status is not None:
@@ -174,20 +187,20 @@ def inspect_repository_multi_cycle_status(repository_id: str, queue_spec_path: s
         # older terminal receipt for the same queue revision.
         selected_terminal, selected_checkpoint = None, checkpoint_for_status
     else:
-        latest = max([*( (directory.name, "terminal", directory, value) for directory, value in terminals ), *( (directory.name, "checkpoint", directory, value) for directory, value in checkpoints )], default=None)
-        selected_terminal = (latest[2], latest[3]) if latest is not None and latest[1] == "terminal" else None
-        selected_checkpoint = (latest[2], latest[3]) if latest is not None and latest[1] == "checkpoint" else None
+        latest = max([*( (directory.name, "terminal", directory, value, evidence) for directory, value, evidence in terminals ), *( (directory.name, "checkpoint", directory, value, evidence) for directory, value, evidence in checkpoints )], default=None)
+        selected_terminal = (latest[2], latest[3], latest[4]) if latest is not None and latest[1] == "terminal" else None
+        selected_checkpoint = (latest[2], latest[3], latest[4]) if latest is not None and latest[1] == "checkpoint" else None
     if selected_terminal is not None:
-        directory, receipt = selected_terminal
+        directory, receipt, evidence = selected_terminal
         terminal_status = receipt["status"]
-        return {**result, "state": "terminal", "cycle_run_id": directory.name, "supervisor_pid": status.get("supervisor_pid"), "supervisor_alive": pid_exists(status.get("supervisor_pid")), "worker_pid": status.get("worker_pid"), "worker_alive": False, "task_count": receipt["task_count"], "completed_count": receipt["completed_count"], "last_activity_at": receipt.get("finished_at") or receipt.get("updated_at"), "terminal_status": terminal_status, "reason_code": receipt.get("reason_code"), "source_anchor_sha": receipt["source_anchor_sha"], "final_accepted_head_sha": receipt["final_accepted_head_sha"], "action_required": terminal_status != "completed", "authoritative_source": "verified_terminal_receipt"}
+        return {**result, "state": "terminal", "cycle_run_id": directory.name, "supervisor_pid": status.get("supervisor_pid"), "supervisor_alive": pid_exists(status.get("supervisor_pid")), "worker_pid": status.get("worker_pid"), "worker_alive": False, "task_count": receipt["task_count"], "completed_count": receipt["completed_count"], "last_activity_at": receipt.get("finished_at") or receipt.get("updated_at"), "terminal_status": terminal_status, "reason_code": receipt.get("reason_code"), "source_anchor_sha": receipt["source_anchor_sha"], "final_accepted_head_sha": receipt["final_accepted_head_sha"], "action_required": evidence.authoritative_terminal and terminal_status != "completed", "authoritative_source": "verified_terminal_receipt" if evidence.authoritative_terminal else "verified_historical_observation", "evidence_kind": evidence.evidence_kind.value, "continuation_eligible": evidence.continuation_eligible, "fresh_launch_suppressing": evidence.fresh_launch_suppressing, "terminal_resume_eligible": evidence.terminal_resume_eligible}
     supervisor_pid, worker_pid = status.get("supervisor_pid"), status.get("worker_pid")
     supervisor_alive, worker_alive = pid_exists(supervisor_pid), pid_exists(worker_pid)
     if selected_checkpoint is not None:
-        directory, checkpoint = selected_checkpoint
+        directory, checkpoint, evidence = selected_checkpoint
         active = checkpoint.get("active_task") if isinstance(checkpoint.get("active_task"), dict) else {}
         active_now = status.get("state") == "worker_active" and worker_alive
-        return {**result, "state": "worker_active" if active_now else "interrupted_or_stale", "cycle_run_id": directory.name, "supervisor_pid": supervisor_pid, "supervisor_alive": supervisor_alive, "worker_pid": worker_pid, "worker_alive": worker_alive, "task_count": checkpoint.get("task_count"), "completed_count": checkpoint.get("completed_count"), "current_task_index": active.get("task_index"), "current_task_id": active.get("task_id"), "phase": checkpoint.get("lifecycle_status"), "last_activity_at": checkpoint.get("updated_at") or status.get("last_heartbeat_at") or status.get("updated_at"), "reason_code": None if active_now else "observation.nonterminal_without_live_worker", "source_anchor_sha": checkpoint.get("source_anchor_sha"), "final_accepted_head_sha": checkpoint.get("accepted_head_sha"), "action_required": not active_now, "authoritative_source": "verified_checkpoint"}
+        return {**result, "state": "worker_active" if active_now else "interrupted_or_stale", "cycle_run_id": directory.name, "supervisor_pid": supervisor_pid, "supervisor_alive": supervisor_alive, "worker_pid": worker_pid, "worker_alive": worker_alive, "task_count": checkpoint.get("task_count"), "completed_count": checkpoint.get("completed_count"), "current_task_index": active.get("task_index"), "current_task_id": active.get("task_id"), "phase": checkpoint.get("lifecycle_status"), "last_activity_at": checkpoint.get("updated_at") or status.get("last_heartbeat_at") or status.get("updated_at"), "reason_code": None if active_now else "observation.nonterminal_without_live_worker", "source_anchor_sha": checkpoint.get("source_anchor_sha"), "final_accepted_head_sha": checkpoint.get("accepted_head_sha"), "action_required": not active_now, "authoritative_source": "verified_checkpoint", "evidence_kind": evidence.evidence_kind.value, "fresh_launch_suppressing": evidence.fresh_launch_suppressing}
     if status_error is not None:
         return {**result, "state": "blocked_observation", "reason_code": status_error, "action_required": True, "authoritative_source": "status.json"}
     if status.get("state") == "worker_active":

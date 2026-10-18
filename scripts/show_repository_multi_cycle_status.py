@@ -18,6 +18,8 @@ _FIELDS = (
     "worker_pid", "worker_alive", "task_count", "completed_count", "current_task_index", "current_task_id",
     "phase", "last_activity_at", "terminal_status", "reason_code", "source_anchor_sha",
     "final_accepted_head_sha", "action_required", "authoritative_source",
+    "evidence_kind", "continuation_eligible", "fresh_launch_suppressing",
+    "terminal_resume_eligible",
 )
 
 

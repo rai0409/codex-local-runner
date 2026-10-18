@@ -33,7 +33,7 @@ from automation.orchestration.repository_multi_cycle_replan_launch_execution imp
 from automation.orchestration.repository_multi_cycle_replan_state import ReplanPersistenceResult
 from automation.orchestration.repository_multi_cycle_state import RepositoryMultiCycleStateError, load_latest_checkpoint
 from automation.orchestration.repository_multi_cycle_status import read_verified_terminal_receipt
-from automation.orchestration.repository_multi_cycle_task_executor import _terminal_resume_pre_task_no_progress
+from automation.orchestration.repository_multi_cycle_evidence import CycleEvidenceKind, classify_cycle_evidence
 
 DEFAULT_SUPERVISOR_STATE_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-supervisor"
 DEFAULT_CYCLE_OUTPUT_ROOT = "~/.local/state/codex-local-runner/repository-multi-cycle-runs"
@@ -106,8 +106,15 @@ class RepositoryMultiCycleSupervisor:
         self._atomic_status(value)
 
     def _write_terminal_status(self, directory: Path, queue_sha256: str, worker_pid: int | None, crash_restart_count: int) -> bool:
-        try: receipt = read_verified_terminal_receipt(directory, self.repository_id, queue_sha256)
-        except ValueError: return False
+        evidence = classify_cycle_evidence(directory, self.repository_id, queue_sha256)
+        if evidence is None or evidence.evidence_kind == CycleEvidenceKind.INVALID:
+            return False
+        if evidence.evidence_kind == CycleEvidenceKind.PRE_TASK_NO_PROGRESS:
+            try: receipt = json.loads((directory / "receipt.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError): return False
+        else:
+            try: receipt = read_verified_terminal_receipt(directory, self.repository_id, queue_sha256)
+            except ValueError: return False
         if receipt is None: return False
         self._write_status("terminal", queue_sha256=queue_sha256, cycle_run_id=directory.name, worker_pid=worker_pid, worker_alive=False, crash_restart_count=crash_restart_count, terminal_status=receipt["status"], reason_code=receipt.get("reason_code"))
         self._terminal_status_written = True
@@ -208,34 +215,29 @@ class RepositoryMultiCycleSupervisor:
         with self._launch_gate: self.stop_event.set()
 
     def _verified_terminal(self, directory: Path, queue_sha: str) -> bool:
-        try: return read_verified_terminal_receipt(directory, self.repository_id, queue_sha) is not None
-        except ValueError: return False
+        evidence = classify_cycle_evidence(directory, self.repository_id, queue_sha)
+        return bool(evidence and evidence.evidence_kind in {
+            CycleEvidenceKind.PRE_TASK_NO_PROGRESS, CycleEvidenceKind.TASK_TERMINAL,
+            CycleEvidenceKind.TASK_TERMINAL_RESUMABLE, CycleEvidenceKind.COMPLETED,
+        })
 
     def _candidates(self, queue_sha: str) -> tuple[list[str], list[str], list[str]]:
         nonterminal, terminal, pre_task = [], [], []
         if not self.cycle_output_root.exists(): return nonterminal, terminal, pre_task
         for directory in sorted(self.cycle_output_root.iterdir(), key=lambda item: item.name):
             if not directory.is_dir() or not directory.name.startswith("cycle-"): continue
-            receipt = directory / "receipt.json"
-            if receipt.exists():
-                try: value=json.loads(receipt.read_text(encoding="utf-8"))
-                except (OSError, ValueError): raise ValueError("supervisor.cycle.receipt_invalid")
-                if value.get("repository_id") == self.repository_id and value.get("queue_spec_sha256") == queue_sha:
-                    try: verified = read_verified_terminal_receipt(directory, self.repository_id, queue_sha)
-                    except ValueError as exc: raise ValueError("supervisor.cycle.receipt_invalid") from exc
-                    if verified is None: raise ValueError("supervisor.cycle.receipt_invalid")
-                    if _terminal_resume_pre_task_no_progress(verified):
-                        pre_task.append(directory.name); continue
-                    terminal.append(directory.name); continue
-                # A verified historical terminal receipt for another queue revision
-                # must not be reclassified as a nonterminal candidate.
+            evidence = classify_cycle_evidence(directory, self.repository_id, queue_sha)
+            if evidence is None:
+                if not (directory / "receipt.json").exists() and not (directory / "state").exists():
+                    raise ValueError("supervisor.cycle.checkpoint_invalid")
                 continue
-            try:
-                state,_=load_latest_checkpoint(directory / "state")
-            except RepositoryMultiCycleStateError as exc:
-                raise ValueError("supervisor.cycle.checkpoint_invalid") from exc
-            if state.get("cycle_run_id") != directory.name: raise ValueError("supervisor.cycle.checkpoint_invalid")
-            if state.get("repository_id") == self.repository_id and state.get("queue_spec_sha256") == queue_sha and state.get("lifecycle_status") in {"initialized","active_task","accepted_task","finalizing"}: nonterminal.append(directory.name)
+            if evidence.evidence_kind == CycleEvidenceKind.INVALID:
+                raise ValueError("supervisor.cycle.evidence_invalid")
+            if evidence.evidence_kind == CycleEvidenceKind.ACTIVE:
+                nonterminal.append(directory.name); continue
+            if evidence.evidence_kind == CycleEvidenceKind.PRE_TASK_NO_PROGRESS:
+                pre_task.append(directory.name); continue
+            terminal.append(directory.name)
         return nonterminal, terminal, pre_task
 
     def _launch(self, resume_cycle_run_id: str | None, *, queue_spec_path: Path | None = None, terminal_resume_cycle_run_id: str | None = None) -> Any:
@@ -337,7 +339,8 @@ class RepositoryMultiCycleSupervisor:
                     receipt = read_verified_terminal_receipt(self.cycle_output_root / terminal[-1], self.repository_id, queue_sha)
                 except ValueError:
                     receipt = None
-                if receipt is not None and receipt.get("status") in {"blocked", "failed"}:
+                evidence = classify_cycle_evidence(self.cycle_output_root / terminal[-1], self.repository_id, queue_sha)
+                if receipt is not None and evidence is not None and evidence.evidence_kind in {CycleEvidenceKind.TASK_TERMINAL, CycleEvidenceKind.TASK_TERMINAL_RESUMABLE}:
                     self._terminal_resume_consumed = True
                     worker = self._launch_or_shutdown(None, terminal_resume_cycle_run_id=terminal[-1])
                     if worker is None:
