@@ -1467,23 +1467,14 @@ def run_repository_single_task(
         if final_task_completion.status == "blocked":
             worktree_preserved = True
             return record("blocked", "single_task.task_completion.blocked", final_task_completion.reason_code)
-        if scope_trim_attempted and scope_constrained_rework_attempted:
-            worktree_preserved = True
-            return record("blocked", "single_task.task_scope.recovery_exhausted")
         if evaluation_number > MAX_TASK_REWORK_ATTEMPTS:
             worktree_preserved = True
             return record("blocked", "single_task.task_completion.rework_exhausted")
         attempt["rework_attempted"] = True
-        if scope_trim_attempted:
-            scope_constrained_rework_attempted = True
-            rework_prompt = _build_scope_constrained_rework_prompt(
-                spec.prompt, effective_allowed_changed_paths,
-            )
-        else:
-            rework_prompt = build_task_completion_rework_prompt(
-                original_task=spec.prompt, allowed_changed_paths=effective_allowed_changed_paths,
-                evaluation=final_task_completion,
-            )
+        rework_prompt = build_task_completion_rework_prompt(
+            original_task=spec.prompt, allowed_changed_paths=effective_allowed_changed_paths,
+            evaluation=final_task_completion,
+        )
         try:
             response = adapter.execute_prepared_worktree({
                 "prompt": rework_prompt, "worktree_path": str(worktree), "work_dir": str(output_directory),
@@ -1549,7 +1540,9 @@ def run_repository_single_task(
             scope_trimmed_paths = tuple(sorted(
                 set(scope_trimmed_paths) | set(completion_scope.trimmed_paths)
             ))
-        if completion_rework_validation_deferred:
+        # Runner-owned validation is mandatory when the adapter deferred it or
+        # runner-owned scope recovery changed the worktree after adapter validation.
+        if completion_rework_validation_deferred or completion_scope.trimmed_paths:
             try:
                 completion_validation = execute_repository_validation(
                     bound_profile,
@@ -1576,45 +1569,6 @@ def run_repository_single_task(
             if completion_validation.status != "passed":
                 worktree_preserved = True
                 return record("blocked", "single_task.validation.failed", "completion_rework_validation_failed")
-        if scope_trim_attempted:
-            try:
-                final_scope = _apply_scope_recovery_after_mutating_execution(
-                    worktree, profile, execution_head,
-                    declared_allowed_changed_paths,
-                    effective_allowed_changed_paths, task_id=task_id,
-                )
-                if final_scope.status != "passed":
-                    raise OSError("scope-constrained rework left unauthorized changes")
-                scope_trimmed_paths = tuple(sorted(
-                    set(scope_trimmed_paths) | set(final_scope.trimmed_paths)
-                ))
-                final_validation = execute_repository_validation(
-                    bound_profile,
-                    timeout_seconds=(
-                        spec.validation_timeout_seconds
-                        if spec.validation_timeout_seconds is not None
-                        else bound_profile.validation_timeout_seconds
-                    ),
-                )
-            except (OSError, ValueError, SafeValidationExecutorError):
-                scope_constrained_rework_status = "failed"
-                worktree_preserved = True
-                return record("blocked", "single_task.changed_files.out_of_scope")
-            post_trim_validation_status = final_validation.status
-            validation_status = final_validation.status
-            validation_reason = "validation_passed" if final_validation.status == "passed" else "validation_failed"
-            validation_attempts = [{
-                "attempt_number": 1, "phase": "scope_constrained_rework",
-                "execution_status": "completed", "validation_status": final_validation.status,
-                "validation_reason": validation_reason,
-            }]
-            attempt["rework_validation_status"] = validation_status
-            attempt["rework_validation_reason"] = validation_reason
-            if final_validation.status != "passed":
-                scope_constrained_rework_status = "failed"
-                worktree_preserved = True
-                return record("blocked", scope_extension_block_reason())
-            scope_constrained_rework_status = "succeeded"
 
     worktree_state = analyze_repository_state(worktree)
     if worktree_state.head_sha != execution_head:
