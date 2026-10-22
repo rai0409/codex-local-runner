@@ -53,14 +53,14 @@ class PolicyLoaderTests(unittest.TestCase):
             "runtime_fix_low_risk", "runtime_fix_high_risk", "contract_extension", "feature",
         })
         self.assertEqual(profiles, {
-            "docs_only": {"model": "gpt-5.5", "model_reasoning_effort": "low"},
-            "ci_only": {"model": "gpt-5.5", "model_reasoning_effort": "medium"},
-            "test_only": {"model": "gpt-5.5", "model_reasoning_effort": "medium"},
+            "docs_only": {"model": "gpt-5.6-terra", "model_reasoning_effort": "low"},
+            "ci_only": {"model": "gpt-5.6-terra", "model_reasoning_effort": "medium"},
+            "test_only": {"model": "gpt-5.6-terra", "model_reasoning_effort": "medium"},
             "contract_guard_only": {
-                "model": "gpt-5.5", "model_reasoning_effort": "medium",
+                "model": "gpt-5.6-terra", "model_reasoning_effort": "medium",
             },
             "runtime_fix_low_risk": {
-                "model": "gpt-5.5", "model_reasoning_effort": "medium",
+                "model": "gpt-5.6-terra", "model_reasoning_effort": "medium",
             },
             "runtime_fix_high_risk": {
                 "model": "gpt-5.6", "model_reasoning_effort": "medium",

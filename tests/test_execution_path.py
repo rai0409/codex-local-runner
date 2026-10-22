@@ -24,6 +24,7 @@ from automation.orchestration.safe_validation_executor import ValidationCommandR
 from automation.orchestration.safe_validation_executor import ValidationExecutionResult
 from orchestrator.codex_execution import execute_codex_cli
 from orchestrator import main as orchestrator_main
+from orchestrator.policy_loader import get_change_category_policy
 
 
 class CodexExecutionArtifactTests(unittest.TestCase):
@@ -1251,9 +1252,9 @@ class CodexCliExecutionTests(unittest.TestCase):
                     return result, list(codex.call_args_list)
 
         cases = (
-            ({}, None, None, "gpt-5.5", "default", "low", "default"),
+            ({}, None, None, "gpt-5.6-terra", "default", "low", "default"),
             ({}, "profile-model", "high", "profile-model", "repository_profile", "high", "repository_profile"),
-            ({"declared_category": "docs_only"}, "profile-model", "high", "gpt-5.5", "category", "low", "category"),
+            ({"declared_category": "docs_only"}, "profile-model", "high", "gpt-5.6-terra", "category", "low", "category"),
             ({"declared_category": "runtime_fix_high_risk"}, None, None, "gpt-5.6", "category", "medium", "category"),
             ({"declared_category": "runtime_fix_high_risk", "model": "task-model", "model_reasoning_effort": "xhigh"}, "profile-model", "low", "task-model", "task", "xhigh", "task"),
             ({"declared_category": "docs_only", "model": "task-model"}, "profile-model", "high", "task-model", "task", "low", "category"),
@@ -1280,6 +1281,19 @@ class CodexCliExecutionTests(unittest.TestCase):
                         "model_reasoning_effort": effort,
                         "model_reasoning_effort_source": effort_source,
                     },
+                )
+
+    def test_legacy_model_categories_use_chatgpt_compatible_model(self) -> None:
+        categories = (
+            "docs_only", "ci_only", "test_only", "contract_guard_only",
+            "runtime_fix_low_risk",
+        )
+        for category_name in categories:
+            with self.subTest(category_name=category_name):
+                category = get_change_category_policy(category_name)
+                assert category is not None
+                self.assertEqual(
+                    category["codex_profile"]["model"], "gpt-5.6-terra",
                 )
 
     def test_codex_execution_profile_invalid_inputs_do_not_run_codex(self) -> None:
@@ -1477,7 +1491,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         category_result, category_calls, category_artifacts = run_case({"declared_category": "docs_only"})
         self.assertEqual(len(category_calls), 1)
         category_command, category_stdin = category_calls[0]
-        assert_command_profile(category_command, "gpt-5.5", "low")
+        assert_command_profile(category_command, "gpt-5.6-terra", "low")
         self.assertIn(prompt, category_stdin)
         self.assertEqual(len(category_artifacts), 1)
         category_evidence = category_result["validation_attempts"][0]
@@ -1486,7 +1500,7 @@ class CodexCliExecutionTests(unittest.TestCase):
                 "model", "model_source", "model_reasoning_effort", "model_reasoning_effort_source",
             )},
             {
-                "model": "gpt-5.5",
+                "model": "gpt-5.6-terra",
                 "model_source": "category",
                 "model_reasoning_effort": "low",
                 "model_reasoning_effort_source": "category",
@@ -1512,7 +1526,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(repository_evidence["model_reasoning_effort_source"], "repository_profile")
 
         default_result, default_calls, _ = run_case({})
-        assert_command_profile(default_calls[0][0], "gpt-5.5", "low")
+        assert_command_profile(default_calls[0][0], "gpt-5.6-terra", "low")
         default_evidence = default_result["validation_attempts"][0]
         self.assertEqual(default_evidence["model_source"], "default")
         self.assertEqual(default_evidence["model_reasoning_effort_source"], "default")

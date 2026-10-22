@@ -92,7 +92,11 @@ def bind_repository_profile_to_worktree(
         "min_repair_headroom": source.min_repair_headroom,
         "approval_boundary": asdict(source.approval_boundary),
         "environment_allowlist": list(source.environment_allowlist),
-        **({field: getattr(source, field) for field in ("execution_timeout_seconds", "validation_timeout_seconds", "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds") if getattr(source, field) is not None})})
+        **({field: getattr(source, field) for field in (
+            "execution_timeout_seconds", "validation_timeout_seconds",
+            "completion_evaluator_timeout_seconds", "completion_rework_timeout_seconds",
+            "model", "model_reasoning_effort",
+        ) if getattr(source, field) is not None})})
 
 
 __all__ = ["RepositoryProfileBindingError", "bind_repository_profile_to_worktree"]

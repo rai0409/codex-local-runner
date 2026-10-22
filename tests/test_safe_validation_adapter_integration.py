@@ -20,8 +20,14 @@ from automation.orchestration.safe_validation_executor import ValidationExecutio
 from orchestrator import main as orchestrator_main
 
 
-def _profile(root: Path, *, approval: str = "automatic"):
-    return validate_repository_profile({
+def _profile(
+    root: Path,
+    *,
+    approval: str = "automatic",
+    model: str | None = None,
+    model_reasoning_effort: str | None = None,
+):
+    raw = {
         "schema_version": "1", "profile_id": "adapter-test", "repository_root": str(root),
         "base_branch": "main", "python_executable": sys.executable,
         "validation_commands": [{"command_id": kind, "kind": kind,
@@ -32,7 +38,12 @@ def _profile(root: Path, *, approval: str = "automatic"):
         "max_changed_files": 2,
         "approval_boundary": {action: (approval if action == "test_execution" else "automatic") for action in APPROVAL_ACTIONS},
         "environment_allowlist": [],
-    })
+    }
+    if model is not None:
+        raw["model"] = model
+    if model_reasoning_effort is not None:
+        raw["model_reasoning_effort"] = model_reasoning_effort
+    return validate_repository_profile(raw)
 
 
 def _git_worktree(root: Path) -> None:
@@ -46,6 +57,27 @@ def _safe_result(status: str, stdout: str = "", stderr: str = "") -> ValidationE
 
 
 class SafeValidationAdapterIntegrationTests(unittest.TestCase):
+    def test_model_resolution_uses_default_profile_category_and_task_precedence(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            _git_worktree(root)
+            completed = {"status": "completed", "return_code": 0, "started_at": "a", "finished_at": "b", "artifacts": [], "error": ""}
+            payload = {"prompt": "test", "worktree_path": str(root), "work_dir": str(root)}
+            cases = (
+                ({"repository_profile": _profile(root)}, "gpt-5.6-terra", "default", "low", "default"),
+                ({"repository_profile": _profile(root, model="profile-model", model_reasoning_effort="high")}, "profile-model", "repository_profile", "high", "repository_profile"),
+                ({"repository_profile": _profile(root, model="profile-model"), "declared_category": "docs_only"}, "gpt-5.6-terra", "category", "low", "category"),
+                ({"repository_profile": _profile(root, model="profile-model"), "declared_category": "docs_only", "model": "task-model", "model_reasoning_effort": "xhigh"}, "task-model", "task", "xhigh", "task"),
+            )
+            for overrides, expected_model, expected_source, expected_effort, expected_effort_source in cases:
+                with mock.patch("adapters.codex_cli.run_codex", return_value=completed) as codex, mock.patch("adapters.codex_cli.execute_repository_validation", return_value=_safe_result("passed")):
+                    result = adapter.execute_prepared_worktree({**payload, **overrides})
+                self.assertEqual(codex.call_args.kwargs["model"], expected_model)
+                self.assertEqual(codex.call_args.kwargs["model_reasoning_effort"], expected_effort)
+                self.assertEqual(result["validation_attempts"][0]["model_source"], expected_source)
+                self.assertEqual(result["validation_attempts"][0]["model_reasoning_effort_source"], expected_effort_source)
+
     def test_timeout_recovery_is_bounded_and_independent_from_validation_repair(self) -> None:
         adapter = CodexCliAdapter()
         with tempfile.TemporaryDirectory() as raw:

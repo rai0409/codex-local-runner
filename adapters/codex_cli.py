@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 import shlex
 from typing import Any, Mapping
@@ -27,7 +26,7 @@ from workspace.worktree import cleanup_git_worktree
 from workspace.worktree import prepare_git_worktree
 
 
-DEFAULT_CODEX_MODEL = "gpt-5.5"
+DEFAULT_CODEX_MODEL = "gpt-5.6-terra"
 DEFAULT_CODEX_MODEL_REASONING_EFFORT = "low"
 _MODEL_REASONING_EFFORTS = frozenset(("low", "medium", "high", "xhigh"))
 
@@ -532,11 +531,6 @@ class CodexCliAdapter(ProviderAdapter):
             try:
                 bound_profile = bind_repository_profile_to_worktree(
                     profile, worktree_result["worktree_path"]
-                )
-                bound_profile = replace(
-                    bound_profile,
-                    model=profile.model,
-                    model_reasoning_effort=profile.model_reasoning_effort,
                 )
             except (RepositoryProfileBindingError, RepositoryProfileValidationError):
                 prepared_result = self._prepared_failure("safe_validation.profile.invalid")
