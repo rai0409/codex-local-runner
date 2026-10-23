@@ -13,8 +13,14 @@ from automation.orchestration.repository_profile_binding import RepositoryProfil
 from automation.orchestration.repository_profile_binding import bind_repository_profile_to_worktree
 
 
-def _profile(root: Path, *, artifact_path: str | None = None):
-    return validate_repository_profile({
+def _profile(
+    root: Path,
+    *,
+    artifact_path: str | None = None,
+    model: str | None = None,
+    model_reasoning_effort: str | None = None,
+):
+    raw = {
         "schema_version": "1", "profile_id": "profile", "repository_root": str(root),
         "base_branch": "main", "python_executable": sys.executable,
         "validation_commands": [
@@ -32,7 +38,12 @@ def _profile(root: Path, *, artifact_path: str | None = None):
         "forbidden_git_operations": list(FORBIDDEN_GIT_OPERATION_IDS), "max_changed_files": 2,
         "approval_boundary": {action: "automatic" for action in APPROVAL_ACTIONS},
         "environment_allowlist": [],
-    })
+    }
+    if model is not None:
+        raw["model"] = model
+    if model_reasoning_effort is not None:
+        raw["model_reasoning_effort"] = model_reasoning_effort
+    return validate_repository_profile(raw)
 
 
 class RepositoryProfileBindingTests(unittest.TestCase):
@@ -49,6 +60,32 @@ class RepositoryProfileBindingTests(unittest.TestCase):
             self.assertTrue(all(item.cwd.startswith(str(worktree.resolve())) for item in bound.validation_commands))
             self.assertEqual(bound.artifact_requirements[0].path, str((worktree / "artifact.json").resolve()))
             self.assertEqual(profile.repository_root, str(source.resolve()))
+
+    def test_preserves_model_fields_without_mutating_source(self) -> None:
+        with tempfile.TemporaryDirectory() as source_raw, tempfile.TemporaryDirectory() as worktree_raw:
+            source, worktree = Path(source_raw), Path(worktree_raw)
+            for root in (source, worktree):
+                (root / "nested").mkdir()
+                (root / ".git").touch()
+            profile = _profile(
+                source,
+                model="profile-model",
+                model_reasoning_effort="high",
+            )
+            bound = bind_repository_profile_to_worktree(profile, worktree)
+            self.assertEqual((bound.model, bound.model_reasoning_effort), ("profile-model", "high"))
+            self.assertEqual((profile.model, profile.model_reasoning_effort), ("profile-model", "high"))
+            self.assertIsNot(bound, profile)
+
+    def test_preserves_unspecified_model_fields_as_none(self) -> None:
+        with tempfile.TemporaryDirectory() as source_raw, tempfile.TemporaryDirectory() as worktree_raw:
+            source, worktree = Path(source_raw), Path(worktree_raw)
+            for root in (source, worktree):
+                (root / "nested").mkdir()
+                (root / ".git").touch()
+            bound = bind_repository_profile_to_worktree(_profile(source), worktree)
+            self.assertIsNone(bound.model)
+            self.assertIsNone(bound.model_reasoning_effort)
 
     def test_rejects_non_worktree_and_mapped_path_escape(self) -> None:
         with tempfile.TemporaryDirectory() as source_raw, tempfile.TemporaryDirectory() as worktree_raw:

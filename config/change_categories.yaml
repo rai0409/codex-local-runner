@@ -15,7 +15,7 @@ categories:
     required_tests: []
     auto_merge_allowed: true
     codex_profile:
-      model: "gpt-5.5"
+      model: "gpt-5.6-terra"
       model_reasoning_effort: low
 
   ci_only:
@@ -35,7 +35,7 @@ categories:
       - "contract_suite"
     auto_merge_allowed: true
     codex_profile:
-      model: "gpt-5.5"
+      model: "gpt-5.6-terra"
       model_reasoning_effort: medium
 
   test_only:
@@ -55,7 +55,7 @@ categories:
       - "contract_suite"
     auto_merge_allowed: true
     codex_profile:
-      model: "gpt-5.5"
+      model: "gpt-5.6-terra"
       model_reasoning_effort: medium
 
   contract_guard_only:
@@ -75,7 +75,7 @@ categories:
       - "contract_suite"
     auto_merge_allowed: true
     codex_profile:
-      model: "gpt-5.5"
+      model: "gpt-5.6-terra"
       model_reasoning_effort: medium
 
   runtime_fix_low_risk:
@@ -96,7 +96,7 @@ categories:
       - "contract_suite"
     auto_merge_allowed: false
     codex_profile:
-      model: "gpt-5.5"
+      model: "gpt-5.6-terra"
       model_reasoning_effort: medium
 
   runtime_fix_high_risk:
